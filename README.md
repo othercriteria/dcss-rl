@@ -54,6 +54,13 @@ Set `DCSS_REF` to test another revision, for example
 `DCSS_REF=0.34.1 poe dcss-fetch`. Upstream source and build products live under
 `vendor/` and are not committed.
 
+Run the same semantic reset, structured WAIT, compact-trajectory, and exact-replay
+smoke against any built binary:
+
+```sh
+poe compatibility-smoke --binary vendor/crawl/crawl-ref/source/crawl
+```
+
 ## Research direction
 
 Initial experiments will compare a conventional recurrent policy with language-model
@@ -87,11 +94,9 @@ schema-v2 deltas. Pass `--case CASE_ID` to inspect a specifically labeled suite 
 the default deliberately follows manifest order instead of selecting a flattering
 showcase seed.
 
-The current champion will be selected by a fixed held-out evaluation suite rather than
-by a hand-picked game. A future `poe watch-best` task will run that checkpoint locally
-and expose native WebTiles spectating, while preserving completed showcase replays and
-morgues. Until a learned policy wins the benchmark, the champion may be a transparent
-scripted baseline.
+Champion promotion is gated by the checked-in held-out regression floor. Until a
+learned policy exceeds it, the champion may be the transparent scripted baseline.
+Native WebTiles spectating can later complement the deterministic completed replay.
 
 ## Licensing
 

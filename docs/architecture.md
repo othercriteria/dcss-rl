@@ -23,6 +23,15 @@ DCSS is ready for more input, so the transport coalesces consecutive batches unt
 short command-specific quiescence period. Multi-turn commands use a longer duration
 than ordinary actions; both durations carry an explicit `Seconds` type.
 
+For ordinary actions, silence is not itself an error: 0.33.1 can process WAIT without
+emitting any visible delta or flush. If no output appears promptly, the adapter queues
+upstream's `spectator_joined` full-state request behind the key. DCSS handles that
+request on its next input-loop entry, providing a concrete synchronization response
+without modifying game state or upstream source. Automatic travel and rest may poll
+control messages while still running, so they deliberately retain multi-flush
+quiescence rather than misusing this probe as an end-of-travel barrier. Raw control
+and response messages remain in the trajectory for later audit.
+
 ## Observations
 
 WebTiles sends sparse deltas rather than full states. The reducer mirrors these stable
@@ -109,6 +118,12 @@ diagnostic seed has informed a code change it cannot be called held out. The hel
 manifest therefore contains a disjoint, untouched seed set and is used only for
 champion evaluation. Independent cases execute concurrently; deterministic result
 ordering follows manifest order rather than completion order.
+
+The frozen scripted-v2 held-out rank is also checked in as a regression floor. The
+standard scripted evaluation command verifies that floor before writing a champion
+manifest. Threshold comparison uses the same lexicographic metric ordering as
+champion selection, so improvement on a higher-priority milestone is not vetoed by a
+lower-priority aggregate.
 
 ## Initial research comparisons
 

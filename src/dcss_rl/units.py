@@ -12,5 +12,7 @@ StepLimit = NewType("StepLimit", int)
 WorkerCount = NewType("WorkerCount", int)
 FrameLimit = NewType("FrameLimit", int)
 ViewRadius = NewType("ViewRadius", int)
+DcssVersion = NewType("DcssVersion", str)
+VisibleCellCount = NewType("VisibleCellCount", int)
 
 type Coordinate = tuple[int, int]

@@ -70,7 +70,8 @@ hooks = { shell = "pre-commit install --install-hooks && pre-commit install --ho
 dcss-fetch = "scripts/fetch_dcss.sh"
 dcss-build = "scripts/build_dcss.sh"
 dcss-smoke = "scripts/smoke_dcss.sh"
-evaluate-scripted = ".venv/bin/dcss-rl evaluate-scripted"
+compatibility-smoke = ".venv/bin/dcss-rl compatibility-smoke"
+evaluate-scripted = ".venv/bin/dcss-rl evaluate-scripted --threshold configs/heldout-regression-v1.json"
 watch-best = ".venv/bin/dcss-rl watch-best"
 
 [tool.ty.environment]

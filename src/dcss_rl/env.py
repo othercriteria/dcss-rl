@@ -132,21 +132,14 @@ class DcssEnv(gym.Env[ObservationData, int]):
         )
         self.game = ManagedGame(self.binary, config=config, run_root=self.run_root)
         self.reducer = ObservationReducer()
-        self.last_batch = self.game.start()
+        setup_keycode = Keycode(ord(self.starting_weapon_key))
+        self.last_batch = self.game.start(initial_keycode=setup_keycode)
         exchange = [self.last_batch]
-        keycodes: list[int] = []
+        keycodes: list[int] = [setup_keycode]
         self.current = self.reducer.apply(self.last_batch)
         self.steps = 0
         self._max_depth = 0
         self._max_xl = 1
-
-        if self.current.menu_type == "newgame-choice":
-            requested = Action.menu_select(Keycode(ord(self.starting_weapon_key)))
-            keycode = encode_action(requested, self.current)
-            self.last_batch = self.game.send_key(keycode)
-            exchange.append(self.last_batch)
-            keycodes.append(ord(keycode) if isinstance(keycode, str) else keycode)
-            self.current = self.reducer.apply(self.last_batch)
 
         self.last_exchange = tuple(exchange)
         self.last_keycodes = tuple(keycodes)

@@ -10,7 +10,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import BinaryIO
 
-from dcss_rl.units import GameSeed, Seconds
+from dcss_rl.units import GameSeed, Keycode, Seconds
 from dcss_rl.webtiles.transport import ObservationBatch, WebtilesTransport
 
 _DEFAULT_GAME_TIMEOUT = Seconds(15.0)
@@ -89,7 +89,7 @@ class ManagedGame:
         )
         return rc_path
 
-    def start(self) -> ObservationBatch:
+    def start(self, *, initial_keycode: Keycode | None = None) -> ObservationBatch:
         """Start DCSS, attach as its primary controller, and return initial output."""
         if self.process is not None:
             raise RuntimeError("DCSS game is already started")
@@ -131,7 +131,13 @@ class ManagedGame:
         )
         try:
             self.transport.connect()
-            return self.transport.receive_until_flush()
+            if initial_keycode is not None:
+                self.transport.send_key(initial_keycode)
+            return self.transport.receive_until_flush(
+                quiet_period=_AUTOMATIC_COMMAND_QUIET_PERIOD
+                if initial_keycode is not None
+                else None
+            )
         except BaseException:
             self.close()
             raise
@@ -142,6 +148,12 @@ class ManagedGame:
             raise RuntimeError("DCSS game is not started")
         self.transport.send_key(key)
         quiet_period = _AUTOMATIC_COMMAND_QUIET_PERIOD if key in {"o", "5"} else None
+        if quiet_period is None and not self.transport.output_available():
+            # Some supported releases emit no delta or flush for a command that has
+            # no visible effect (notably WAIT in 0.33). This upstream message is
+            # processed when DCSS next enters its input loop and guarantees a
+            # full-state response without modifying the game.
+            self.transport.request_full_state()
         return self.transport.receive_until_flush(quiet_period=quiet_period)
 
     def close(self) -> None:

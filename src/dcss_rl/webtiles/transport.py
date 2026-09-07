@@ -118,6 +118,18 @@ class WebtilesTransport:
             keycode = key
         self.send({"msg": "key", "keycode": keycode})
 
+    def output_available(self, *, within: Seconds | None = None) -> bool:
+        """Report whether DCSS emitted output within a bounded interval."""
+        if self._socket is None:
+            raise RuntimeError("WebTiles transport is not connected")
+        wait = self.input_quiet_period if within is None else within
+        readable, _, _ = select.select([self._socket], [], [], wait)
+        return bool(readable)
+
+    def request_full_state(self) -> None:
+        """Queue a full-state response as an input-loop synchronization probe."""
+        self.send({"msg": "spectator_joined"})
+
     def receive(self) -> Message:
         """Receive and decode one newline-terminated, possibly fragmented message."""
         if self._socket is None:

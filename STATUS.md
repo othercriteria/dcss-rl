@@ -33,8 +33,8 @@ Completed:
 - A pinned `ty` type-check gate and a project-wide semantic-type discipline, with
   domain dataclasses/enums and TypedDict schemas at Gym/JSON boundaries. The checked
   source and tests carry no inline type-checker suppressions.
-- Fast and live checks are split: 39 unit tests complete in about 0.24 seconds, while
-  three isolated DCSS integration tests run concurrently in about 6.2 seconds.
+- Fast and live checks are split: 46 unit tests complete in about 0.23 seconds, while
+  three isolated DCSS integration tests run concurrently in about 6.7 seconds.
 - Deterministic scripted MiBe policy, fixed diagnostic/held-out suite manifests,
   concurrent evaluation runner, metric-vector ranking, and champion manifest writer.
   The first diagnostic run exposed and fixed automatic-input and level-up prompt
@@ -52,6 +52,17 @@ Completed:
   player-centered terminal replay. It supports both the existing schema-v1 champion
   and new schema-v2 trajectories and defaults to manifest order, not a cherry-picked
   episode.
+- Ordinary silent commands now use upstream's full-state request as an input-loop
+  synchronization probe. This fixed 0.33.1 WAIT deadlock without modifying DCSS;
+  automatic travel/rest retain their isolated typed quiescence fallback because they
+  can consume control messages before completing.
+- `poe compatibility-smoke` exercises semantic MiBe reset, a structured action,
+  schema-v2 recording, and exact replay reconstruction against any binary. It passes
+  on trunk plus 0.34.1 (`1eebc1a2892e1c89776a0d7a10691f8dac8d9796`) and 0.33.1
+  (`9cb173b281c11a5177f40b8c0662bacd3aac2717`).
+- `configs/heldout-regression-v1.json` locks the scripted-v2 held-out rank
+  `(0, 0, 5, 10, 3516, 50.0)`; `poe evaluate-scripted` enforces it before champion
+  promotion.
 
 Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
 
@@ -63,9 +74,10 @@ Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
 
 Next:
 
-1. Add held-out regression thresholds and improve the scripted baseline's descent.
-2. Replace or more tightly validate quiescence-based policy-input readiness.
-3. Test trunk plus at least releases 0.34.1 and 0.33.1.
+1. Improve the scripted baseline's descent beyond the locked D:1 floor.
+2. GPU-smoke the optional training stack and implement the first learned baseline.
+3. Recharacterize rollout scaling on a representative training workload once one
+   exists; the current short-episode sweep remains the environment baseline.
 
 ## Verified commands
 
@@ -73,6 +85,7 @@ Next:
 poe dcss-fetch
 poe dcss-build
 poe dcss-smoke
+poe compatibility-smoke
 poe check
 ```
 

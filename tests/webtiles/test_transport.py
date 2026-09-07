@@ -109,3 +109,19 @@ def test_send_key_rejects_strings_that_are_not_one_character(
     with pytest.raises(ValueError, match="exactly one character"):
         transport.send_key("wait")
     transport.close()
+
+
+def test_full_state_probe_uses_upstream_spectator_message(
+    game_socket: socket.socket, tmp_path: Path
+) -> None:
+    game_path = Path(game_socket.getsockname())
+    transport = WebtilesTransport(game_path, client_directory=tmp_path / "client")
+    transport.connect()
+    game_socket.recvfrom(4096)
+
+    assert not transport.output_available()
+    transport.request_full_state()
+
+    payload, _ = game_socket.recvfrom(4096)
+    assert json.loads(payload) == {"msg": "spectator_joined"}
+    transport.close()

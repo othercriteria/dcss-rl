@@ -6,18 +6,21 @@ import pytest
 from dcss_rl.evaluation import (
     EpisodeResult,
     EvaluationSummary,
+    RegressionThreshold,
+    assert_meets_regression_threshold,
+    load_regression_threshold,
     load_suite,
     select_champion,
 )
 from dcss_rl.units import GameSeed
 
 
-def result(*, depth: int, xl: int, turns: int) -> EpisodeResult:
+def result(*, depth: int, xl: int, turns: int, reward: float = 0.0) -> EpisodeResult:
     return EpisodeResult(
         case_id="case",
         seed=GameSeed(1),
         outcome="dead",
-        total_reward=0.0,
+        total_reward=reward,
         policy_steps=10,
         game_turns=turns,
         max_depth=depth,
@@ -57,3 +60,35 @@ def test_rejects_comparing_different_suites(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="same held-out suite"):
         select_champion((first, second), tmp_path / "champion.json")
+
+
+def test_checked_in_regression_threshold_matches_frozen_baseline() -> None:
+    threshold = load_regression_threshold(Path("configs/heldout-regression-v1.json"))
+    summary = EvaluationSummary(
+        "mibe-heldout-v1",
+        "candidate",
+        "now",
+        (result(depth=5, xl=10, turns=3516, reward=50.0),),
+    )
+
+    assert_meets_regression_threshold(summary, threshold)
+
+
+def test_rejects_rank_below_regression_threshold() -> None:
+    threshold = RegressionThreshold("suite", "baseline", (0, 0, 2, 1, 1, 0.0))
+    summary = EvaluationSummary(
+        "suite", "candidate", "now", (result(depth=1, xl=20, turns=9999),)
+    )
+
+    with pytest.raises(RuntimeError, match=r"below.*floor"):
+        assert_meets_regression_threshold(summary, threshold)
+
+
+def test_rejects_threshold_for_different_suite() -> None:
+    threshold = RegressionThreshold("heldout", "baseline", (0, 0, 1, 1, 1, 0.0))
+    summary = EvaluationSummary(
+        "diagnostic", "candidate", "now", (result(depth=2, xl=2, turns=2),)
+    )
+
+    with pytest.raises(ValueError, match="threshold is for"):
+        assert_meets_regression_threshold(summary, threshold)

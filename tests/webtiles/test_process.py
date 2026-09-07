@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from dcss_rl.observation import ObservationReducer
-from dcss_rl.units import GameSeed
+from dcss_rl.units import GameSeed, Keycode
 from dcss_rl.webtiles import GameConfig, ManagedGame
 
 _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
@@ -40,18 +40,17 @@ def test_trunk_reaches_a_webtiles_input_boundary(tmp_path: Path) -> None:
         run_root=tmp_path / "episode",
     )
     try:
-        initial = game.start()
+        initial = game.start(initial_keycode=Keycode(ord("c")))
         kinds = {message.kind for message in initial.observations}
         control_kinds = {message.kind for message in initial.controls}
 
         assert "flush_messages" in control_kinds
-        assert {"version", "options", "layout"}.issubset(kinds)
+        assert {"version", "options", "layout", "player", "map"}.issubset(kinds)
         assert game.process is not None
         assert game.process.poll() is None
 
         reducer = ObservationReducer()
-        reducer.apply(initial)
-        in_game = reducer.apply(game.send_key("c"))
+        in_game = reducer.apply(initial)
         assert in_game.player["species"] == "Minotaur"
         assert in_game.player["depth"] == 1
         assert any(cell.get("g") == "@" for cell in in_game.cells)

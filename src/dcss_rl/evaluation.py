@@ -19,6 +19,7 @@ from dcss_rl.units import GameSeed, StepLimit, WorkerCount
 from dcss_rl.webtiles import GameConfig
 
 _DEFAULT_EVALUATION_WORKERS = WorkerCount(1)
+type EvaluationRank = tuple[int, int, int, int, int, float]
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +58,7 @@ class EvaluationSummary:
     episodes: tuple[EpisodeResult, ...]
 
     @property
-    def rank(self) -> tuple[int, int, int, int, int, float]:
+    def rank(self) -> EvaluationRank:
         """Lexicographic champion order, with ascension dominating all milestones."""
         return (
             sum(episode.outcome == "won" for episode in self.episodes),
@@ -67,6 +68,15 @@ class EvaluationSummary:
             sum(episode.game_turns for episode in self.episodes),
             sum(episode.total_reward for episode in self.episodes),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class RegressionThreshold:
+    """Minimum acceptable champion rank for one fixed evaluation suite."""
+
+    suite_id: str
+    baseline_policy_id: str
+    minimum_rank: EvaluationRank
 
 
 def load_suite(path: Path) -> EvaluationSuite:
@@ -91,6 +101,51 @@ def load_suite(path: Path) -> EvaluationSuite:
             raise ValueError("each evaluation case needs a string case_id and int seed")
         cases.append(EvaluationCase(case_id, GameSeed(seed)))
     return EvaluationSuite(suite_id, StepLimit(step_limit), tuple(cases))
+
+
+def load_regression_threshold(path: Path) -> RegressionThreshold:
+    """Load a checked-in aggregate regression floor."""
+    decoded: object = json.loads(Path(path).read_text())
+    if not isinstance(decoded, dict):
+        raise ValueError("regression threshold must be a JSON object")
+    suite_id = decoded.get("suite_id")
+    baseline_policy_id = decoded.get("baseline_policy_id")
+    raw_rank = decoded.get("minimum_rank")
+    if not isinstance(suite_id, str) or not isinstance(baseline_policy_id, str):
+        raise ValueError("regression threshold needs suite and baseline policy IDs")
+    if (
+        not isinstance(raw_rank, list)
+        or len(raw_rank) != 6
+        or any(not isinstance(value, (int, float)) for value in raw_rank)
+    ):
+        raise ValueError("minimum_rank must contain six numeric metrics")
+    return RegressionThreshold(
+        suite_id,
+        baseline_policy_id,
+        (
+            int(raw_rank[0]),
+            int(raw_rank[1]),
+            int(raw_rank[2]),
+            int(raw_rank[3]),
+            int(raw_rank[4]),
+            float(raw_rank[5]),
+        ),
+    )
+
+
+def assert_meets_regression_threshold(
+    summary: EvaluationSummary, threshold: RegressionThreshold
+) -> None:
+    """Reject a candidate whose held-out rank falls below the locked baseline."""
+    if summary.suite_id != threshold.suite_id:
+        raise ValueError(
+            f"threshold is for {threshold.suite_id!r}, not {summary.suite_id!r}"
+        )
+    if summary.rank < threshold.minimum_rank:
+        raise RuntimeError(
+            f"policy {summary.policy_id!r} rank {summary.rank} is below "
+            f"{threshold.baseline_policy_id!r} floor {threshold.minimum_rank}"
+        )
 
 
 def evaluate_policy(
