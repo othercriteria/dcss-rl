@@ -4,8 +4,15 @@ import numpy as np
 import pytest
 
 from dcss_rl.actions import Action, ActionKind
-from dcss_rl.env import DcssEnv, action_to_index, index_to_action
-from dcss_rl.units import GameSeed, Keycode, StepLimit
+from dcss_rl.env import (
+    DcssEnv,
+    RewardShaping,
+    action_to_index,
+    index_to_action,
+    shaped_reward,
+)
+from dcss_rl.schema import ObservationData
+from dcss_rl.units import GameSeed, Keycode, RewardWeight, StepLimit
 from dcss_rl.webtiles import GameConfig, Message, ObservationBatch
 
 _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
@@ -36,6 +43,47 @@ def test_player_visible_death_ends_episode_before_post_game_ui() -> None:
     )
 
     assert DcssEnv._terminal_outcome(batch) == (True, "dead")
+
+
+def test_dense_reward_uses_visible_potential_deltas() -> None:
+    previous: ObservationData = {
+        "player": {"xl": 1, "progress": 50, "hp": 10, "hp_max": 20},
+        "cells": [{"x": 0, "y": 0, "g": "@"}],
+        "messages": [],
+        "menu": None,
+        "input_mode": 1,
+    }
+    current: ObservationData = {
+        "player": {"xl": 2, "progress": 10, "hp": 15, "hp_max": 20},
+        "cells": [
+            {"x": 0, "y": 0, "g": "."},
+            {"x": 1, "y": 0, "g": "@"},
+            {"x": 2, "y": 0, "g": "."},
+        ],
+        "messages": [],
+        "menu": None,
+        "input_mode": 1,
+    }
+    shaping = RewardShaping(
+        explored_cell=RewardWeight(0.1),
+        experience_progress=RewardWeight(2.0),
+        hp_fraction=RewardWeight(4.0),
+    )
+
+    # 2 new cells * .1 + .6 levels * 2 + .25 HP fraction * 4
+    assert shaped_reward(previous, current, shaping=shaping) == pytest.approx(2.4)
+
+
+def test_dense_reward_is_zero_by_default() -> None:
+    observation: ObservationData = {
+        "player": {"xl": 1, "progress": 0, "hp": 10, "hp_max": 20},
+        "cells": [{"x": 0, "y": 0, "g": "@"}],
+        "messages": [],
+        "menu": None,
+        "input_mode": 1,
+    }
+
+    assert shaped_reward(observation, observation, shaping=RewardShaping()) == 0.0
 
 
 @pytest.mark.integration

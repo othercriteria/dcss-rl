@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -13,7 +14,7 @@ from gymnasium import spaces
 from dcss_rl.actions import Action, ActionKind, encode_action, legal_actions
 from dcss_rl.observation import ObservationReducer, SemanticObservation
 from dcss_rl.schema import GymMetadata, ObservationData
-from dcss_rl.units import ActionCount, ActionIndex, Keycode, StepLimit
+from dcss_rl.units import ActionCount, ActionIndex, Keycode, RewardWeight, StepLimit
 from dcss_rl.webtiles import GameConfig, ManagedGame, ObservationBatch
 
 _COMMAND_ACTIONS = tuple(
@@ -22,6 +23,27 @@ _COMMAND_ACTIONS = tuple(
 _MENU_OFFSET = len(_COMMAND_ACTIONS)
 _KEYCODE_COUNT = 256
 ACTION_COUNT = ActionCount(_MENU_OFFSET + _KEYCODE_COUNT)
+_ZERO_REWARD_WEIGHT = RewardWeight(0.0)
+
+
+@dataclass(frozen=True, slots=True)
+class RewardShaping:
+    """Potential-style training rewards derived only from player-visible state."""
+
+    explored_cell: RewardWeight = _ZERO_REWARD_WEIGHT
+    experience_progress: RewardWeight = _ZERO_REWARD_WEIGHT
+    hp_fraction: RewardWeight = _ZERO_REWARD_WEIGHT
+
+    def __post_init__(self) -> None:
+        if any(
+            weight < 0
+            for weight in (
+                self.explored_cell,
+                self.experience_progress,
+                self.hp_fraction,
+            )
+        ):
+            raise ValueError("reward-shaping weights cannot be negative")
 
 
 class SemanticObservationSpace(gym.Space[ObservationData]):
@@ -92,6 +114,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         starting_weapon_key: str = "c",
         max_steps: StepLimit | None = None,
         run_root: Path | None = None,
+        reward_shaping: RewardShaping | None = None,
     ) -> None:
         super().__init__()
         if len(starting_weapon_key) != 1:
@@ -101,6 +124,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.starting_weapon_key = starting_weapon_key
         self.max_steps = max_steps
         self.run_root = run_root
+        self.reward_shaping = reward_shaping or RewardShaping()
         self.action_space = spaces.Discrete(ACTION_COUNT)
         self.observation_space = SemanticObservationSpace()
         self.game: ManagedGame | None = None
@@ -155,6 +179,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
             raise RuntimeError("reset must be called before step")
         structured_action = index_to_action(ActionIndex(action))
         keycode = encode_action(structured_action, self.current)
+        previous_observation = self.current.to_dict()
         previous_depth = self._max_depth
         previous_xl = self._max_xl
 
@@ -170,6 +195,11 @@ class DcssEnv(gym.Env[ObservationData, int]):
             + 10 * (self._max_xl - previous_xl)
             + (1000 if outcome == "won" else 0)
             - (10 if outcome == "dead" else 0)
+        )
+        reward += shaped_reward(
+            previous_observation,
+            self.current.to_dict(),
+            shaping=self.reward_shaping,
         )
         truncated = self.max_steps is not None and self.steps >= self.max_steps
         return (
@@ -234,3 +264,36 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.last_batch = None
         self.last_exchange = ()
         self.last_keycodes = ()
+
+
+def shaped_reward(
+    previous: ObservationData,
+    current: ObservationData,
+    *,
+    shaping: RewardShaping,
+) -> float:
+    """Return dense potential deltas without changing headline sparse rewards."""
+    previous_cells = {(cell["x"], cell["y"]) for cell in previous["cells"]}
+    current_cells = {(cell["x"], cell["y"]) for cell in current["cells"]}
+    newly_explored = len(current_cells - previous_cells)
+    experience_delta = _experience_potential(current) - _experience_potential(previous)
+    hp_delta = _hp_fraction(current) - _hp_fraction(previous)
+    return float(
+        shaping.explored_cell * newly_explored
+        + shaping.experience_progress * experience_delta
+        + shaping.hp_fraction * hp_delta
+    )
+
+
+def _experience_potential(observation: ObservationData) -> float:
+    player = observation["player"]
+    xl = player.get("xl", 1)
+    progress = player.get("progress", 0)
+    return float(xl) + float(progress) / 100.0
+
+
+def _hp_fraction(observation: ObservationData) -> float:
+    player = observation["player"]
+    hp = player.get("hp", 0)
+    hp_max = max(player.get("hp_max", 1), 1)
+    return hp / hp_max

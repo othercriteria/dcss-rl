@@ -13,7 +13,7 @@ from dcss_rl.evaluation import (
     promote_champion,
     select_champion,
 )
-from dcss_rl.units import GameSeed
+from dcss_rl.units import DecisionProgressArea, GameSeed
 
 
 def result(
@@ -26,6 +26,8 @@ def result(
         total_reward=reward,
         policy_steps=policy_steps,
         game_turns=turns,
+        depth_progress_area=DecisionProgressArea(max(depth - 1, 0) * policy_steps),
+        xl_progress_area=DecisionProgressArea(max(xl - 1, 0) * policy_steps),
         max_depth=depth,
         max_xl=xl,
         runes=0,
@@ -67,18 +69,12 @@ def test_rejects_comparing_different_suites(tmp_path: Path) -> None:
 
 def test_checked_in_regression_threshold_matches_frozen_baseline() -> None:
     threshold = load_regression_threshold(Path("configs/heldout-regression-v1.json"))
-    summary = EvaluationSummary(
-        "mibe-heldout-v1",
-        "candidate",
-        "now",
-        (result(depth=5, xl=10, turns=3516, reward=50.0, policy_steps=2500),),
-    )
 
-    assert_meets_regression_threshold(summary, threshold)
+    assert threshold.minimum_rank == (0, 0, 0, 2172, 2500, 5, 50.0)
 
 
 def test_rejects_rank_below_regression_threshold() -> None:
-    threshold = RegressionThreshold("suite", "baseline", (0, 0, 2, 1, 1, 0.0))
+    threshold = RegressionThreshold("suite", "baseline", (0, 0, 2, 1, 1, 1, 0.0))
     summary = EvaluationSummary(
         "suite", "candidate", "now", (result(depth=1, xl=20, turns=9999),)
     )
@@ -88,7 +84,7 @@ def test_rejects_rank_below_regression_threshold() -> None:
 
 
 def test_rejects_threshold_for_different_suite() -> None:
-    threshold = RegressionThreshold("heldout", "baseline", (0, 0, 1, 1, 1, 0.0))
+    threshold = RegressionThreshold("heldout", "baseline", (0, 0, 1, 1, 1, 1, 0.0))
     summary = EvaluationSummary(
         "diagnostic", "candidate", "now", (result(depth=2, xl=2, turns=2),)
     )
@@ -128,7 +124,7 @@ def test_rank_uses_bounded_policy_survival_not_inflatable_game_turns() -> None:
     assert survives.rank > rests.rank
 
 
-def test_promoting_same_policy_migrates_embedded_v1_rank(tmp_path: Path) -> None:
+def test_promoting_same_policy_migrates_older_rank_spec(tmp_path: Path) -> None:
     destination = tmp_path / "champion.json"
     candidate = EvaluationSummary(
         "suite",
@@ -138,11 +134,11 @@ def test_promoting_same_policy_migrates_embedded_v1_rank(tmp_path: Path) -> None
     )
     select_champion((candidate,), destination)
     manifest = json.loads(destination.read_text())
-    del manifest["rank_spec_version"]
-    manifest["rank"][4] = 5000
+    manifest["rank_spec_version"] = 2
+    manifest["rank"] = [0, 0, 2, 2, 10, 0.0]
     destination.write_text(json.dumps(manifest))
 
     assert promote_champion(candidate, destination)
     migrated = json.loads(destination.read_text())
-    assert migrated["rank_spec_version"] == 2
-    assert migrated["rank"][4] == 10
+    assert migrated["rank_spec_version"] == 3
+    assert migrated["rank"][2] == 10

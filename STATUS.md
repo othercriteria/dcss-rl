@@ -60,8 +60,8 @@ Completed:
   schema-v2 recording, and exact replay reconstruction against any binary. It passes
   on trunk plus 0.34.1 (`1eebc1a2892e1c89776a0d7a10691f8dac8d9796`) and 0.33.1
   (`9cb173b281c11a5177f40b8c0662bacd3aac2717`).
-- `configs/heldout-regression-v1.json` locks the scripted-v2 held-out rank
-  `(0, 0, 5, 10, 2500, 50.0)`; `poe evaluate-scripted` enforces it before champion
+- `configs/heldout-regression-v1.json` locks the scripted-v2 held-out rank-v3 vector
+  `(0, 0, 0, 2172, 2500, 5, 50.0)`; `poe evaluate-scripted` enforces it before champion
   promotion.
 - PyTorch 2.14.0+cu130 sees the RTX 4090 and completes CUDA tensor operations without
   a flake change. A versioned fixed-width semantic actor/value model, ECHO
@@ -75,7 +75,8 @@ Completed:
   not GPU training, is currently the dominant wall-time cost.
 - Scripted-v3 fixes sparse monster handling, ignores positively identified stationary
   flora, and permits BFS to enter stair feature cells. Its diagnostic rank is
-  `(0, 0, 20, 18, 851, 155.0)`, providing a materially stronger multi-depth teacher.
+  Its depth-progress area is 1,019 over 851 decisions, providing a materially stronger
+  multi-depth teacher.
 - Canonical held-out and diagnostic leaders now have separate monotonic promotion
   tracks. `poe watch-heldout-champion` remains held-out-only;
   `poe watch-diagnostic-leader` exposes the current diagnostic leader without weakening
@@ -83,8 +84,9 @@ Completed:
   parallel and mark death, horizon truncation, and ascension explicitly.
 - The confidence-gated DAgger-v4 agent matches the depth-20 diagnostic expert while
   making 23.7% of diagnostic decisions neurally. It cleared the locked held-out floor
-  and became canonical with rank `(0, 0, 11, 8, 1240, 18.0)`, versus scripted-v2's
-  `(0, 0, 5, 10, 2500, 50.0)`. Held-out learned-action coverage was 2.4%, an explicit
+  and became canonical with maximum-depth sum 11 versus scripted-v2's 5. Its
+  depth-progress area is 213 over 1,240 decisions, while the D:1-only baseline has
+  zero over 2,500. Held-out learned-action coverage was 2.4%, an explicit
   limitation and the next optimization target. The canonical trajectory records
   checkpoint SHA-256 `e8e1f37e4fa28517a38a01c42eb79c0ba034a016366d39c9c9eb22a0f6b5975b`;
   its first manifest episode reaches D:2 at step 34.
@@ -121,11 +123,16 @@ current bottleneck.
   working negative results: the next gain needs a denser learning signal or collector
   change, not merely more synchronous updates.
 - Synchronous online rollout scaling at 5/10/20 workers was 4.53/5.63/7.29 decisions/s.
-  Stragglers from long automatic commands make an asynchronous actor queue the likely
-  next scaling step.
-- Champion rank v2 uses bounded policy decisions survived after wins, runes, depth,
-  and XL; raw game turns were removed because rest/travel can inflate them behind one
-  policy action. Legacy manifests migrate from their embedded episode summaries.
+  Independent per-worker chunks remove the per-action straggler barrier: the matched
+  20×64 workload reaches 44.66 decisions/s (6.13× faster), and an exact repeat produced
+  bit-identical model tensors despite thread scheduling.
+- Training environments can add typed, player-visible potential rewards for newly
+  explored cells, fractional XP progress, and HP preservation. Defaults remain zero,
+  so headline evaluation rewards and old behavior are unchanged; selected weights are
+  stored in PPO checkpoint metadata.
+- Champion rank v3 uses decision-weighted depth/XL progress and bounded policy survival
+  after wins and runes, with maximum depth retained as a later frontier tie-breaker.
+  Raw game turns were removed because rest/travel can inflate them behind one action.
 - DCSS can abort when an overlong run directory produces a Unix socket path beyond
   Linux's 107-byte payload limit. Managed games now reject such paths before launch
   with a clear instruction to shorten the output root.

@@ -50,3 +50,17 @@ this journal exists to keep research velocity and direction visible.
   rank tie-breaker. Decision: rank bounded policy survival instead of automatic game
   turns; do not spend on the matched strong-ECHO-off arm until the learning signal or
   collection architecture changes.
+- **2026-09-07 16:18 EDT — ranking follow-up.** Replayed historical trajectories to
+  compare decision-weighted progression. The D:1 scripted heldout floor has raw depth
+  area 2,500 but zero `depth - 1` progress; the hybrid champion has 213 progress over
+  1,240 decisions; scripted-v3 diagnostic has 1,019 over 851. Decision: rank v3 uses
+  depth/XL progress area ahead of bounded survival, retaining maximum depth only as a
+  later frontier tie-breaker. Branch curricula must replace the Dungeon-local depth
+  coordinate with a versioned topology-aware mapping before they become eligible.
+- **2026-09-07 16:25 EDT — asynchronous collector and dense-reward smoke.** The
+  matched 20-worker × 64-step workload rose from 7.29 to 44.66 decisions/s (6.13×)
+  after removing per-action barriers. A full repeat reached 44.63 decisions/s and
+  produced bit-identical model tensors using worker-local seeded samplers. Exploration
+  0.01, XP-progress 1.0, and HP-potential 1.0 yielded finite losses and one completed
+  episode. Decision: use this foundation for controlled 20-seed dense-reward runs;
+  further synchronous worker tuning is no longer the immediate bottleneck.

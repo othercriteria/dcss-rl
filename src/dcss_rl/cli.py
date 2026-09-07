@@ -25,6 +25,7 @@ from dcss_rl.units import (
     LearningRate,
     LossWeight,
     Probability,
+    RewardWeight,
     RolloutLength,
     Seconds,
     UpdateCount,
@@ -109,6 +110,9 @@ def main() -> None:
     ppo.add_argument("--imitation-weight", type=float, default=0.1)
     ppo.add_argument("--epochs-per-update", type=int, default=4)
     ppo.add_argument("--clip-ratio", type=float, default=0.2)
+    ppo.add_argument("--explored-cell-reward", type=float, default=0.0)
+    ppo.add_argument("--experience-progress-reward", type=float, default=0.0)
+    ppo.add_argument("--hp-fraction-reward", type=float, default=0.0)
     ppo.add_argument("--seed", type=int, default=1)
     ppo.add_argument("--device", default="cuda")
     watch = commands.add_parser("watch-best")
@@ -225,6 +229,11 @@ def main() -> None:
                 imitation_weight=LossWeight(arguments.imitation_weight),
                 epochs_per_update=EpochCount(arguments.epochs_per_update),
                 clip_ratio=Probability(arguments.clip_ratio),
+                explored_cell_reward=RewardWeight(arguments.explored_cell_reward),
+                experience_progress_reward=RewardWeight(
+                    arguments.experience_progress_reward
+                ),
+                hp_fraction_reward=RewardWeight(arguments.hp_fraction_reward),
                 device=arguments.device,
             ),
             policy_id=arguments.policy_id,

@@ -16,13 +16,20 @@ from dcss_rl.env import DcssEnv
 from dcss_rl.policy import Policy
 from dcss_rl.schema import JsonObject
 from dcss_rl.trajectory import RecordingEnv, TrajectoryWriter
-from dcss_rl.units import DecisionsPerSecond, GameSeed, Seconds, StepLimit, WorkerCount
+from dcss_rl.units import (
+    DecisionProgressArea,
+    DecisionsPerSecond,
+    GameSeed,
+    Seconds,
+    StepLimit,
+    WorkerCount,
+)
 from dcss_rl.webtiles import GameConfig
 
 _DEFAULT_EVALUATION_WORKERS = WorkerCount(1)
 _ZERO_SECONDS = Seconds(0.0)
-type EvaluationRank = tuple[int, int, int, int, int, float]
-RANK_SPEC_VERSION = 2
+type EvaluationRank = tuple[int, int, int, int, int, int, float]
+RANK_SPEC_VERSION = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +53,8 @@ class EpisodeResult:
     total_reward: float
     policy_steps: int
     game_turns: int
+    depth_progress_area: DecisionProgressArea
+    xl_progress_area: DecisionProgressArea
     max_depth: int
     max_xl: int
     runes: int
@@ -67,9 +76,10 @@ class EvaluationSummary:
         return (
             sum(episode.outcome == "won" for episode in self.episodes),
             sum(episode.runes for episode in self.episodes),
-            sum(episode.max_depth for episode in self.episodes),
-            sum(episode.max_xl for episode in self.episodes),
+            sum(episode.depth_progress_area for episode in self.episodes),
+            sum(episode.xl_progress_area for episode in self.episodes),
             sum(episode.policy_steps for episode in self.episodes),
+            sum(episode.max_depth for episode in self.episodes),
             sum(episode.total_reward for episode in self.episodes),
         )
 
@@ -126,10 +136,10 @@ def load_regression_threshold(path: Path) -> RegressionThreshold:
         raise ValueError("regression threshold needs suite and baseline policy IDs")
     if (
         not isinstance(raw_rank, list)
-        or len(raw_rank) != 6
+        or len(raw_rank) != 7
         or any(not isinstance(value, (int, float)) for value in raw_rank)
     ):
-        raise ValueError("minimum_rank must contain six numeric metrics")
+        raise ValueError("minimum_rank must contain seven numeric metrics")
     return RegressionThreshold(
         suite_id,
         baseline_policy_id,
@@ -139,7 +149,8 @@ def load_regression_threshold(path: Path) -> RegressionThreshold:
             int(raw_rank[2]),
             int(raw_rank[3]),
             int(raw_rank[4]),
-            float(raw_rank[5]),
+            int(raw_rank[5]),
+            float(raw_rank[6]),
         ),
     )
 
@@ -232,13 +243,17 @@ def promote_champion(candidate: EvaluationSummary, destination: Path) -> bool:
             raise ValueError(
                 f"champion track is for {suite_id!r}, not {candidate.suite_id!r}"
             )
-        if not isinstance(raw_rank, list) or len(raw_rank) != 6:
+        if not isinstance(raw_rank, list) or len(raw_rank) not in {6, 7}:
             raise ValueError("champion manifest has an invalid rank")
-        existing_rank = (
-            _stored_rank(raw_rank)
-            if decoded.get("rank_spec_version") == RANK_SPEC_VERSION
-            else _migrate_v1_rank(decoded)
-        )
+        if decoded.get("rank_spec_version") != RANK_SPEC_VERSION:
+            if existing_policy_id != candidate.policy_id:
+                raise ValueError(
+                    "champion uses an older rank specification; re-evaluate its "
+                    "current policy before comparing a new candidate"
+                )
+            existing_rank = candidate.rank
+        else:
+            existing_rank = _stored_rank(raw_rank)
         if candidate.rank < existing_rank or (
             candidate.rank == existing_rank
             and existing_policy_id != candidate.policy_id
@@ -255,51 +270,14 @@ def _stored_rank(raw_rank: list[object]) -> EvaluationRank:
         int(_number(raw_rank[2])),
         int(_number(raw_rank[3])),
         int(_number(raw_rank[4])),
-        float(_number(raw_rank[5])),
-    )
-
-
-def _migrate_v1_rank(manifest: dict[object, object]) -> EvaluationRank:
-    """Recompute bounded-survival rank from episode data embedded in v1 manifests."""
-    summary = manifest.get("summary")
-    if not isinstance(summary, dict):
-        raise ValueError("v1 champion manifest lacks an embedded summary")
-    episodes = cast(dict[str, object], summary).get("episodes")
-    if not isinstance(episodes, list) or not episodes:
-        raise ValueError("v1 champion manifest lacks embedded episodes")
-    required = (
-        "outcome",
-        "runes",
-        "max_depth",
-        "max_xl",
-        "policy_steps",
-        "total_reward",
-    )
-    if any(
-        not isinstance(episode, dict) or any(field not in episode for field in required)
-        for episode in episodes
-    ):
-        raise ValueError("v1 champion episodes cannot be migrated to rank v2")
-    typed_episodes = cast(list[dict[str, object]], episodes)
-    return (
-        sum(_text(episode["outcome"]) == "won" for episode in typed_episodes),
-        sum(int(_number(episode["runes"])) for episode in typed_episodes),
-        sum(int(_number(episode["max_depth"])) for episode in typed_episodes),
-        sum(int(_number(episode["max_xl"])) for episode in typed_episodes),
-        sum(int(_number(episode["policy_steps"])) for episode in typed_episodes),
-        sum(float(_number(episode["total_reward"])) for episode in typed_episodes),
+        int(_number(raw_rank[5])),
+        float(_number(raw_rank[6])),
     )
 
 
 def _number(value: object) -> int | float:
     if not isinstance(value, (int, float)):
         raise ValueError("champion rank field must be numeric")
-    return value
-
-
-def _text(value: object) -> str:
-    if not isinstance(value, str):
-        raise ValueError("champion outcome must be text")
     return value
 
 
@@ -326,6 +304,8 @@ def _run_episode(
         checkpoint_id=policy.checkpoint_id,
     )
     total_reward = 0.0
+    depth_progress_area = DecisionProgressArea(0)
+    xl_progress_area = DecisionProgressArea(0)
     outcome = "unknown"
     observation, info = env.reset()
     try:
@@ -336,6 +316,13 @@ def _run_episode(
             action = policy.select(observation, mask)
             observation, reward, terminated, truncated, info = env.step(action)
             total_reward += reward
+            player = observation["player"]
+            depth_progress_area = DecisionProgressArea(
+                depth_progress_area + max(player.get("depth", 1) - 1, 0)
+            )
+            xl_progress_area = DecisionProgressArea(
+                xl_progress_area + max(player.get("xl", 1) - 1, 0)
+            )
             if terminated or truncated:
                 raw_outcome = info.get("outcome")
                 outcome = raw_outcome if isinstance(raw_outcome, str) else "truncated"
@@ -348,6 +335,8 @@ def _run_episode(
             total_reward,
             _required_int(info, "steps"),
             player.get("turn", 0),
+            depth_progress_area,
+            xl_progress_area,
             _required_int(info, "max_depth"),
             _required_int(info, "max_xl"),
             0,
