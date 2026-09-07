@@ -23,6 +23,7 @@
             uv
             ruff
             poethepoet
+            pre-commit
 
             # DCSS console/WebTiles build dependencies.
             git

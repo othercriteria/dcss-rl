@@ -19,8 +19,12 @@ activate the pinned Nix shell and project virtual environment automatically:
 ```sh
 direnv allow
 uv sync
+poe hooks
 poe check
 ```
+
+The installed commit hook auto-fixes Ruff issues and runs fast tests. The push hook
+runs the complete gate, including the live DCSS process integration test.
 
 For non-interactive use and CI, the equivalent explicit shell entry is
 `nix develop`.

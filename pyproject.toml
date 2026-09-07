@@ -59,6 +59,7 @@ lint = "ruff check ."
 format = "ruff format ."
 format-check = "ruff format --check ."
 check = ["test", "lint", "format-check"]
+hooks = { shell = "pre-commit install --install-hooks && pre-commit install --hook-type pre-push" }
 dcss-fetch = "scripts/fetch_dcss.sh"
 dcss-build = "scripts/build_dcss.sh"
 dcss-smoke = "scripts/smoke_dcss.sh"
