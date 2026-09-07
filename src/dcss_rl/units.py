@@ -20,5 +20,8 @@ FeatureCount = NewType("FeatureCount", int)
 ActionCount = NewType("ActionCount", int)
 LearningRate = NewType("LearningRate", float)
 LossWeight = NewType("LossWeight", float)
+Probability = NewType("Probability", float)
+CheckpointId = NewType("CheckpointId", str)
+DecisionsPerSecond = NewType("DecisionsPerSecond", float)
 
 type Coordinate = tuple[int, int]

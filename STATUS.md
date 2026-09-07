@@ -79,6 +79,15 @@ Completed:
 - Canonical held-out and diagnostic leaders now have separate monotonic promotion
   tracks. `poe watch-best` remains held-out-only; `poe watch-dev-best` exposes the
   current diagnostic leader without weakening champion hygiene.
+- The confidence-gated DAgger-v4 agent matches the depth-20 diagnostic expert while
+  making 23.7% of diagnostic decisions neurally. It cleared the locked held-out floor
+  and became canonical with rank `(0, 0, 11, 8, 2155, 18.0)`, versus scripted-v2's
+  `(0, 0, 5, 10, 3516, 50.0)`. Held-out learned-action coverage was 2.4%, an explicit
+  limitation and the next optimization target. The canonical trajectory records
+  checkpoint SHA-256 `e8e1f37e4fa28517a38a01c42eb79c0ba034a016366d39c9c9eb22a0f6b5975b`;
+  its first manifest episode reaches D:2 at step 34.
+- `configs/curriculum-v1.json` freezes the non-held-out expert bootstrap, four DAgger
+  rounds, 0.98 diagnostic confidence gate, and locked held-out promotion stages.
 
 Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
 
@@ -88,14 +97,27 @@ Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
 | 2 | 22.5 s | 1.74x |
 | 5 | 10.1 s | 3.90x |
 
+Learned hybrid scaling on five 50-step diagnostic cases (250 decisions total,
+identical deterministic rank and 25.2% neural coverage, 2026-09-07):
+
+| workers | wall time | decisions/s | speedup |
+| ---: | ---: | ---: | ---: |
+| 1 | 84.50 s | 2.96 | 1.00x |
+| 2 | 45.07 s | 5.55 | 1.88x |
+| 5 | 20.61 s | 12.13 | 4.10x |
+
+The near-linear process scaling and sub-30-second GPU training iterations show that
+broader rollout suites and longer horizons are affordable next steps. DCSS internal
+automatic-command work remains the dominant per-episode cost; GPU capacity is not the
+current bottleneck.
+
 Next:
 
-1. Retrain the learner on the corrected multi-depth teacher and iterate on residual
-   compounding errors until it clears the diagnostic expert/floor.
-2. Run the learned candidate on the locked held-out suite, promote it if eligible,
-   and verify `watch-best` on learned play.
-3. Profile automatic-command latency and test worker counts on the representative
-   200-decision learned workload; GPU training is not presently the bottleneck.
+1. Increase autonomous learned-action coverage beyond 23.7% diagnostic / 2.4%
+   held-out while retaining or improving the depth-11 held-out champion rank.
+2. Add online policy-gradient fine-tuning and compare ECHO-on versus ECHO-off under
+   matched rollout budgets.
+3. Improve survival/XL after depth progress, then expand toward rune curricula.
 
 ## Verified commands
 

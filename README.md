@@ -121,6 +121,11 @@ Checkpoints and generated rollouts remain untracked. Learned candidates must fir
 improve the diagnostic track and then clear the checked-in held-out floor before
 promotion to `watch-best`.
 
+`configs/curriculum-v1.json` records the exact bootstrap, DAgger, confidence gate,
+and held-out promotion stages used by the first learned champion. It references only
+diagnostic seeds before the final locked evaluation; held-out trajectories are never
+training inputs.
+
 ## Licensing
 
 Project code is Apache-2.0. DCSS is an external GPLv2+ dependency fetched from its

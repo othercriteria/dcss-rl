@@ -1,0 +1,32 @@
+{
+  "curriculum_id": "mibe-semantic-dagger-v1",
+  "character": {"species": "Mi", "background": "Be", "starting_weapon_key": "c"},
+  "stages": [
+    {
+      "stage_id": "expert-bootstrap",
+      "mode": "scripted-rollout",
+      "suite": "configs/diagnostic-v1.json",
+      "teacher_policy": "scripted-mibe-v3"
+    },
+    {
+      "stage_id": "dagger",
+      "mode": "scripted-relabel",
+      "rounds": 4,
+      "epochs": 50,
+      "echo_weight": 0.1,
+      "value_weight": 0.1
+    },
+    {
+      "stage_id": "diagnostic-gate",
+      "mode": "confidence-gated-evaluation",
+      "suite": "configs/diagnostic-v1.json",
+      "confidence_threshold": 0.98
+    },
+    {
+      "stage_id": "heldout-promotion",
+      "mode": "locked-evaluation",
+      "suite": "configs/heldout-v1.json",
+      "regression_threshold": "configs/heldout-regression-v1.json"
+    }
+  ]
+}

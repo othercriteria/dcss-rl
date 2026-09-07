@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from threading import Lock
 
 import numpy as np
 import torch
 from torch import Tensor, nn
 
 from dcss_rl.features import FEATURE_COUNT, FEATURE_SPEC_VERSION, encode_observation
+from dcss_rl.policy import Policy
 from dcss_rl.schema import ObservationData
-from dcss_rl.units import ActionIndex
+from dcss_rl.units import ActionIndex, CheckpointId, Probability
 
 CHECKPOINT_SCHEMA_VERSION = 1
 
@@ -33,6 +36,12 @@ class CheckpointTrainingMetadata:
     echo_weight: float
     value_weight: float
     validation_accuracy: float
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyProposal:
+    action: ActionIndex
+    confidence: Probability
 
 
 class SemanticActorCritic(nn.Module):
@@ -64,6 +73,7 @@ class LearnedPolicy:
     """Deterministic masked policy restored from a versioned checkpoint."""
 
     def __init__(self, checkpoint: Path, *, device: str = "cpu") -> None:
+        checkpoint = Path(checkpoint)
         payload = torch.load(checkpoint, map_location=device, weights_only=True)
         if not isinstance(payload, dict):
             raise ValueError("checkpoint must contain an object")
@@ -86,16 +96,64 @@ class LearnedPolicy:
         if not isinstance(identifier, str):
             raise ValueError("checkpoint lacks policy ID")
         self.policy_id = identifier
+        digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+        self.checkpoint_id = CheckpointId(digest)
 
     def select(
         self, observation: ObservationData, action_mask: np.ndarray
     ) -> ActionIndex:
+        return self.propose(observation, action_mask).action
+
+    def propose(
+        self, observation: ObservationData, action_mask: np.ndarray
+    ) -> PolicyProposal:
         features = torch.from_numpy(encode_observation(observation)).to(self.device)
         mask = torch.from_numpy(action_mask).to(self.device)
         with torch.inference_mode():
             logits, _, _ = self.model(features.unsqueeze(0))
             logits = logits.squeeze(0).masked_fill(~mask, -torch.inf)
-            return ActionIndex(int(torch.argmax(logits).item()))
+            probabilities = torch.softmax(logits, dim=-1)
+            action = ActionIndex(int(torch.argmax(probabilities).item()))
+            confidence = Probability(float(probabilities[action].item()))
+            return PolicyProposal(action, confidence)
+
+
+class ConfidenceGatedPolicy:
+    """Use learned decisions above a threshold and a visible-state expert otherwise."""
+
+    def __init__(
+        self,
+        learned: LearnedPolicy,
+        fallback: Policy,
+        *,
+        threshold: Probability,
+    ) -> None:
+        self.learned = learned
+        self.fallback = fallback
+        self.threshold = threshold
+        self.policy_id = f"{learned.policy_id}-gated-{threshold:.3f}"
+        self.checkpoint_id = learned.checkpoint_id
+        self._lock = Lock()
+        self._learned_decisions = 0
+        self._fallback_decisions = 0
+
+    def select(
+        self, observation: ObservationData, action_mask: np.ndarray
+    ) -> ActionIndex:
+        proposal = self.learned.propose(observation, action_mask)
+        if proposal.confidence >= self.threshold:
+            with self._lock:
+                self._learned_decisions += 1
+            return proposal.action
+        with self._lock:
+            self._fallback_decisions += 1
+        return self.fallback.select(observation, action_mask)
+
+    @property
+    def learned_fraction(self) -> float:
+        with self._lock:
+            total = self._learned_decisions + self._fallback_decisions
+            return self._learned_decisions / total if total else 0.0
 
 
 def save_checkpoint(

@@ -11,7 +11,7 @@ import numpy as np
 from dcss_rl.actions import Action, ActionKind
 from dcss_rl.env import action_to_index
 from dcss_rl.schema import CellView, ObservationData
-from dcss_rl.units import ActionIndex, Coordinate, Keycode
+from dcss_rl.units import ActionIndex, CheckpointId, Coordinate, Keycode
 
 
 class Policy(Protocol):
@@ -19,6 +19,9 @@ class Policy(Protocol):
 
     @property
     def policy_id(self) -> str: ...
+
+    @property
+    def checkpoint_id(self) -> CheckpointId | None: ...
 
     def select(
         self, observation: ObservationData, action_mask: np.ndarray
@@ -54,6 +57,7 @@ class ScriptedMibePolicy:
     """Deterministic MiBe baseline using only the semantic player view."""
 
     policy_id = "scripted-mibe-v3"
+    checkpoint_id = None
 
     def decide(self, observation: ObservationData) -> PolicyDecision:
         menu = observation["menu"]

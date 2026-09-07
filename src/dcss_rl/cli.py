@@ -24,6 +24,7 @@ from dcss_rl.units import (
     GameSeed,
     LearningRate,
     LossWeight,
+    Probability,
     Seconds,
     ViewRadius,
     WorkerCount,
@@ -70,6 +71,8 @@ def main() -> None:
         "--champion", type=Path, default=Path("artifacts/champion.json")
     )
     learned.add_argument("--device", default="cuda")
+    learned.add_argument("--fallback-scripted", action="store_true")
+    learned.add_argument("--confidence-threshold", type=float, default=0.95)
     train = commands.add_parser("train-imitation")
     train.add_argument("trajectories", type=Path, nargs="+")
     train.add_argument("--checkpoint", type=Path, required=True)
@@ -110,10 +113,18 @@ def main() -> None:
         )
         return
     if arguments.command == "evaluate-learned":
-        from dcss_rl.learned import LearnedPolicy
+        from dcss_rl.learned import ConfidenceGatedPolicy, LearnedPolicy
+
+        policy: Policy = LearnedPolicy(arguments.checkpoint, device=arguments.device)
+        if arguments.fallback_scripted:
+            policy = ConfidenceGatedPolicy(
+                policy,
+                ScriptedMibePolicy(),
+                threshold=Probability(arguments.confidence_threshold),
+            )
 
         _evaluate(
-            policy=LearnedPolicy(arguments.checkpoint, device=arguments.device),
+            policy=policy,
             binary=arguments.binary,
             suite_path=arguments.suite,
             output=arguments.output,
@@ -121,6 +132,8 @@ def main() -> None:
             workers=WorkerCount(arguments.workers),
             threshold_path=arguments.threshold,
         )
+        if isinstance(policy, ConfidenceGatedPolicy):
+            print(f"learned decision fraction: {policy.learned_fraction:.3f}")
         return
     if arguments.command == "train-imitation":
         from dcss_rl.training import TrainingConfig, train_imitation
@@ -204,6 +217,10 @@ def _evaluate(
     print(f"evaluation: {output / 'summary.json'}")
     print(f"champion: {champion_path} ({'promoted' if promoted else 'retained'})")
     print(f"rank: {summary.rank}")
+    print(
+        f"throughput: {summary.decision_rate:.2f} decisions/s "
+        f"over {summary.wall_seconds:.2f}s"
+    )
 
 
 def _unreachable(value: object) -> NoReturn:

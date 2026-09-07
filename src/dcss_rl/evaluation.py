@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from time import perf_counter
 from typing import cast
 
 import numpy as np
@@ -15,10 +16,11 @@ from dcss_rl.env import DcssEnv
 from dcss_rl.policy import Policy
 from dcss_rl.schema import JsonObject
 from dcss_rl.trajectory import RecordingEnv, TrajectoryWriter
-from dcss_rl.units import GameSeed, StepLimit, WorkerCount
+from dcss_rl.units import DecisionsPerSecond, GameSeed, Seconds, StepLimit, WorkerCount
 from dcss_rl.webtiles import GameConfig
 
 _DEFAULT_EVALUATION_WORKERS = WorkerCount(1)
+_ZERO_SECONDS = Seconds(0.0)
 type EvaluationRank = tuple[int, int, int, int, int, float]
 
 
@@ -56,6 +58,7 @@ class EvaluationSummary:
     policy_id: str
     created_at: str
     episodes: tuple[EpisodeResult, ...]
+    wall_seconds: Seconds = _ZERO_SECONDS
 
     @property
     def rank(self) -> EvaluationRank:
@@ -68,6 +71,13 @@ class EvaluationSummary:
             sum(episode.game_turns for episode in self.episodes),
             sum(episode.total_reward for episode in self.episodes),
         )
+
+    @property
+    def decision_rate(self) -> DecisionsPerSecond:
+        decisions = sum(episode.policy_steps for episode in self.episodes)
+        if self.wall_seconds <= 0:
+            return DecisionsPerSecond(0.0)
+        return DecisionsPerSecond(decisions / self.wall_seconds)
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,6 +170,7 @@ def evaluate_policy(
     output_directory.mkdir(parents=True, exist_ok=False)
     if workers < 1:
         raise ValueError("evaluation workers must be positive")
+    started = perf_counter()
     with ThreadPoolExecutor(max_workers=workers) as executor:
         episodes = tuple(
             executor.map(
@@ -174,6 +185,7 @@ def evaluate_policy(
         policy.policy_id,
         datetime.now(UTC).isoformat(),
         episodes,
+        Seconds(perf_counter() - started),
     )
     _write_json(output_directory / "summary.json", _summary_data(summary))
     return summary
@@ -212,6 +224,7 @@ def promote_champion(candidate: EvaluationSummary, destination: Path) -> bool:
         if not isinstance(decoded, dict):
             raise ValueError("champion manifest must be a JSON object")
         suite_id = decoded.get("suite_id")
+        existing_policy_id = decoded.get("policy_id")
         raw_rank = decoded.get("rank")
         if suite_id != candidate.suite_id:
             raise ValueError(
@@ -227,7 +240,10 @@ def promote_champion(candidate: EvaluationSummary, destination: Path) -> bool:
             int(raw_rank[4]),
             float(raw_rank[5]),
         )
-        if candidate.rank <= existing_rank:
+        if candidate.rank < existing_rank or (
+            candidate.rank == existing_rank
+            and existing_policy_id != candidate.policy_id
+        ):
             return False
     select_champion((candidate,), destination)
     return True
@@ -253,6 +269,7 @@ def _run_episode(
         base,
         TrajectoryWriter(trajectory_path),
         agent_id=policy.policy_id,
+        checkpoint_id=policy.checkpoint_id,
     )
     total_reward = 0.0
     outcome = "unknown"

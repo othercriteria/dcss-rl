@@ -156,3 +156,16 @@ the feature-spec version and fail closed when loading older checkpoints.
 Diagnostic and held-out champion manifests are separate monotonic tracks. A candidate
 can replace a track only when its metric vector strictly outranks the existing
 same-suite manifest; cross-suite promotion is rejected.
+
+The first promoted agent uses a confidence gate calibrated only on diagnostic expert
+states. At threshold 0.98, neural decisions covered 23.7% of diagnostic actions with
+100% agreement on the calibration set; the transparent expert handles lower-confidence
+states. Evaluation reports the realized learned-action fraction so hybrid gains cannot
+be mistaken for fully autonomous neural control. Increasing that fraction while
+retaining depth is the next learning objective.
+
+On a fixed five-case, 50-decision learned-policy workload, throughput scales from
+2.96 decisions/s with one worker to 5.55 with two and 12.13 with five. All worker
+counts produce the identical metric vector and learned-action fraction. This makes
+additional rollout breadth comparatively cheap; longer horizons remain independently
+valuable because early-floor behavior underrepresents later-level tactical states.
