@@ -89,6 +89,14 @@ Watch the first manifest-ordered episode from the current champion:
 poe watch-best
 ```
 
+Held-out and development leaders are deliberately separate. Diagnostic evaluations
+promote monotonically to `artifacts/dev-champion.json`; observe that track with:
+
+```sh
+poe evaluate-scripted-diagnostic
+poe watch-dev-best
+```
+
 The terminal viewer reconstructs both legacy full-snapshot trajectories and compact
 schema-v2 deltas. Pass `--case CASE_ID` to inspect a specifically labeled suite case;
 the default deliberately follows manifest order instead of selecting a flattering
@@ -97,6 +105,21 @@ showcase seed.
 Champion promotion is gated by the checked-in held-out regression floor. Until a
 learned policy exceeds it, the champion may be the transparent scripted baseline.
 Native WebTiles spectating can later complement the deterministic completed replay.
+
+The optional training stack provides a versioned semantic actor/value model with an
+ECHO next-state-delta head. A behavior-cloning or scripted-relabel DAgger run is
+reproducible from explicit non-held-out trajectories:
+
+```sh
+uv sync --group train
+dcss-rl train-imitation artifacts/eval/TRAIN/*/trajectory.jsonl \
+  --checkpoint checkpoints/candidate.pt --relabel-scripted
+dcss-rl evaluate-learned --checkpoint checkpoints/candidate.pt
+```
+
+Checkpoints and generated rollouts remain untracked. Learned candidates must first
+improve the diagnostic track and then clear the checked-in held-out floor before
+promotion to `watch-best`.
 
 ## Licensing
 

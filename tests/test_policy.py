@@ -37,6 +37,28 @@ def test_attacks_adjacent_monster_before_resting() -> None:
     assert policy.decide(state).action == Action(ActionKind.MOVE_E)
 
 
+def test_ignores_stationary_flora() -> None:
+    state = observation(
+        cells=[
+            {"x": 0, "y": 0, "g": "@"},
+            {"x": 1, "y": 0, "g": "P", "mon": {"name": "bush"}},
+        ]
+    )
+
+    assert ScriptedMibePolicy().decide(state).action == Action(ActionKind.EXPLORE)
+
+
+def test_treats_sparse_monster_delta_as_tactical() -> None:
+    state = observation(
+        cells=[
+            {"x": 0, "y": 0, "g": "@"},
+            {"x": 1, "y": 0, "g": "g", "mon": {}},
+        ]
+    )
+
+    assert ScriptedMibePolicy().decide(state).action == Action(ActionKind.MOVE_E)
+
+
 def test_rests_when_injured_and_no_monster_is_visible() -> None:
     assert ScriptedMibePolicy().decide(observation(hp=10)).action == Action(
         ActionKind.REST
@@ -51,6 +73,18 @@ def test_routes_to_known_stairs_after_exploration() -> None:
             {"x": 2, "y": 0, "g": ">"},
         ],
         messages=["Done exploring."],
+    )
+
+    assert ScriptedMibePolicy().decide(state).action == Action(ActionKind.MOVE_E)
+
+
+def test_routes_to_known_stairs_without_transient_exploration_message() -> None:
+    state = observation(
+        cells=[
+            {"x": 0, "y": 0, "g": "@"},
+            {"x": 1, "y": 0, "g": "."},
+            {"x": 2, "y": 0, "g": ">", "mf": 44},
+        ]
     )
 
     assert ScriptedMibePolicy().decide(state).action == Action(ActionKind.MOVE_E)

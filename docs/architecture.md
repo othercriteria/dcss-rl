@@ -135,3 +135,24 @@ lower-priority aggregate.
 The RTX 4090 favors small models and parameter-efficient tuning initially. The
 environment, trajectory format, evaluation, and viewer must not depend on a particular
 trainer implementation.
+
+## First learned baseline
+
+The first falsifiable learner is a fixed-width semantic actor/value network rather
+than an LM. Its deterministic feature contract contains a player-centered local map,
+normalized character statistics, prompt/message indicators, and global navigation
+summaries computed only from remembered player-visible cells. A shared encoder feeds
+masked action logits, discounted-return value regression, and an ECHO auxiliary head
+that predicts the next semantic feature delta. The auxiliary weight is configurable
+for later ablation.
+
+Training begins with behavior cloning and scripted-relabel DAgger. The latter labels
+learner-visited states with the transparent expert, directly addressing compounding
+errors without using held-out games. Checkpoints store a schema version, feature-spec
+version, model configuration, plain state dictionary, policy identity, training
+method/hyperparameters, source counts, and validation accuracy. Feature changes bump
+the feature-spec version and fail closed when loading older checkpoints.
+
+Diagnostic and held-out champion manifests are separate monotonic tracks. A candidate
+can replace a track only when its metric vector strictly outranks the existing
+same-suite manifest; cross-suite promotion is rejected.

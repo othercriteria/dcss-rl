@@ -2,17 +2,20 @@
 
 ## Objective
 
-Deliver and validate a reproducible DCSS RL MVP on local, unmodified trunk: typed
-WebTiles boundaries, compact ECHO-ready trajectories, deterministic diagnostic and
-held-out evaluation, a scripted champion baseline, robust policy-input readiness,
-and `watch-best` live/replay observability. Keep the public repository tested and
-documented, retain fast development gates and semantic domain types, characterize
-parallel rollout scaling, and establish compatibility with recent stable releases.
+Build and evaluate the first learning-based DCSS agent that materially exceeds the
+scripted Minotaur Berserker baseline on survival and depth progression, using compact
+ECHO-style trajectories and the local RTX 4090. Deliver a reproducible training
+pipeline, curriculum and checkpoint format, locked diagnostic and held-out regression
+suites, automatic champion promotion, and `watch-best` observation of learned play.
+Resolve or sharply characterize policy-input readiness and measure rollout/training
+throughput well enough to identify the next bottleneck.
 
-The MVP finish line is evidence-backed rather than feature-count based:
+The learning milestone is evidence-backed rather than feature-count based:
 
-- A policy can run reproducibly from a fixed suite manifest and produce replayable
-  trajectories whose policy-action and next-environment targets remain distinct.
+- A learned policy and its preprocessing can be restored from a versioned checkpoint
+  and run reproducibly from a fixed suite manifest.
+- Training uses policy/value objectives plus an ECHO-style auxiliary prediction target
+  derived from the next player-visible semantic state; ablations can disable it.
 - Champion selection uses only a fixed held-out suite, has explicit regression
   thresholds, and can be observed without choosing a favorable episode by hand.
 - Policy-input readiness either uses a reliable upstream signal or has a documented,
@@ -23,9 +26,9 @@ The MVP finish line is evidence-backed rather than feature-count based:
   assumed from a single worker count.
 - The same integration/trajectory smoke path passes on canonical trunk and at least
   the two most recent selected stable releases, with exact revisions recorded.
-- The baseline provides a stable floor and a useful incremental learning signal even
-  before rune acquisition or ascension; depth progression is the current first
-  behavioral regression target.
+- The learned candidate materially exceeds the locked scripted baseline on survival
+  and depth progression before held-out champion promotion. Diagnostic improvements
+  alone do not satisfy the milestone.
 
 Work autonomously on routine architecture, implementation, dependency, experiment,
 commit, and publication decisions. Ask only about material scope changes, credentials,

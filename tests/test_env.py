@@ -6,7 +6,7 @@ import pytest
 from dcss_rl.actions import Action, ActionKind
 from dcss_rl.env import DcssEnv, action_to_index, index_to_action
 from dcss_rl.units import GameSeed, Keycode, StepLimit
-from dcss_rl.webtiles import GameConfig
+from dcss_rl.webtiles import GameConfig, Message, ObservationBatch
 
 _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
 
@@ -19,6 +19,23 @@ def test_fixed_action_catalog_round_trips(kind: ActionKind) -> None:
         else Action(kind)
     )
     assert index_to_action(action_to_index(action)) == action
+
+
+def test_player_visible_death_ends_episode_before_post_game_ui() -> None:
+    batch = ObservationBatch(
+        observations=(
+            Message({"msg": "player", "hp": 0}),
+            Message(
+                {
+                    "msg": "msgs",
+                    "messages": [{"text": "<lightgrey>You die...", "turn": 7}],
+                }
+            ),
+        ),
+        controls=(),
+    )
+
+    assert DcssEnv._terminal_outcome(batch) == (True, "dead")
 
 
 @pytest.mark.integration

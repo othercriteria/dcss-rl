@@ -13,7 +13,7 @@ from gymnasium import spaces
 from dcss_rl.actions import Action, ActionKind, encode_action, legal_actions
 from dcss_rl.observation import ObservationReducer, SemanticObservation
 from dcss_rl.schema import GymMetadata, ObservationData
-from dcss_rl.units import ActionIndex, Keycode, StepLimit
+from dcss_rl.units import ActionCount, ActionIndex, Keycode, StepLimit
 from dcss_rl.webtiles import GameConfig, ManagedGame, ObservationBatch
 
 _COMMAND_ACTIONS = tuple(
@@ -21,6 +21,7 @@ _COMMAND_ACTIONS = tuple(
 )
 _MENU_OFFSET = len(_COMMAND_ACTIONS)
 _KEYCODE_COUNT = 256
+ACTION_COUNT = ActionCount(_MENU_OFFSET + _KEYCODE_COUNT)
 
 
 class SemanticObservationSpace(gym.Space[ObservationData]):
@@ -100,7 +101,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.starting_weapon_key = starting_weapon_key
         self.max_steps = max_steps
         self.run_root = run_root
-        self.action_space = spaces.Discrete(_MENU_OFFSET + _KEYCODE_COUNT)
+        self.action_space = spaces.Discrete(ACTION_COUNT)
         self.observation_space = SemanticObservationSpace()
         self.game: ManagedGame | None = None
         self.reducer: ObservationReducer | None = None
@@ -189,12 +190,24 @@ class DcssEnv(gym.Env[ObservationData, int]):
 
     @staticmethod
     def _terminal_outcome(batch: ObservationBatch) -> tuple[bool, str | None]:
-        for message in batch.controls:
-            if message.kind != "exit_reason":
-                continue
-            outcome = message.payload.get("type")
-            if isinstance(outcome, str) and outcome != "unknown":
-                return True, outcome
+        for message in batch.messages:
+            if message.control and message.kind == "exit_reason":
+                outcome = message.payload.get("type")
+                if isinstance(outcome, str) and outcome != "unknown":
+                    return True, outcome
+            if message.kind == "milestone" and message.payload.get("status") == "dead":
+                return True, "dead"
+            if message.kind == "player" and message.payload.get("hp") == 0:
+                return True, "dead"
+            if message.kind == "msgs":
+                raw_messages = message.payload.get("messages")
+                if isinstance(raw_messages, list) and any(
+                    isinstance(item, dict)
+                    and isinstance(item.get("text"), str)
+                    and "you die" in item["text"].casefold()
+                    for item in raw_messages
+                ):
+                    return True, "dead"
         return False, None
 
     def _info(

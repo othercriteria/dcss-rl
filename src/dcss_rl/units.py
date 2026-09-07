@@ -14,5 +14,11 @@ FrameLimit = NewType("FrameLimit", int)
 ViewRadius = NewType("ViewRadius", int)
 DcssVersion = NewType("DcssVersion", str)
 VisibleCellCount = NewType("VisibleCellCount", int)
+EpochCount = NewType("EpochCount", int)
+BatchSize = NewType("BatchSize", int)
+FeatureCount = NewType("FeatureCount", int)
+ActionCount = NewType("ActionCount", int)
+LearningRate = NewType("LearningRate", float)
+LossWeight = NewType("LossWeight", float)
 
 type Coordinate = tuple[int, int]

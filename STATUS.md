@@ -63,6 +63,22 @@ Completed:
 - `configs/heldout-regression-v1.json` locks the scripted-v2 held-out rank
   `(0, 0, 5, 10, 3516, 50.0)`; `poe evaluate-scripted` enforces it before champion
   promotion.
+- PyTorch 2.14.0+cu130 sees the RTX 4090 and completes CUDA tensor operations without
+  a flake change. A versioned fixed-width semantic actor/value model, ECHO
+  next-feature-delta head, legality-masked class-balanced imitation trainer, and
+  scripted-relabel DAgger path now produce restorable checkpoints.
+- Pure learned diagnostic iterations established the first behavioral/throughput
+  evidence: naive cloning collapsed to autoexplore; class balancing diversified
+  actions but hit walls; DAgger plus global player-visible navigation features reached
+  depth sum 6 but still underperformed the scripted floor on XL. Five concurrent
+  200-decision learned episodes take about two minutes; DCSS internal command work,
+  not GPU training, is currently the dominant wall-time cost.
+- Scripted-v3 fixes sparse monster handling, ignores positively identified stationary
+  flora, and permits BFS to enter stair feature cells. Its diagnostic rank is
+  `(0, 0, 20, 18, 3287, 155.0)`, providing a materially stronger multi-depth teacher.
+- Canonical held-out and diagnostic leaders now have separate monotonic promotion
+  tracks. `poe watch-best` remains held-out-only; `poe watch-dev-best` exposes the
+  current diagnostic leader without weakening champion hygiene.
 
 Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
 
@@ -74,10 +90,12 @@ Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
 
 Next:
 
-1. Improve the scripted baseline's descent beyond the locked D:1 floor.
-2. GPU-smoke the optional training stack and implement the first learned baseline.
-3. Recharacterize rollout scaling on a representative training workload once one
-   exists; the current short-episode sweep remains the environment baseline.
+1. Retrain the learner on the corrected multi-depth teacher and iterate on residual
+   compounding errors until it clears the diagnostic expert/floor.
+2. Run the learned candidate on the locked held-out suite, promote it if eligible,
+   and verify `watch-best` on learned play.
+3. Profile automatic-command latency and test worker counts on the representative
+   200-decision learned workload; GPU training is not presently the bottleneck.
 
 ## Verified commands
 

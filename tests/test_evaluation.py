@@ -10,6 +10,7 @@ from dcss_rl.evaluation import (
     assert_meets_regression_threshold,
     load_regression_threshold,
     load_suite,
+    promote_champion,
     select_champion,
 )
 from dcss_rl.units import GameSeed
@@ -92,3 +93,17 @@ def test_rejects_threshold_for_different_suite() -> None:
 
     with pytest.raises(ValueError, match="threshold is for"):
         assert_meets_regression_threshold(summary, threshold)
+
+
+def test_champion_promotion_is_monotonic(tmp_path: Path) -> None:
+    destination = tmp_path / "champion.json"
+    strong = EvaluationSummary(
+        "suite", "strong", "now", (result(depth=3, xl=2, turns=20),)
+    )
+    weak = EvaluationSummary(
+        "suite", "weak", "later", (result(depth=2, xl=9, turns=999),)
+    )
+
+    assert promote_champion(strong, destination)
+    assert not promote_champion(weak, destination)
+    assert json.loads(destination.read_text())["policy_id"] == "strong"

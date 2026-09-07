@@ -45,12 +45,15 @@ _DIRECTION_BY_DELTA = {
 }
 _NEIGHBORS = tuple(_DIRECTION_BY_DELTA)
 _IMPASSABLE_GLYPHS = frozenset({" ", "#", "≈", "♣"})
+_IGNORED_STATIONARY_MONSTERS = frozenset(
+    {"bush", "plant", "fungus", "withered plant", "demonic plant"}
+)
 
 
 class ScriptedMibePolicy:
     """Deterministic MiBe baseline using only the semantic player view."""
 
-    policy_id = "scripted-mibe-v2"
+    policy_id = "scripted-mibe-v3"
 
     def decide(self, observation: ObservationData) -> PolicyDecision:
         menu = observation["menu"]
@@ -69,7 +72,9 @@ class ScriptedMibePolicy:
 
         position = _player_position(observation)
         cells = _cells_by_position(observation["cells"])
-        monsters = {point for point, cell in cells.items() if "mon" in cell}
+        monsters = {
+            point for point, cell in cells.items() if _is_tactical_monster(cell)
+        }
 
         if position is not None:
             adjacent = sorted(monsters & set(_adjacent(position)))
@@ -110,7 +115,7 @@ class ScriptedMibePolicy:
         ):
             return PolicyDecision(Action(ActionKind.WAIT), "wait for nearby threat")
 
-        if position is not None and _exploration_complete(observation):
+        if position is not None:
             downstairs = {
                 point for point, cell in cells.items() if cell.get("g") == ">"
             }
@@ -173,6 +178,14 @@ def _walkable(cell: CellView) -> bool:
     )
 
 
+def _is_tactical_monster(cell: CellView) -> bool:
+    monster = cell.get("mon")
+    if not isinstance(monster, dict):
+        return False
+    name = monster.get("name")
+    return not isinstance(name, str) or name not in _IGNORED_STATIONARY_MONSTERS
+
+
 def _shortest_step(
     start: Coordinate,
     targets: set[Coordinate],
@@ -199,7 +212,7 @@ def _shortest_step(
             if candidate in predecessors:
                 continue
             cell = cells.get(candidate)
-            if cell is None or not _walkable(cell):
+            if cell is None or (candidate not in targets and not _walkable(cell)):
                 continue
             predecessors[candidate] = current
             queue.append(candidate)

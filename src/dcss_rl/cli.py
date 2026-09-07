@@ -13,11 +13,21 @@ from dcss_rl.evaluation import (
     evaluate_policy,
     load_regression_threshold,
     load_suite,
-    select_champion,
+    promote_champion,
 )
-from dcss_rl.policy import ScriptedMibePolicy
+from dcss_rl.policy import Policy, ScriptedMibePolicy
 from dcss_rl.replay import champion_trajectory, watch_replay
-from dcss_rl.units import FrameLimit, GameSeed, Seconds, ViewRadius, WorkerCount
+from dcss_rl.units import (
+    BatchSize,
+    EpochCount,
+    FrameLimit,
+    GameSeed,
+    LearningRate,
+    LossWeight,
+    Seconds,
+    ViewRadius,
+    WorkerCount,
+)
 
 
 def main() -> None:
@@ -43,6 +53,35 @@ def main() -> None:
     evaluate.add_argument(
         "--champion", type=Path, default=Path("artifacts/champion.json")
     )
+    learned = commands.add_parser("evaluate-learned")
+    learned.add_argument("--checkpoint", type=Path, required=True)
+    learned.add_argument(
+        "--binary",
+        type=Path,
+        default=Path("vendor/crawl/crawl-ref/source/crawl"),
+    )
+    learned.add_argument(
+        "--suite", type=Path, default=Path("configs/diagnostic-v1.json")
+    )
+    learned.add_argument("--output", type=Path)
+    learned.add_argument("--workers", type=int, default=5)
+    learned.add_argument("--threshold", type=Path)
+    learned.add_argument(
+        "--champion", type=Path, default=Path("artifacts/champion.json")
+    )
+    learned.add_argument("--device", default="cuda")
+    train = commands.add_parser("train-imitation")
+    train.add_argument("trajectories", type=Path, nargs="+")
+    train.add_argument("--checkpoint", type=Path, required=True)
+    train.add_argument("--policy-id", default="semantic-bc-echo-v1")
+    train.add_argument("--epochs", type=int, default=20)
+    train.add_argument("--batch-size", type=int, default=256)
+    train.add_argument("--learning-rate", type=float, default=3e-4)
+    train.add_argument("--echo-weight", type=float, default=0.1)
+    train.add_argument("--value-weight", type=float, default=0.1)
+    train.add_argument("--seed", type=int, default=1)
+    train.add_argument("--device", default="cuda")
+    train.add_argument("--relabel-scripted", action="store_true")
     watch = commands.add_parser("watch-best")
     watch.add_argument("--champion", type=Path, default=Path("artifacts/champion.json"))
     watch.add_argument("--case")
@@ -70,6 +109,43 @@ def main() -> None:
             threshold_path=arguments.threshold,
         )
         return
+    if arguments.command == "evaluate-learned":
+        from dcss_rl.learned import LearnedPolicy
+
+        _evaluate(
+            policy=LearnedPolicy(arguments.checkpoint, device=arguments.device),
+            binary=arguments.binary,
+            suite_path=arguments.suite,
+            output=arguments.output,
+            champion_path=arguments.champion,
+            workers=WorkerCount(arguments.workers),
+            threshold_path=arguments.threshold,
+        )
+        return
+    if arguments.command == "train-imitation":
+        from dcss_rl.training import TrainingConfig, train_imitation
+
+        report = train_imitation(
+            tuple(arguments.trajectories),
+            arguments.checkpoint,
+            config=TrainingConfig(
+                seed=arguments.seed,
+                epochs=EpochCount(arguments.epochs),
+                batch_size=BatchSize(arguments.batch_size),
+                learning_rate=LearningRate(arguments.learning_rate),
+                echo_weight=LossWeight(arguments.echo_weight),
+                value_weight=LossWeight(arguments.value_weight),
+                device=arguments.device,
+                relabel_with_scripted=arguments.relabel_scripted,
+            ),
+            policy_id=arguments.policy_id,
+        )
+        print(
+            f"checkpoint: {report.checkpoint}; samples={report.sample_count}; "
+            f"validation_accuracy={report.validation_accuracy:.3f}; "
+            f"validation_policy_loss={report.validation_policy_loss:.3f}"
+        )
+        return
     if arguments.command == "watch-best":
         trajectory = champion_trajectory(arguments.champion, arguments.case)
         watch_replay(
@@ -94,7 +170,27 @@ def _evaluate_scripted(
     workers: WorkerCount,
     threshold_path: Path | None,
 ) -> None:
-    policy = ScriptedMibePolicy()
+    _evaluate(
+        policy=ScriptedMibePolicy(),
+        binary=binary,
+        suite_path=suite_path,
+        output=output,
+        champion_path=champion_path,
+        workers=workers,
+        threshold_path=threshold_path,
+    )
+
+
+def _evaluate(
+    *,
+    policy: Policy,
+    binary: Path,
+    suite_path: Path,
+    output: Path | None,
+    champion_path: Path,
+    workers: WorkerCount,
+    threshold_path: Path | None,
+) -> None:
     suite = load_suite(suite_path)
     if output is None:
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -104,9 +200,9 @@ def _evaluate_scripted(
         assert_meets_regression_threshold(
             summary, load_regression_threshold(threshold_path)
         )
-    select_champion((summary,), champion_path)
+    promoted = promote_champion(summary, champion_path)
     print(f"evaluation: {output / 'summary.json'}")
-    print(f"champion: {champion_path}")
+    print(f"champion: {champion_path} ({'promoted' if promoted else 'retained'})")
     print(f"rank: {summary.rank}")
 
 

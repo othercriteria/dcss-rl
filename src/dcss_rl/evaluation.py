@@ -204,6 +204,35 @@ def select_champion(
     return champion
 
 
+def promote_champion(candidate: EvaluationSummary, destination: Path) -> bool:
+    """Promote only when a candidate outranks the existing same-suite champion."""
+    destination = Path(destination)
+    if destination.exists():
+        decoded: object = json.loads(destination.read_text())
+        if not isinstance(decoded, dict):
+            raise ValueError("champion manifest must be a JSON object")
+        suite_id = decoded.get("suite_id")
+        raw_rank = decoded.get("rank")
+        if suite_id != candidate.suite_id:
+            raise ValueError(
+                f"champion track is for {suite_id!r}, not {candidate.suite_id!r}"
+            )
+        if not isinstance(raw_rank, list) or len(raw_rank) != 6:
+            raise ValueError("champion manifest has an invalid rank")
+        existing_rank: EvaluationRank = (
+            int(raw_rank[0]),
+            int(raw_rank[1]),
+            int(raw_rank[2]),
+            int(raw_rank[3]),
+            int(raw_rank[4]),
+            float(raw_rank[5]),
+        )
+        if candidate.rank <= existing_rank:
+            return False
+    select_champion((candidate,), destination)
+    return True
+
+
 def _run_episode(
     binary: Path,
     policy: Policy,
