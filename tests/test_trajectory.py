@@ -5,7 +5,11 @@ import pytest
 
 from dcss_rl.actions import Action, ActionKind
 from dcss_rl.env import DcssEnv, action_to_index
-from dcss_rl.trajectory import RecordingEnv, TrajectoryWriter
+from dcss_rl.trajectory import (
+    RecordingEnv,
+    TrajectoryWriter,
+    apply_observation_delta,
+)
 from dcss_rl.units import GameSeed, StepLimit
 from dcss_rl.webtiles import GameConfig
 
@@ -26,14 +30,14 @@ def test_records_replayable_raw_and_echo_segmented_trajectory(tmp_path: Path) ->
     env = RecordingEnv(base, TrajectoryWriter(path), agent_id="test-agent")
     try:
         observation, _ = env.reset()
-        env.step(action_to_index(Action(ActionKind.WAIT)))
+        next_observation, *_ = env.step(action_to_index(Action(ActionKind.WAIT)))
     finally:
         env.close()
 
     records = [json.loads(line) for line in path.read_text().splitlines()]
     assert [record["type"] for record in records] == ["episode", "transition"]
     header, transition = records
-    assert header["schema_version"] == 1
+    assert header["schema_version"] == 2
     assert header["metadata"]["seed"] == 11
     assert header["metadata"]["dcss_commit"]
     assert header["initial"]["setup_keycodes"] == [ord("c")]
@@ -41,11 +45,16 @@ def test_records_replayable_raw_and_echo_segmented_trajectory(tmp_path: Path) ->
         message["payload"].get("msg") == "player"
         for message in header["initial"]["raw_messages"]
     )
-    assert transition["observation"]["player"]["species"] == "Minotaur"
+    reconstructed = apply_observation_delta(
+        observation, transition["observation_delta"]
+    )
+    assert reconstructed == next_observation
     assert transition["emitted_keycodes"] == [ord(".")]
     assert [segment["loss"] for segment in transition["training_segments"]] == [
-        None,
         "policy",
         "environment",
     ]
-    assert json.loads(transition["training_segments"][0]["text"]) == observation
+    assert (
+        json.loads(transition["training_segments"][1]["text"])
+        == transition["observation_delta"]
+    )

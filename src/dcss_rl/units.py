@@ -10,5 +10,7 @@ ActionIndex = NewType("ActionIndex", int)
 Keycode = NewType("Keycode", int)
 StepLimit = NewType("StepLimit", int)
 WorkerCount = NewType("WorkerCount", int)
+FrameLimit = NewType("FrameLimit", int)
+ViewRadius = NewType("ViewRadius", int)
 
 type Coordinate = tuple[int, int]

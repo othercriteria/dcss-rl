@@ -6,18 +6,27 @@ import hashlib
 import json
 import subprocess
 import uuid
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from dcss_rl.env import DcssEnv, index_to_action
-from dcss_rl.schema import ObservationData
+from dcss_rl.schema import (
+    CellView,
+    CharacterData,
+    ObservationData,
+    ObservationDeltaData,
+    PlayerView,
+    Position,
+    RawMessageData,
+)
 from dcss_rl.units import ActionIndex
 from dcss_rl.webtiles import ObservationBatch
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +46,7 @@ class EpisodeMetadata:
     dcss_commit: str | None
     code_revision: str | None
     seed: int | None
-    character: dict[str, str]
+    character: CharacterData
     agent_id: str
     checkpoint_id: str | None
     reward_spec: str
@@ -58,12 +67,81 @@ def _json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def _raw_batches(batches: tuple[ObservationBatch, ...]) -> list[dict[str, Any]]:
+def _raw_batches(batches: tuple[ObservationBatch, ...]) -> list[RawMessageData]:
     return [
         {"control": message.control, "payload": message.payload}
         for batch in batches
         for message in batch.messages
     ]
+
+
+def observation_delta(
+    previous: ObservationData, current: ObservationData
+) -> ObservationDeltaData:
+    """Return the minimal deterministic patch from one semantic snapshot to another."""
+    changed_player = {
+        key: deepcopy(value)
+        for key, value in current["player"].items()
+        if previous["player"].get(key) != value
+    }
+    removed_player_fields = [
+        key for key in previous["player"] if key not in current["player"]
+    ]
+    previous_cells = {(cell["x"], cell["y"]): cell for cell in previous["cells"]}
+    current_cells = {(cell["x"], cell["y"]): cell for cell in current["cells"]}
+    changed_cells = [
+        deepcopy(cell)
+        for point, cell in current_cells.items()
+        if previous_cells.get(point) != cell
+    ]
+    removed_cells: list[Position] = [
+        {"x": x, "y": y} for x, y in previous_cells.keys() - current_cells.keys()
+    ]
+    menu_changed = previous["menu"] != current["menu"]
+    input_mode_changed = previous["input_mode"] != current["input_mode"]
+    return {
+        "player": cast(PlayerView, changed_player),
+        "removed_player_fields": sorted(removed_player_fields),
+        "cells": sorted(changed_cells, key=lambda cell: (cell["y"], cell["x"])),
+        "removed_cells": sorted(
+            removed_cells, key=lambda position: (position["y"], position["x"])
+        ),
+        "messages": deepcopy(current["messages"]),
+        "menu_changed": menu_changed,
+        "menu": deepcopy(current["menu"]) if menu_changed else None,
+        "input_mode_changed": input_mode_changed,
+        "input_mode": current["input_mode"] if input_mode_changed else None,
+    }
+
+
+def apply_observation_delta(
+    previous: ObservationData, delta: ObservationDeltaData
+) -> ObservationData:
+    """Reconstruct the exact next semantic snapshot from a schema-v2 patch."""
+    player_values = cast(dict[str, object], deepcopy(previous["player"]))
+    for key in delta["removed_player_fields"]:
+        player_values.pop(key, None)
+    player_values.update(cast(dict[str, object], delta["player"]))
+    player = cast(PlayerView, player_values)
+    cells = {(cell["x"], cell["y"]): deepcopy(cell) for cell in previous["cells"]}
+    for position in delta["removed_cells"]:
+        cells.pop((position["x"], position["y"]), None)
+    for cell in delta["cells"]:
+        cells[(cell["x"], cell["y"])] = deepcopy(cell)
+    ordered_cells: list[CellView] = sorted(
+        cells.values(), key=lambda cell: (cell["y"], cell["x"])
+    )
+    return {
+        "player": player,
+        "cells": ordered_cells,
+        "messages": deepcopy(delta["messages"]),
+        "menu": deepcopy(delta["menu"])
+        if delta["menu_changed"]
+        else deepcopy(previous["menu"]),
+        "input_mode": delta["input_mode"]
+        if delta["input_mode_changed"]
+        else previous["input_mode"],
+    }
 
 
 class TrajectoryWriter:
@@ -142,10 +220,10 @@ class TrajectoryWriter:
         if not self._started:
             raise RuntimeError("trajectory has not started")
         action = index_to_action(action_index).to_dict()
+        delta = observation_delta(previous, observation)
         segments = (
-            LossSegment("environment", _json(previous), None),
             LossSegment("action", _json(action), "policy"),
-            LossSegment("environment", _json(observation), "environment"),
+            LossSegment("environment", _json(delta), "environment"),
         )
         self._write(
             {
@@ -155,7 +233,7 @@ class TrajectoryWriter:
                 "action": action,
                 "emitted_keycodes": list(env.last_keycodes),
                 "raw_messages": _raw_batches(env.last_exchange),
-                "observation": observation,
+                "observation_delta": delta,
                 "reward": reward,
                 "terminated": terminated,
                 "truncated": truncated,

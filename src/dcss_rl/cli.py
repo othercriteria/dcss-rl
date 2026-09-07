@@ -9,7 +9,8 @@ from typing import NoReturn
 
 from dcss_rl.evaluation import evaluate_policy, load_suite, select_champion
 from dcss_rl.policy import ScriptedMibePolicy
-from dcss_rl.units import WorkerCount
+from dcss_rl.replay import champion_trajectory, watch_replay
+from dcss_rl.units import FrameLimit, Seconds, ViewRadius, WorkerCount
 
 
 def main() -> None:
@@ -27,6 +28,13 @@ def main() -> None:
     evaluate.add_argument(
         "--champion", type=Path, default=Path("artifacts/champion.json")
     )
+    watch = commands.add_parser("watch-best")
+    watch.add_argument("--champion", type=Path, default=Path("artifacts/champion.json"))
+    watch.add_argument("--case")
+    watch.add_argument("--frame-delay-seconds", type=float, default=0.1)
+    watch.add_argument("--view-radius", type=int, default=10)
+    watch.add_argument("--frame-limit", type=int)
+    watch.add_argument("--no-animate", action="store_true")
     arguments = parser.parse_args()
     if arguments.command == "evaluate-scripted":
         _evaluate_scripted(
@@ -35,6 +43,18 @@ def main() -> None:
             output=arguments.output,
             champion_path=arguments.champion,
             workers=WorkerCount(arguments.workers),
+        )
+        return
+    if arguments.command == "watch-best":
+        trajectory = champion_trajectory(arguments.champion, arguments.case)
+        watch_replay(
+            trajectory,
+            frame_delay=Seconds(arguments.frame_delay_seconds),
+            view_radius=ViewRadius(arguments.view_radius),
+            frame_limit=FrameLimit(arguments.frame_limit)
+            if arguments.frame_limit is not None
+            else None,
+            animate=not arguments.no_animate,
         )
         return
     _unreachable(arguments.command)

@@ -74,7 +74,13 @@ An episode record must be sufficient to reproduce, audit, and re-reduce a rollou
 - structured actions plus exact emitted keycodes;
 - semantic snapshots and terminal outcome/morgue paths;
 - tokenized training examples with separate policy-action and environment-observation
-  masks.
+masks.
+
+Trajectory schema v2 stores one initial semantic snapshot and a minimal patch per
+transition: changed/removed player fields, changed/removed map cells, current messages,
+and explicit menu/input-mode changes. Policy-action and next-delta segments retain
+separate loss labels. Exact raw messages remain alongside the delta, and applying each
+patch reconstructs the policy-facing snapshots required as future training context.
 
 ECHO-style training adds next-environment-token cross-entropy to a policy-gradient
 objective. DCSS is stochastic and partially observable, so prediction quality is
@@ -92,6 +98,11 @@ branch/depth progress, XL, turns survived, and deaths. A documented ordering sel
 one champion manifest from a fixed suite. `watch-best` always runs that manifest (or a
 clearly labeled scripted champion before learned checkpoints exist) and records the
 selected seed policy so viewing cannot become cherry-picking.
+
+The initial `watch-best` implementation is a player-centered terminal replay. It reads
+the champion manifest, defaults to its first suite-ordered episode, supports explicit
+case IDs, and reconstructs both schema-v1 and schema-v2 trajectories. A native live
+spectator can be added without changing champion selection or replay semantics.
 
 The checked-in diagnostic suite is used for policy and adapter development. Once a
 diagnostic seed has informed a code change it cannot be called held out. The held-out

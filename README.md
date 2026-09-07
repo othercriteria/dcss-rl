@@ -76,6 +76,17 @@ profiling another machine. Checked-in diagnostic seeds are separate from the unt
 held-out manifest; generated trajectories, game directories, summaries, and
 `artifacts/champion.json` remain untracked.
 
+Watch the first manifest-ordered episode from the current champion:
+
+```sh
+poe watch-best
+```
+
+The terminal viewer reconstructs both legacy full-snapshot trajectories and compact
+schema-v2 deltas. Pass `--case CASE_ID` to inspect a specifically labeled suite case;
+the default deliberately follows manifest order instead of selecting a flattering
+showcase seed.
+
 The current champion will be selected by a fixed held-out evaluation suite rather than
 by a hand-picked game. A future `poe watch-best` task will run that checkpoint locally
 and expose native WebTiles spectating, while preserving completed showcase replays and

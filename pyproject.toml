@@ -71,6 +71,7 @@ dcss-fetch = "scripts/fetch_dcss.sh"
 dcss-build = "scripts/build_dcss.sh"
 dcss-smoke = "scripts/smoke_dcss.sh"
 evaluate-scripted = ".venv/bin/dcss-rl evaluate-scripted"
+watch-best = ".venv/bin/dcss-rl watch-best"
 
 [tool.ty.environment]
 python-version = "3.13"

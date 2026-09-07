@@ -44,6 +44,14 @@ Completed:
   reached the 500-decision truncation on D:1, making descent the clearest policy
   regression target. The replay set occupies 164 MiB, confirming compact semantic
   deltas are also a near-term throughput requirement.
+- Compact trajectory schema v2 replaces repeated full snapshots with exactly
+  reconstructible semantic patches while preserving raw WebTiles messages and distinct
+  policy/environment loss segments. On the matched five-case 20-step workload,
+  trajectory JSONL fell from 7.81 MiB to 1.48 MiB (81%).
+- `poe watch-best` resolves the champion manifest and renders a deterministic,
+  player-centered terminal replay. It supports both the existing schema-v1 champion
+  and new schema-v2 trajectories and defaults to manifest order, not a cherry-picked
+  episode.
 
 Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
 
@@ -55,10 +63,9 @@ Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
 
 Next:
 
-1. Add regression thresholds and compact trajectory state deltas.
+1. Add held-out regression thresholds and improve the scripted baseline's descent.
 2. Replace or more tightly validate quiescence-based policy-input readiness.
-3. Add `watch-best` via native WebTiles live spectating and durable replay/morgues.
-4. Test trunk plus at least releases 0.34.1 and 0.33.1.
+3. Test trunk plus at least releases 0.34.1 and 0.33.1.
 
 ## Verified commands
 

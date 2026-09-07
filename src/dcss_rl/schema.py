@@ -88,6 +88,18 @@ class ObservationData(TypedDict):
     input_mode: int | None
 
 
+class ObservationDeltaData(TypedDict):
+    player: PlayerView
+    removed_player_fields: list[str]
+    cells: list[CellView]
+    removed_cells: list[Position]
+    messages: list[str]
+    menu_changed: bool
+    menu: MenuView | None
+    input_mode_changed: bool
+    input_mode: int | None
+
+
 class ActionData(TypedDict):
     kind: str
     keycode: int | None
