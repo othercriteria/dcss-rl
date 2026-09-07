@@ -114,3 +114,9 @@ this journal exists to keep research velocity and direction visible.
   over its prior 44.66/s result; 40 workers regressed slightly. Decision: keep 20 as
   the collector knee and spend the recovered wall clock on a 64-seed, 1,000-decision
   training-only v2 suite rather than further process oversubscription.
+- **2026-09-07 18:14 EDT — seed-breadth audit.** Before launching v2, inspection found
+  that each worker advanced by one suite entry per episode. Twenty workers therefore
+  overlapped almost completely after their first episodes instead of covering the next
+  seed block. Decision: stride episode rotations by worker count, with semantic worker,
+  episode, case-count, and case-index types. A 20-worker/64-case schedule now covers
+  0–19, 20–39, 40–59, then 60–63 plus 0–15 before repeating.

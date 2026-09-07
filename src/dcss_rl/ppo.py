@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
 from time import perf_counter
@@ -26,11 +26,14 @@ from dcss_rl.learned import (
     save_checkpoint,
 )
 from dcss_rl.policy import ScriptedMibePolicy
+from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.schema import ObservationData
 from dcss_rl.units import (
     ActionIndex,
     BatchSize,
+    CaseCount,
     DecisionsPerSecond,
+    EpisodeIndex,
     EpochCount,
     GameSeed,
     LearningRate,
@@ -41,6 +44,7 @@ from dcss_rl.units import (
     StepLimit,
     UpdateCount,
     WorkerCount,
+    WorkerIndex,
 )
 from dcss_rl.webtiles import GameConfig
 
@@ -147,10 +151,11 @@ class _Worker:
     binary: Path
     suite: EvaluationSuite
     root: Path
-    worker_index: int
+    worker_index: WorkerIndex
+    seed_schedule: TrainingSeedSchedule
     reward_shaping: RewardShaping
     rng: np.random.Generator
-    episode_index: int = 0
+    episode_index: EpisodeIndex = field(default_factory=lambda: EpisodeIndex(0))
     env: DcssEnv | None = None
     observation: ObservationData | None = None
     action_mask: BoolArray | None = None
@@ -193,10 +198,10 @@ class _Worker:
 
     def _reset(self) -> None:
         case = self.suite.cases[
-            (self.worker_index + self.episode_index) % len(self.suite.cases)
+            self.seed_schedule.case_index(self.worker_index, self.episode_index)
         ]
         episode_index = self.episode_index
-        self.episode_index += 1
+        self.episode_index = EpisodeIndex(self.episode_index + 1)
         last_timeout: TimeoutError | None = None
         for attempt in range(_GAME_START_ATTEMPTS):
             run_root = (
@@ -276,12 +281,14 @@ def train_ppo(
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     teacher = ScriptedMibePolicy()
+    seed_schedule = TrainingSeedSchedule(CaseCount(len(suite.cases)), config.workers)
     workers = tuple(
         _Worker(
             binary,
             suite,
             run_root,
-            index,
+            WorkerIndex(index),
+            seed_schedule,
             RewardShaping(
                 explored_cell=config.explored_cell_reward,
                 depth_progress=config.depth_progress_reward,

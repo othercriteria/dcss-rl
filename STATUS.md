@@ -160,7 +160,9 @@ not the current bottleneck.
   workers to 63.94 at ten and 97.93 at twenty, then declines to 93.28 at forty.
   Twenty workers remain the measured knee and are 2.19× faster than the prior matched
   collector. `online-train-v2` expands training from 20 to 64 disjoint seeds and its
-  per-episode horizon from 500 to 1,000 decisions.
+  per-episode horizon from 500 to 1,000 decisions. Episode rotation strides by worker
+  count, so concurrent workers consume disjoint seed blocks before wrapping rather
+  than shifting into nearly complete overlap.
 
 Next:
 
