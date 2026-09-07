@@ -8,6 +8,12 @@ ECHO-compatible masks, scripted baseline, held-out champion evaluation, and a
 `watch-best` workflow for observing live or replayed play. Keep the public repository
 tested and documented.
 
+Current delivery criteria include explicit semantic scalar types, a subsecond unit
+loop and bounded full gate, characterized rollout-worker scaling, robust detection of
+true policy-input boundaries, disjoint diagnostic/held-out seeds, compact replayable
+trajectories, and an observable champion workflow. Treat these as parts of the MVP,
+not optional cleanup.
+
 Work autonomously on routine architecture, implementation, dependency, experiment,
 commit, and publication decisions. Ask only about material scope changes, credentials,
 costs, or destructive actions.
@@ -27,6 +33,11 @@ costs, or destructive actions.
   observations separately so future reducers can replay old data.
 - ECHO is an objective family, not a dependency choice: retain distinct token masks
   for policy actions and next-environment observations.
+- Prefer an explicit upstream readiness signal over timing heuristics. Until one is
+  found or added without modifying DCSS, isolate and type any quiescence durations,
+  test multi-turn commands and blocking CRT/prompt states, and preserve raw evidence.
+- Keep the fast unit loop subsecond at current scale. Parallelize isolated live tests
+  and evaluation cases; remeasure worker scaling after material workload changes.
 - Select the champion only on a fixed held-out suite. Never hand-pick showcase seeds.
 - Generated DCSS source/builds, runs, artifacts, and checkpoints remain untracked.
 - Prefer semantic types to raw containers. Use dataclasses/enums for domain objects,

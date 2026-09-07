@@ -38,7 +38,12 @@ Completed:
 - Deterministic scripted MiBe policy, fixed diagnostic/held-out suite manifests,
   concurrent evaluation runner, metric-vector ranking, and champion manifest writer.
   The first diagnostic run exposed and fixed automatic-input and level-up prompt
-  boundaries; a fresh held-out champion run remains pending.
+  boundaries.
+- Frozen scripted MiBe v2 completed the untouched five-seed held-out suite: zero wins,
+  zero runes, depth sum 5, XL sum 10, 3,516 game turns, and reward 50. All five cases
+  reached the 500-decision truncation on D:1, making descent the clearest policy
+  regression target. The replay set occupies 164 MiB, confirming compact semantic
+  deltas are also a near-term throughput requirement.
 
 Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
 
@@ -50,8 +55,8 @@ Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
 
 Next:
 
-1. Validate scripted MiBe v2 on diagnostics, then run the untouched held-out suite.
-2. Add regression thresholds and compact trajectory state deltas.
+1. Add regression thresholds and compact trajectory state deltas.
+2. Replace or more tightly validate quiescence-based policy-input readiness.
 3. Add `watch-best` via native WebTiles live spectating and durable replay/morgues.
 4. Test trunk plus at least releases 0.34.1 and 0.33.1.
 
