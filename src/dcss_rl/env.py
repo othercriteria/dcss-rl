@@ -12,6 +12,7 @@ from gymnasium import spaces
 
 from dcss_rl.actions import Action, ActionKind, encode_action, legal_actions
 from dcss_rl.observation import ObservationReducer, SemanticObservation
+from dcss_rl.schema import GymMetadata, ObservationData
 from dcss_rl.webtiles import GameConfig, ManagedGame, ObservationBatch
 
 _COMMAND_ACTIONS = tuple(
@@ -21,7 +22,7 @@ _MENU_OFFSET = len(_COMMAND_ACTIONS)
 _KEYCODE_COUNT = 256
 
 
-class SemanticObservationSpace(gym.Space[dict[str, Any]]):
+class SemanticObservationSpace(gym.Space[ObservationData]):
     """Validation space for the variable-sized semantic observation schema."""
 
     def __init__(self) -> None:
@@ -29,7 +30,7 @@ class SemanticObservationSpace(gym.Space[dict[str, Any]]):
 
     def sample(
         self, mask: Any | None = None, probability: Any | None = None
-    ) -> dict[str, Any]:
+    ) -> ObservationData:
         del mask, probability
         return {
             "player": {},
@@ -39,7 +40,7 @@ class SemanticObservationSpace(gym.Space[dict[str, Any]]):
             "input_mode": None,
         }
 
-    def contains(self, value: object) -> bool:
+    def contains(self, value: Any) -> bool:  # ty: ignore[invalid-method-override]
         if not isinstance(value, Mapping):
             return False
         return all(
@@ -77,10 +78,10 @@ def action_mask(observation: SemanticObservation) -> np.ndarray:
     return result
 
 
-class DcssEnv(gym.Env[dict[str, Any], int]):
+class DcssEnv(gym.Env[ObservationData, int]):
     """Single-process Gym environment with structured, masked actions."""
 
-    metadata: ClassVar[dict[str, list[str]]] = {"render_modes": []}
+    metadata: ClassVar[GymMetadata] = {"render_modes": []}
 
     def __init__(
         self,
@@ -103,6 +104,8 @@ class DcssEnv(gym.Env[dict[str, Any], int]):
         self.reducer: ObservationReducer | None = None
         self.current: SemanticObservation | None = None
         self.last_batch: ObservationBatch | None = None
+        self.last_exchange: tuple[ObservationBatch, ...] = ()
+        self.last_keycodes: tuple[int, ...] = ()
         self.steps = 0
         self._max_depth = 0
         self._max_xl = 1
@@ -112,11 +115,13 @@ class DcssEnv(gym.Env[dict[str, Any], int]):
         *,
         seed: int | None = None,
         options: dict[str, Any] | None = None,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
+    ) -> tuple[ObservationData, dict[str, Any]]:
         super().reset(seed=seed)
         self.close()
         options = options or {}
         game_seed = options.get("game_seed", self.game_config.seed)
+        if game_seed is not None and not isinstance(game_seed, int):
+            raise ValueError("game_seed must be an integer or None")
         config = GameConfig(
             name=self.game_config.name,
             species=self.game_config.species,
@@ -126,6 +131,8 @@ class DcssEnv(gym.Env[dict[str, Any], int]):
         self.game = ManagedGame(self.binary, config=config)
         self.reducer = ObservationReducer()
         self.last_batch = self.game.start()
+        exchange = [self.last_batch]
+        keycodes: list[int] = []
         self.current = self.reducer.apply(self.last_batch)
         self.steps = 0
         self._max_depth = 0
@@ -135,14 +142,19 @@ class DcssEnv(gym.Env[dict[str, Any], int]):
             requested = Action.menu_select(ord(self.starting_weapon_key))
             keycode = encode_action(requested, self.current)
             self.last_batch = self.game.send_key(keycode)
+            exchange.append(self.last_batch)
+            keycodes.append(ord(keycode) if isinstance(keycode, str) else keycode)
             self.current = self.reducer.apply(self.last_batch)
+
+        self.last_exchange = tuple(exchange)
+        self.last_keycodes = tuple(keycodes)
 
         self._update_maxima(self.current)
         return self.current.to_dict(), self._info(None)
 
     def step(
         self, action_index: int
-    ) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObservationData, float, bool, bool, dict[str, Any]]:  # ty: ignore[invalid-method-override]
         if self.game is None or self.reducer is None or self.current is None:
             raise RuntimeError("reset must be called before step")
         action = index_to_action(int(action_index))
@@ -151,6 +163,8 @@ class DcssEnv(gym.Env[dict[str, Any], int]):
         previous_xl = self._max_xl
 
         self.last_batch = self.game.send_key(keycode)
+        self.last_exchange = (self.last_batch,)
+        self.last_keycodes = (ord(keycode) if isinstance(keycode, str) else keycode,)
         self.current = self.reducer.apply(self.last_batch)
         self.steps += 1
         terminated, outcome = self._terminal_outcome(self.last_batch)
@@ -196,6 +210,7 @@ class DcssEnv(gym.Env[dict[str, Any], int]):
         return {
             "action_mask": action_mask(self.current),
             "structured_action": action.to_dict() if action is not None else None,
+            "emitted_keycodes": self.last_keycodes,
             "outcome": outcome,
             "steps": self.steps,
             "max_depth": self._max_depth,
@@ -209,3 +224,5 @@ class DcssEnv(gym.Env[dict[str, Any], int]):
         self.reducer = None
         self.current = None
         self.last_batch = None
+        self.last_exchange = ()
+        self.last_keycodes = ()

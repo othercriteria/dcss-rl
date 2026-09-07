@@ -27,18 +27,18 @@ Completed:
 - Gymnasium environment that starts a real isolated game, completes MiBe hand-axe
   creation, steps structured actions, emits semantic dictionaries, and reports basic
   depth/XL/terminal rewards. Its live trunk test passes.
-
-In progress:
-
-- Raw and semantic episode records with explicit ECHO masks.
+- Append-only, replayable JSONL trajectories containing revision/character metadata,
+  exact emitted keycodes, wire-ordered raw protocol messages, semantic observations,
+  and distinct ECHO-compatible policy/environment loss segments.
+- A pinned `ty` type-check gate and a project-wide semantic-type discipline, with
+  domain dataclasses/enums and TypedDict schemas at Gym/JSON boundaries.
 
 Next:
 
-1. Define raw + semantic episode records and explicit ECHO action/observation masks.
-2. Implement a deterministic scripted MiBe baseline and fixed train/eval seed policy.
-3. Add aggregate evaluation, champion manifest, and regression thresholds.
-4. Add `watch-best` via native WebTiles live spectating and durable replay/morgues.
-5. Test trunk plus at least releases 0.34.1 and 0.33.1.
+1. Implement a deterministic scripted MiBe baseline and fixed train/eval seed policy.
+2. Add aggregate evaluation, champion manifest, and regression thresholds.
+3. Add `watch-best` via native WebTiles live spectating and durable replay/morgues.
+4. Test trunk plus at least releases 0.34.1 and 0.33.1.
 
 ## Verified commands
 

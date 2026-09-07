@@ -21,6 +21,12 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
+      - id: typecheck
+        name: ty
+        entry: ty check src tests
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
       - id: full-check
         name: full check (including live DCSS)
         entry: poe check

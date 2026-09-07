@@ -18,7 +18,7 @@ def test_fixed_action_catalog_round_trips(kind: ActionKind) -> None:
 def test_gym_environment_resets_and_steps_real_trunk() -> None:
     binary = Path("vendor/crawl/crawl-ref/source/crawl")
     if not binary.is_file():
-        pytest.skip("local DCSS binary has not been built")
+        pytest.skip("local DCSS binary has not been built")  # ty: ignore[too-many-positional-arguments]
     env = DcssEnv(binary, game_config=GameConfig(seed=7), max_steps=1)
     try:
         observation, info = env.reset()

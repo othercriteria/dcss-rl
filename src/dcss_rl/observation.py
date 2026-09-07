@@ -6,8 +6,9 @@ import copy
 import html
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import cast
 
+from dcss_rl.schema import CellView, JsonObject, ObservationData, PlayerView
 from dcss_rl.webtiles import ObservationBatch
 
 _TAG = re.compile(r"<[^>]*>")
@@ -18,10 +19,11 @@ def plain_text(value: str) -> str:
     return html.unescape(_TAG.sub("", value)).strip()
 
 
-def _merge(target: dict[str, Any], delta: dict[str, Any]) -> None:
+def _merge(target: JsonObject, delta: JsonObject) -> None:
     for key, value in delta.items():
-        if isinstance(value, dict) and isinstance(target.get(key), dict):
-            _merge(target[key], value)
+        existing = target.get(key)
+        if isinstance(value, dict) and isinstance(existing, dict):
+            _merge(existing, value)
         else:
             target[key] = copy.deepcopy(value)
 
@@ -36,15 +38,15 @@ class MenuChoice:
 class SemanticObservation:
     """A compact policy-facing snapshot at one DCSS input boundary."""
 
-    player: dict[str, Any]
-    cells: tuple[dict[str, Any], ...]
+    player: PlayerView
+    cells: tuple[CellView, ...]
     messages: tuple[str, ...]
     menu_type: str | None
     prompt: str | None
     choices: tuple[MenuChoice, ...]
     input_mode: int | None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> ObservationData:
         """Return a deterministic, JSON-compatible representation for trajectories."""
         return {
             "player": self.player,
@@ -101,11 +103,11 @@ class ObservationReducer:
     CELL_FIELDS = ("g", "col", "f", "mf", "mon")
 
     def __init__(self) -> None:
-        self._player: dict[str, Any] = {}
-        self._cells: dict[tuple[int, int], dict[str, Any]] = {}
+        self._player: JsonObject = {}
+        self._cells: dict[tuple[int, int], JsonObject] = {}
         self._map_x: int | None = None
         self._map_y: int | None = None
-        self._menu: dict[str, Any] | None = None
+        self._menu: JsonObject | None = None
         self._input_mode: int | None = None
 
     def apply(self, batch: ObservationBatch) -> SemanticObservation:
@@ -136,7 +138,7 @@ class ObservationReducer:
             input_mode=self._input_mode,
         )
 
-    def _apply_map(self, payload: dict[str, Any]) -> None:
+    def _apply_map(self, payload: JsonObject) -> None:
         if payload.get("clear") is True:
             self._cells.clear()
         cells = payload.get("cells")
@@ -160,7 +162,7 @@ class ObservationReducer:
             _merge(cell, {k: v for k, v in delta.items() if k not in {"x", "y"}})
 
     @staticmethod
-    def _read_messages(payload: dict[str, Any]) -> list[str]:
+    def _read_messages(payload: JsonObject) -> list[str]:
         result: list[str] = []
         values = payload.get("messages", [])
         if not isinstance(values, list):
@@ -170,7 +172,7 @@ class ObservationReducer:
                 result.append(plain_text(value["text"]))
         return result
 
-    def _semantic_player(self) -> dict[str, Any]:
+    def _semantic_player(self) -> PlayerView:
         result = {
             key: copy.deepcopy(self._player[key])
             for key in self.PLAYER_FIELDS
@@ -183,20 +185,23 @@ class ObservationReducer:
                 for slot, item in inventory.items()
                 if isinstance(item, dict) and item.get("quantity", 0) > 0
             }
-        return result
+        return cast(PlayerView, result)
 
-    def _semantic_cells(self) -> tuple[dict[str, Any], ...]:
-        cells: list[dict[str, Any]] = []
+    def _semantic_cells(self) -> tuple[CellView, ...]:
+        cells: list[CellView] = []
         ordered = sorted(self._cells.items(), key=lambda item: item[0][::-1])
         for (x, y), source in ordered:
-            cell = {"x": x, "y": y}
-            cell.update(
-                {
-                    key: copy.deepcopy(source[key])
-                    for key in self.CELL_FIELDS
-                    if key in source and source[key] is not None
-                }
-            )
+            cell: CellView = {"x": x, "y": y}
+            glyph = source.get("g")
+            if isinstance(glyph, str):
+                cell["g"] = glyph
+            for key in ("col", "f", "mf"):
+                value = source.get(key)
+                if isinstance(value, int):
+                    cell[key] = value  # type: ignore[literal-required]
+            monster = source.get("mon")
+            if isinstance(monster, dict):
+                cell["mon"] = copy.deepcopy(monster)
             cells.append(cell)
         return tuple(cells)
 
@@ -207,16 +212,20 @@ class ObservationReducer:
         return value if isinstance(value, str) else "unknown"
 
     def _prompt(self) -> str | None:
-        if self._menu is None or not isinstance(self._menu.get("prompt"), str):
+        if self._menu is None:
             return None
-        return plain_text(self._menu["prompt"])
+        prompt = self._menu.get("prompt")
+        return plain_text(prompt) if isinstance(prompt, str) else None
 
     def _choices(self) -> tuple[MenuChoice, ...]:
         if self._menu is None:
             return ()
         choices: list[MenuChoice] = []
         for section in ("main-items", "sub-items"):
-            values = self._menu.get(section, {}).get("buttons", [])
+            section_value = self._menu.get(section)
+            if not isinstance(section_value, dict):
+                continue
+            values = section_value.get("buttons", [])
             if not isinstance(values, list):
                 continue
             for value in values:

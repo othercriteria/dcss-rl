@@ -29,6 +29,10 @@ costs, or destructive actions.
   for policy actions and next-environment observations.
 - Select the champion only on a fixed held-out suite. Never hand-pick showcase seeds.
 - Generated DCSS source/builds, runs, artifacts, and checkpoints remain untracked.
+- Prefer semantic types to raw containers. Use dataclasses/enums for domain objects,
+  `TypedDict` at required JSON/Gym boundaries, and named JSON aliases only at protocol
+  decoding seams. Do not let `Any` or anonymous nested `dict`/`list` types propagate
+  through application code.
 
 ## Workflow
 

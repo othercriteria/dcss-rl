@@ -1,8 +1,9 @@
 from dcss_rl.observation import ObservationReducer, plain_text
+from dcss_rl.schema import JsonObject
 from dcss_rl.webtiles import Message, ObservationBatch
 
 
-def batch(*payloads: dict[str, object]) -> ObservationBatch:
+def batch(*payloads: JsonObject) -> ObservationBatch:
     return ObservationBatch(tuple(Message(dict(value)) for value in payloads), ())
 
 

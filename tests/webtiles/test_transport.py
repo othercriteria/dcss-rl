@@ -56,6 +56,7 @@ def test_receive_until_flush_reassembles_fragments(
     assert [message.kind for message in batch.observations] == ["player"]
     assert batch.observations[0].payload["hp"] == 12
     assert [message.kind for message in batch.controls] == ["flush_messages"]
+    assert [message.kind for message in batch.messages] == ["player", "flush_messages"]
 
 
 def test_send_key_rejects_strings_that_are_not_one_character(

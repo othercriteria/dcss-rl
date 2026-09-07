@@ -14,7 +14,9 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import cast
+
+from dcss_rl.schema import JsonObject
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +28,7 @@ class Message:
     observations and are suitable inputs to a policy.
     """
 
-    payload: dict[str, Any]
+    payload: JsonObject
     control: bool = False
 
     @property
@@ -41,6 +43,12 @@ class ObservationBatch:
 
     observations: tuple[Message, ...]
     controls: tuple[Message, ...]
+    ordered: tuple[Message, ...] = ()
+
+    @property
+    def messages(self) -> tuple[Message, ...]:
+        """Return messages in wire order, with a fallback for legacy fixtures."""
+        return self.ordered or (*self.observations, *self.controls)
 
 
 class WebtilesTransport:
@@ -85,7 +93,7 @@ class WebtilesTransport:
         self._socket = transport
         self.send({"msg": "attach", "primary": primary})
 
-    def send(self, payload: Mapping[str, Any]) -> None:
+    def send(self, payload: Mapping[str, object]) -> None:
         """Send one JSON control message to DCSS."""
         if self._socket is None:
             raise RuntimeError("WebTiles transport is not connected")
@@ -118,21 +126,27 @@ class WebtilesTransport:
             control = wire_message.startswith(b"*")
             if control:
                 wire_message = wire_message[1:]
-            decoded = json.loads(wire_message)
+            decoded: object = json.loads(wire_message)
             if not isinstance(decoded, dict):
                 raise ValueError("DCSS WebTiles message must be a JSON object")
-            return Message(decoded, control=control)
+            if not all(isinstance(key, str) for key in decoded):
+                raise ValueError("DCSS WebTiles object keys must be strings")
+            return Message(cast(JsonObject, decoded), control=control)
 
     def receive_until_flush(self) -> ObservationBatch:
         """Collect the complete state delta emitted before the next input boundary."""
         observations: list[Message] = []
         controls: list[Message] = []
+        ordered: list[Message] = []
         while True:
             message = self.receive()
+            ordered.append(message)
             target = controls if message.control else observations
             target.append(message)
             if message.control and message.kind == "flush_messages":
-                return ObservationBatch(tuple(observations), tuple(controls))
+                return ObservationBatch(
+                    tuple(observations), tuple(controls), tuple(ordered)
+                )
 
     def close(self) -> None:
         if self._socket is not None:

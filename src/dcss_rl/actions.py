@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from dcss_rl.observation import SemanticObservation
+from dcss_rl.schema import ActionData
 
 
 class ActionKind(StrEnum):
@@ -53,7 +54,7 @@ class Action:
     def menu_select(cls, keycode: int) -> Action:
         return cls(ActionKind.MENU_SELECT, keycode)
 
-    def to_dict(self) -> dict[str, str | int | None]:
+    def to_dict(self) -> ActionData:
         return {"kind": self.kind.value, "keycode": self.keycode}
 
 
