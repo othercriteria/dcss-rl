@@ -177,6 +177,10 @@ not the current bottleneck.
   loop and reduced v6-off diagnostic-v2 replay from 125.12 to 21.00 seconds without
   changing rank. The revealed failure is a repeated rest/confirm cycle; PPO telemetry
   now reports teacher agreement and imitation loss explicitly for targeted tuning.
+- A 10,240-decision imitation-weight probe raised online teacher agreement from 42.2%
+  at weight 1 to 47.6% at weight 10, but diagnostic-v2 depth-progress regressed from
+  1,383 to 920. Agreement is useful optimizer telemetry, not a quality proxy; the
+  stronger arm needs a full-budget test before changing objectives again.
 
 Next:
 

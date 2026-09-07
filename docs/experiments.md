@@ -141,3 +141,11 @@ this journal exists to keep research velocity and direction visible.
   21.00 seconds. It also exposed the deeper behavior: 1,867 selections answered yes,
   then rest immediately stopped and prompted again. Decision: add online teacher
   agreement and imitation-loss telemetry, then tune against the rest/prompt loop.
+- **2026-09-07 18:55 EDT — imitation-strength probe.** Two ECHO-off arms started from
+  the pre-PPO DAgger checkpoint and consumed 10,240 decisions with teacher weights 1
+  and 10. Weight 1 ended at 42.2% sampled-action agreement and diagnostic-v2 depth
+  progress 1,383. Weight 10 lowered last-minibatch imitation loss from 1.18 to 0.89 and
+  raised agreement to 47.6%, but depth progress regressed to 920 and lost one descent.
+  Both remained dominated by rest/prompt cycles. Decision: extend only weight 10 to
+  the matched 40,960-decision budget to distinguish slow distillation from saturation;
+  do not infer policy quality from agreement alone.
