@@ -7,6 +7,8 @@ from dcss_rl.actions import Action, ActionKind
 from dcss_rl.env import DcssEnv, action_to_index, index_to_action
 from dcss_rl.webtiles import GameConfig
 
+_DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
+
 
 @pytest.mark.parametrize("kind", list(ActionKind))
 def test_fixed_action_catalog_round_trips(kind: ActionKind) -> None:
@@ -15,11 +17,11 @@ def test_fixed_action_catalog_round_trips(kind: ActionKind) -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    not _DCSS_BINARY.is_file(), reason="local DCSS binary has not been built"
+)
 def test_gym_environment_resets_and_steps_real_trunk() -> None:
-    binary = Path("vendor/crawl/crawl-ref/source/crawl")
-    if not binary.is_file():
-        pytest.skip("local DCSS binary has not been built")  # ty: ignore[too-many-positional-arguments]
-    env = DcssEnv(binary, game_config=GameConfig(seed=7), max_steps=1)
+    env = DcssEnv(_DCSS_BINARY, game_config=GameConfig(seed=7), max_steps=1)
     try:
         observation, info = env.reset()
         assert env.observation_space.contains(observation)

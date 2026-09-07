@@ -8,14 +8,16 @@ from dcss_rl.env import DcssEnv, action_to_index
 from dcss_rl.trajectory import RecordingEnv, TrajectoryWriter
 from dcss_rl.webtiles import GameConfig
 
+_DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
+
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    not _DCSS_BINARY.is_file(), reason="local DCSS binary has not been built"
+)
 def test_records_replayable_raw_and_echo_segmented_trajectory(tmp_path: Path) -> None:
-    binary = Path("vendor/crawl/crawl-ref/source/crawl")
-    if not binary.is_file():
-        pytest.skip("local DCSS binary has not been built")  # ty: ignore[too-many-positional-arguments]
     path = tmp_path / "episode.jsonl"
-    base = DcssEnv(binary, game_config=GameConfig(seed=11), max_steps=1)
+    base = DcssEnv(_DCSS_BINARY, game_config=GameConfig(seed=11), max_steps=1)
     env = RecordingEnv(base, TrajectoryWriter(path), agent_id="test-agent")
     try:
         observation, _ = env.reset()

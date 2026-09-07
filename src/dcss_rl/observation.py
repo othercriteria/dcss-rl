@@ -195,10 +195,15 @@ class ObservationReducer:
             glyph = source.get("g")
             if isinstance(glyph, str):
                 cell["g"] = glyph
-            for key in ("col", "f", "mf"):
-                value = source.get(key)
-                if isinstance(value, int):
-                    cell[key] = value  # type: ignore[literal-required]
+            col = source.get("col")
+            if isinstance(col, int):
+                cell["col"] = col
+            feature = source.get("f")
+            if isinstance(feature, int):
+                cell["f"] = feature
+            map_feature = source.get("mf")
+            if isinstance(map_feature, int):
+                cell["mf"] = map_feature
             monster = source.get("mon")
             if isinstance(monster, dict):
                 cell["mon"] = copy.deepcopy(monster)

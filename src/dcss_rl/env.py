@@ -40,12 +40,11 @@ class SemanticObservationSpace(gym.Space[ObservationData]):
             "input_mode": None,
         }
 
-    def contains(self, value: Any) -> bool:  # ty: ignore[invalid-method-override]
-        if not isinstance(value, Mapping):
+    def contains(self, x: Any) -> bool:
+        if not isinstance(x, Mapping):
             return False
         return all(
-            key in value
-            for key in ("player", "cells", "messages", "menu", "input_mode")
+            key in x for key in ("player", "cells", "messages", "menu", "input_mode")
         )
 
 
@@ -153,12 +152,12 @@ class DcssEnv(gym.Env[ObservationData, int]):
         return self.current.to_dict(), self._info(None)
 
     def step(
-        self, action_index: int
-    ) -> tuple[ObservationData, float, bool, bool, dict[str, Any]]:  # ty: ignore[invalid-method-override]
+        self, action: int
+    ) -> tuple[ObservationData, float, bool, bool, dict[str, Any]]:
         if self.game is None or self.reducer is None or self.current is None:
             raise RuntimeError("reset must be called before step")
-        action = index_to_action(int(action_index))
-        keycode = encode_action(action, self.current)
+        structured_action = index_to_action(int(action))
+        keycode = encode_action(structured_action, self.current)
         previous_depth = self._max_depth
         previous_xl = self._max_xl
 
@@ -181,7 +180,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
             reward,
             terminated,
             truncated,
-            self._info(action, outcome=outcome),
+            self._info(structured_action, outcome=outcome),
         )
 
     def _update_maxima(self, observation: SemanticObservation) -> None:

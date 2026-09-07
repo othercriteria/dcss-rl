@@ -31,7 +31,8 @@ Completed:
   exact emitted keycodes, wire-ordered raw protocol messages, semantic observations,
   and distinct ECHO-compatible policy/environment loss segments.
 - A pinned `ty` type-check gate and a project-wide semantic-type discipline, with
-  domain dataclasses/enums and TypedDict schemas at Gym/JSON boundaries.
+  domain dataclasses/enums and TypedDict schemas at Gym/JSON boundaries. The checked
+  source and tests carry no inline type-checker suppressions.
 
 Next:
 
