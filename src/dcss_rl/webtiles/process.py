@@ -11,7 +11,11 @@ from types import TracebackType
 from typing import BinaryIO
 
 from dcss_rl.units import GameSeed, Keycode, Seconds, UnixSocketPathBytes
-from dcss_rl.webtiles.transport import ObservationBatch, WebtilesTransport
+from dcss_rl.webtiles.transport import (
+    FlushBoundary,
+    ObservationBatch,
+    WebtilesTransport,
+)
 
 _DEFAULT_GAME_TIMEOUT = Seconds(15.0)
 _AUTOMATIC_COMMAND_QUIET_PERIOD = Seconds(0.5)
@@ -90,6 +94,10 @@ class ManagedGame:
                     f"morgue_dir = {self.morgue_path}",
                     "restart_after_game = false",
                     "show_more = false",
+                    "view_delay = 0",
+                    "travel_delay = -1",
+                    "rest_delay = -1",
+                    "use_animations =",
                     "",
                 )
             )
@@ -143,7 +151,8 @@ class ManagedGame:
             return self.transport.receive_until_flush(
                 quiet_period=_AUTOMATIC_COMMAND_QUIET_PERIOD
                 if initial_keycode is not None
-                else None
+                else None,
+                boundary=FlushBoundary.QUIESCENCE,
             )
         except BaseException:
             self.close()
@@ -161,7 +170,12 @@ class ManagedGame:
             # processed when DCSS next enters its input loop and guarantees a
             # full-state response without modifying the game.
             self.transport.request_full_state()
-        return self.transport.receive_until_flush(quiet_period=quiet_period)
+        return self.transport.receive_until_flush(
+            quiet_period=quiet_period,
+            boundary=FlushBoundary.INPUT_READY_OR_QUIESCENCE
+            if quiet_period is not None
+            else FlushBoundary.QUIESCENCE,
+        )
 
     def close(self) -> None:
         """Close transport and stop DCSS, escalating only if it fails to exit."""

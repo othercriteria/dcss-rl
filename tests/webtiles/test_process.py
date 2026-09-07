@@ -27,6 +27,10 @@ def test_prepare_isolates_mutable_game_paths(tmp_path: Path) -> None:
     assert game.morgue_path.is_dir()
     assert f"save_dir = {game.save_path}" in rc_path.read_text()
     assert f"morgue_dir = {game.morgue_path}" in rc_path.read_text()
+    assert "view_delay = 0" in rc_path.read_text()
+    assert "travel_delay = -1" in rc_path.read_text()
+    assert "rest_delay = -1" in rc_path.read_text()
+    assert "use_animations =\n" in rc_path.read_text()
 
 
 def test_rejects_overlong_unix_socket_path_before_start(tmp_path: Path) -> None:

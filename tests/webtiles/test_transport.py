@@ -1,13 +1,15 @@
 import json
+import select
 import socket
 import threading
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Never
 
 import pytest
 
 from dcss_rl.units import Seconds
-from dcss_rl.webtiles import WebtilesTransport
+from dcss_rl.webtiles import FlushBoundary, WebtilesTransport
 
 
 @pytest.fixture
@@ -61,7 +63,7 @@ def test_receive_until_flush_reassembles_fragments(
 
 
 def test_receive_until_flush_coalesces_automatic_turns(
-    game_socket: socket.socket, tmp_path: Path
+    game_socket: socket.socket, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     game_path = Path(game_socket.getsockname())
     transport = WebtilesTransport(
@@ -82,7 +84,18 @@ def test_receive_until_flush_coalesces_automatic_turns(
 
     sender = threading.Thread(target=emit)
     sender.start()
-    batch = transport.receive_until_flush()
+    select_calls = 0
+    original_select = select.select
+
+    def counting_select(rlist, wlist, xlist, timeout=None):
+        nonlocal select_calls
+        select_calls += 1
+        return original_select(rlist, wlist, xlist, timeout)
+
+    monkeypatch.setattr(select, "select", counting_select)
+    batch = transport.receive_until_flush(
+        boundary=FlushBoundary.INPUT_READY_OR_QUIESCENCE
+    )
     sender.join()
     transport.close()
 
@@ -95,6 +108,39 @@ def test_receive_until_flush_coalesces_automatic_turns(
         "flush_messages",
         "flush_messages",
     ]
+    assert select_calls == 1
+
+
+def test_input_ready_boundary_persists_across_batches(
+    game_socket: socket.socket, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transport = WebtilesTransport(
+        Path(game_socket.getsockname()), client_directory=tmp_path / "client"
+    )
+    transport.connect()
+    _, client_address = game_socket.recvfrom(4096)
+    game_socket.sendto(b'{"msg":"input_mode","mode":1}\n', client_address)
+    game_socket.sendto(b'*{"msg":"flush_messages"}\n', client_address)
+    first = transport.receive_until_flush(
+        boundary=FlushBoundary.INPUT_READY_OR_QUIESCENCE
+    )
+
+    game_socket.sendto(b'{"msg":"player","turn":2}\n', client_address)
+    game_socket.sendto(b'*{"msg":"flush_messages"}\n', client_address)
+
+    def unexpected_select(*args: object) -> Never:
+        raise AssertionError(
+            f"ready input unexpectedly waited for quiescence: {args!r}"
+        )
+
+    monkeypatch.setattr(select, "select", unexpected_select)
+    second = transport.receive_until_flush(
+        boundary=FlushBoundary.INPUT_READY_OR_QUIESCENCE
+    )
+    transport.close()
+
+    assert [message.kind for message in first.observations] == ["input_mode"]
+    assert [message.payload.get("turn") for message in second.observations] == [2]
 
 
 def test_send_key_rejects_strings_that_are_not_one_character(

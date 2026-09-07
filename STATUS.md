@@ -117,9 +117,8 @@ identical deterministic rank and 25.2% neural coverage, 2026-09-07):
 | 5 | 20.61 s | 12.13 | 4.10x |
 
 The near-linear process scaling and sub-30-second GPU training iterations show that
-broader rollout suites and longer horizons are affordable next steps. DCSS internal
-automatic-command work remains the dominant per-episode cost; GPU capacity is not the
-current bottleneck.
+broader rollout suites and longer horizons are affordable next steps. GPU capacity is
+not the current bottleneck.
 
 - Online legality-masked PPO now supports concurrent seeded rollouts, GAE, clipped
   policy/value losses, optional scripted imitation and ECHO auxiliaries, portable
@@ -152,13 +151,18 @@ current bottleneck.
   ordering for summaries and ranks. Champion-track activation validates suite/rank
   versions, archives the prior canonical manifest, and atomically cuts all heldout
   viewers to the selected replacement; `watch-heldout-grid` now resolves heldout-v2.
+- Automatic commands now prefer upstream's flushed `input_mode=1` boundary and retain
+  the typed 500 ms quiescence only as a compatibility fallback. Delay-free documented
+  DCSS RC options remove presentation sleeps from local agent play. The identical
+  five-seed, 2,500-decision learned evaluation improved from 311.11 seconds (8.04/s)
+  to 16.18 seconds (154.48/s), a 19.23× speed-up with exactly the same rank.
 
 Next:
 
 1. Increase autonomous learned-action coverage beyond 23.7% diagnostic / 2.4%
    held-out while retaining or improving the depth-11 held-out champion rank.
-2. Add online policy-gradient fine-tuning and compare ECHO-on versus ECHO-off under
-   matched rollout budgets.
+2. Remeasure PPO collection after the input-boundary/runtime speed-up, then broaden
+   training seed sets and episode horizons under matched ECHO-on/off budgets.
 3. Improve survival/XL after depth progress, then expand toward rune curricula.
 
 ## Verified commands

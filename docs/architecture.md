@@ -19,18 +19,26 @@ DCSS fragments large JSON messages into datagrams and terminates each logical me
 with a newline. A starred message is server control. In particular,
 `*{"msg":"flush_messages"}` marks the point at which the emitted deltas form one
 atomic rendering batch. Automatic travel and rest can emit several such batches before
-DCSS is ready for more input, so the transport coalesces consecutive batches until a
-short command-specific quiescence period. Multi-turn commands use a longer duration
-than ordinary actions; both durations carry an explicit `Seconds` type.
+DCSS is ready for more input. Their preferred boundary is the upstream `input_mode=1`
+signal followed by a flush; the transport remembers readiness across batches because
+DCSS emits mode changes rather than repeating the current mode. If that signal is
+absent, automatic commands retain a conservative command-specific quiescence fallback
+with an explicit `Seconds` type.
 
 For ordinary actions, silence is not itself an error: 0.33.1 can process WAIT without
 emitting any visible delta or flush. If no output appears promptly, the adapter queues
 upstream's `spectator_joined` full-state request behind the key. DCSS handles that
 request on its next input-loop entry, providing a concrete synchronization response
 without modifying game state or upstream source. Automatic travel and rest may poll
-control messages while still running, so they deliberately retain multi-flush
-quiescence rather than misusing this probe as an end-of-travel barrier. Raw control
-and response messages remain in the trajectory for later audit.
+control messages while still running, so they use the input-ready signal rather than
+misusing this probe as an end-of-travel barrier. Adversarial transport tests cross an
+intermediate flush before accepting readiness and cover the quiescence fallback. Raw
+control and response messages remain in the trajectory for later audit.
+
+Local agent RC files disable view, travel, rest, and monster-in-sight animations using
+ordinary documented DCSS options. These are presentation sleeps only: they do not
+alter game turns or rules. This matters particularly when autoexplore repeatedly stops
+on a visible monster; trunk otherwise sleeps 100 ms for every warning flash.
 
 ## Observations
 

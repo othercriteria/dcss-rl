@@ -14,6 +14,7 @@ import tempfile
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import cast
 
@@ -23,6 +24,19 @@ from dcss_rl.units import Seconds
 _DEFAULT_TRANSPORT_TIMEOUT = Seconds(10.0)
 _DEFAULT_INPUT_QUIET_PERIOD = Seconds(0.01)
 _SOCKET_APPEARANCE_POLL_INTERVAL = Seconds(0.01)
+
+
+class FlushBoundary(StrEnum):
+    """Evidence required to treat a protocol flush as a policy boundary."""
+
+    QUIESCENCE = "quiescence"
+    INPUT_READY_OR_QUIESCENCE = "input-ready-or-quiescence"
+
+
+class _InputReadiness(Enum):
+    UNKNOWN = auto()
+    BUSY = auto()
+    READY = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +97,7 @@ class WebtilesTransport:
         self.client_socket = client_directory / "client.sock"
         self._socket: socket.socket | None = None
         self._fragment_buffer = bytearray()
+        self._input_readiness = _InputReadiness.UNKNOWN
 
     def connect(self, *, primary: bool = True) -> None:
         """Wait for DCSS's socket, bind locally, and send the attach handshake."""
@@ -154,7 +169,10 @@ class WebtilesTransport:
             return Message(cast(JsonObject, decoded), control=control)
 
     def receive_until_flush(
-        self, *, quiet_period: Seconds | None = None
+        self,
+        *,
+        quiet_period: Seconds | None = None,
+        boundary: FlushBoundary = FlushBoundary.QUIESCENCE,
     ) -> ObservationBatch:
         """Collect deltas until DCSS flushes and becomes quiescent for input.
 
@@ -173,7 +191,20 @@ class WebtilesTransport:
             ordered.append(message)
             target = controls if message.control else observations
             target.append(message)
+            if message.kind == "input_mode":
+                mode = message.payload.get("mode")
+                if isinstance(mode, int):
+                    self._input_readiness = (
+                        _InputReadiness.READY if mode == 1 else _InputReadiness.BUSY
+                    )
             if message.control and message.kind == "flush_messages":
+                if (
+                    boundary is FlushBoundary.INPUT_READY_OR_QUIESCENCE
+                    and self._input_readiness is _InputReadiness.READY
+                ):
+                    return ObservationBatch(
+                        tuple(observations), tuple(controls), tuple(ordered)
+                    )
                 readable, _, _ = select.select([self._socket], [], [], settle)
                 if not readable:
                     return ObservationBatch(

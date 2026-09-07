@@ -97,3 +97,14 @@ this journal exists to keep research velocity and direction visible.
   scripted policy remained incumbent. A validated atomic activation archived v1 and
   cut the canonical viewer over to v2. Evaluation now streams completion-order case
   telemetry while persisting summaries in manifest order.
+- **2026-09-07 17:44–17:59 EDT — protocol and presentation latency.** The identical
+  five-seed, 2,500-decision fallback-free v5 evaluation previously took 311.11 seconds
+  (8.04 decisions/s). Ending automatic commands on upstream `input_mode=1` plus flush,
+  with the existing 500 ms quiescence as fallback, reduced it to 61.60 seconds while
+  reproducing rank `(0, 0, 0, 2500, 5, 5, 0.0)` exactly. Raw traces then explained the
+  remaining two-worker tail: repeated monster warnings invoked DCSS's presentation-only
+  100 ms animation sleep. Documented delay-free/accessibility RC options, including an
+  empty `use_animations` list, reduced the same workload to 16.18 seconds and 154.48
+  decisions/s: 19.23× the original throughput with the same rank. Decision: retain the
+  explicit readiness/fallback contract and delay-free local runtime, then remeasure PPO
+  collection before increasing seed breadth and horizon.
