@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from dcss_rl.observation import ObservationReducer
 from dcss_rl.webtiles import GameConfig, ManagedGame
 
 
@@ -45,6 +46,14 @@ def test_trunk_reaches_a_webtiles_input_boundary(tmp_path: Path) -> None:
         assert {"version", "options", "layout"}.issubset(kinds)
         assert game.process is not None
         assert game.process.poll() is None
+
+        reducer = ObservationReducer()
+        reducer.apply(initial)
+        in_game = reducer.apply(game.send_key("c"))
+        assert in_game.player["species"] == "Minotaur"
+        assert in_game.player["depth"] == 1
+        assert any(cell.get("g") == "@" for cell in in_game.cells)
+        assert in_game.menu_type is None
     finally:
         game.close()
 
