@@ -14,6 +14,7 @@ from typing import Any, Literal
 
 from dcss_rl.env import DcssEnv, index_to_action
 from dcss_rl.schema import ObservationData
+from dcss_rl.units import ActionIndex
 from dcss_rl.webtiles import ObservationBatch
 
 SCHEMA_VERSION = 1
@@ -131,7 +132,7 @@ class TrajectoryWriter:
         self,
         env: DcssEnv,
         previous: ObservationData,
-        action_index: int,
+        action_index: ActionIndex,
         observation: ObservationData,
         reward: float,
         terminated: bool,
@@ -212,7 +213,7 @@ class RecordingEnv:
         return observation, info
 
     def step(
-        self, action_index: int
+        self, action_index: ActionIndex
     ) -> tuple[ObservationData, float, bool, bool, dict[str, Any]]:
         if self._observation is None:
             raise RuntimeError("reset must be called before step")

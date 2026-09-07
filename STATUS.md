@@ -33,11 +33,25 @@ Completed:
 - A pinned `ty` type-check gate and a project-wide semantic-type discipline, with
   domain dataclasses/enums and TypedDict schemas at Gym/JSON boundaries. The checked
   source and tests carry no inline type-checker suppressions.
+- Fast and live checks are split: 39 unit tests complete in about 0.24 seconds, while
+  three isolated DCSS integration tests run concurrently in about 6.2 seconds.
+- Deterministic scripted MiBe policy, fixed diagnostic/held-out suite manifests,
+  concurrent evaluation runner, metric-vector ranking, and champion manifest writer.
+  The first diagnostic run exposed and fixed automatic-input and level-up prompt
+  boundaries; a fresh held-out champion run remains pending.
+
+Evaluation worker scaling on five 20-step diagnostic cases (2026-09-07):
+
+| workers | wall time | speedup |
+| ---: | ---: | ---: |
+| 1 | 39.2 s | 1.00x |
+| 2 | 22.5 s | 1.74x |
+| 5 | 10.1 s | 3.90x |
 
 Next:
 
-1. Implement a deterministic scripted MiBe baseline and fixed train/eval seed policy.
-2. Add aggregate evaluation, champion manifest, and regression thresholds.
+1. Validate scripted MiBe v2 on diagnostics, then run the untouched held-out suite.
+2. Add regression thresholds and compact trajectory state deltas.
 3. Add `watch-best` via native WebTiles live spectating and durable replay/morgues.
 4. Test trunk plus at least releases 0.34.1 and 0.33.1.
 

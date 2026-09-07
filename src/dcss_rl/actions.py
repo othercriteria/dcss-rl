@@ -7,6 +7,7 @@ from enum import StrEnum
 
 from dcss_rl.observation import SemanticObservation
 from dcss_rl.schema import ActionData
+from dcss_rl.units import Keycode
 
 
 class ActionKind(StrEnum):
@@ -48,10 +49,10 @@ _COMMAND_KEYS = {
 @dataclass(frozen=True, slots=True)
 class Action:
     kind: ActionKind
-    keycode: int | None = None
+    keycode: Keycode | None = None
 
     @classmethod
-    def menu_select(cls, keycode: int) -> Action:
+    def menu_select(cls, keycode: Keycode) -> Action:
         return cls(ActionKind.MENU_SELECT, keycode)
 
     def to_dict(self) -> ActionData:

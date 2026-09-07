@@ -10,7 +10,12 @@ from pathlib import Path
 from types import TracebackType
 from typing import BinaryIO
 
+from dcss_rl.units import GameSeed, Seconds
 from dcss_rl.webtiles.transport import ObservationBatch, WebtilesTransport
+
+_DEFAULT_GAME_TIMEOUT = Seconds(15.0)
+_AUTOMATIC_COMMAND_QUIET_PERIOD = Seconds(0.5)
+_PROCESS_SHUTDOWN_TIMEOUT = Seconds(3.0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,7 +25,7 @@ class GameConfig:
     name: str = "dcss-rl"
     species: str = "Mi"
     background: str = "Be"
-    seed: int | None = None
+    seed: GameSeed | None = None
 
 
 class ManagedGame:
@@ -35,7 +40,7 @@ class ManagedGame:
         binary: Path,
         *,
         config: GameConfig | None = None,
-        timeout: float = 15.0,
+        timeout: Seconds = _DEFAULT_GAME_TIMEOUT,
         run_root: Path | None = None,
     ) -> None:
         self.binary = Path(binary).resolve()
@@ -123,7 +128,6 @@ class ManagedGame:
         self.transport = WebtilesTransport(
             self.socket_path,
             timeout=self.timeout,
-            client_directory=self.run_root / "transport",
         )
         try:
             self.transport.connect()
@@ -137,7 +141,8 @@ class ManagedGame:
         if self.transport is None:
             raise RuntimeError("DCSS game is not started")
         self.transport.send_key(key)
-        return self.transport.receive_until_flush()
+        quiet_period = _AUTOMATIC_COMMAND_QUIET_PERIOD if key in {"o", "5"} else None
+        return self.transport.receive_until_flush(quiet_period=quiet_period)
 
     def close(self) -> None:
         """Close transport and stop DCSS, escalating only if it fails to exit."""
@@ -148,10 +153,10 @@ class ManagedGame:
             if self.process.poll() is None:
                 self.process.terminate()
                 try:
-                    self.process.wait(timeout=3)
+                    self.process.wait(timeout=_PROCESS_SHUTDOWN_TIMEOUT)
                 except subprocess.TimeoutExpired:
                     self.process.kill()
-                    self.process.wait(timeout=3)
+                    self.process.wait(timeout=_PROCESS_SHUTDOWN_TIMEOUT)
             self.process = None
         if self._log_handle is not None:
             self._log_handle.close()

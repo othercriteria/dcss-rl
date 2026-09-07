@@ -8,6 +8,7 @@ from dcss_rl.actions import (
     legal_actions,
 )
 from dcss_rl.observation import MenuChoice, SemanticObservation
+from dcss_rl.units import Keycode
 
 
 def observation(
@@ -28,14 +29,14 @@ def test_command_mode_exposes_stable_structured_actions() -> None:
 def test_menu_actions_are_derived_from_visible_choices() -> None:
     menu = observation(
         menu_type="newgame-choice",
-        choices=(MenuChoice(ord("c"), "c - hand axe"),),
+        choices=(MenuChoice(Keycode(ord("c")), "c - hand axe"),),
     )
 
     assert legal_actions(menu) == (
-        Action.menu_select(ord("c")),
+        Action.menu_select(Keycode(ord("c"))),
         Action(ActionKind.CANCEL),
     )
-    assert encode_action(Action.menu_select(ord("c")), menu) == ord("c")
+    assert encode_action(Action.menu_select(Keycode(ord("c"))), menu) == ord("c")
 
 
 def test_action_mask_fails_closed_for_unknown_input_mode() -> None:
@@ -49,8 +50,8 @@ def test_action_mask_fails_closed_for_unknown_input_mode() -> None:
 def test_rejects_menu_key_that_dcss_did_not_offer() -> None:
     menu = observation(
         menu_type="newgame-choice",
-        choices=(MenuChoice(ord("c"), "c - hand axe"),),
+        choices=(MenuChoice(Keycode(ord("c")), "c - hand axe"),),
     )
 
     with pytest.raises(IllegalAction):
-        encode_action(Action.menu_select(ord("a")), menu)
+        encode_action(Action.menu_select(Keycode(ord("a"))), menu)

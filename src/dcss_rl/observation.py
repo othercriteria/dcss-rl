@@ -9,9 +9,13 @@ from dataclasses import dataclass
 from typing import cast
 
 from dcss_rl.schema import CellView, JsonObject, ObservationData, PlayerView
+from dcss_rl.units import Keycode
 from dcss_rl.webtiles import ObservationBatch
 
 _TAG = re.compile(r"<[^>]*>")
+_PROMPT_CHOICE = re.compile(r"\(([A-Za-z])\)([A-Za-z]+)")
+_MORE_INPUT_MODE = 5
+_PROMPT_INPUT_MODE = 7
 
 
 def plain_text(value: str) -> str:
@@ -30,7 +34,7 @@ def _merge(target: JsonObject, delta: JsonObject) -> None:
 
 @dataclass(frozen=True, slots=True)
 class MenuChoice:
-    keycode: int
+    keycode: Keycode
     text: str
 
 
@@ -128,13 +132,27 @@ class ObservationReducer:
             elif message.kind in {"ui-pop", "close_menu", "close_all_menus"}:
                 self._menu = None
 
+        menu_type = self._menu_type()
+        prompt = self._prompt()
+        choices = self._choices()
+        if menu_type is None and self._input_mode == _MORE_INPUT_MODE:
+            menu_type = "more"
+            prompt = "--more--"
+            choices = (MenuChoice(Keycode(ord(" ")), "continue"),)
+        elif menu_type is None and self._input_mode == _PROMPT_INPUT_MODE:
+            parsed = self._prompt_choices(messages)
+            if parsed:
+                menu_type = "prompt"
+                prompt = messages[-1] if messages else None
+                choices = parsed
+
         return SemanticObservation(
             player=self._semantic_player(),
             cells=self._semantic_cells(),
             messages=tuple(messages),
-            menu_type=self._menu_type(),
-            prompt=self._prompt(),
-            choices=self._choices(),
+            menu_type=menu_type,
+            prompt=prompt,
+            choices=choices,
             input_mode=self._input_mode,
         )
 
@@ -244,5 +262,13 @@ class ObservationReducer:
                 else:
                     label = value.get("label", "")
                     text = plain_text(label) if isinstance(label, str) else ""
-                choices.append(MenuChoice(value["hotkey"], text))
+                choices.append(MenuChoice(Keycode(value["hotkey"]), text))
         return tuple(choices)
+
+    @staticmethod
+    def _prompt_choices(messages: list[str]) -> tuple[MenuChoice, ...]:
+        return tuple(
+            MenuChoice(Keycode(ord(match.group(1))), match.group(1) + match.group(2))
+            for message in messages
+            for match in _PROMPT_CHOICE.finditer(message)
+        )

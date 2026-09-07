@@ -33,6 +33,10 @@ costs, or destructive actions.
   `TypedDict` at required JSON/Gym boundaries, and named JSON aliases only at protocol
   decoding seams. Do not let `Any` or anonymous nested `dict`/`list` types propagate
   through application code.
+- Give scalar values semantic types as well: use `NewType` for identifiers, units,
+  indices, seeds, and other values that must not be accidentally interchanged; use
+  named aliases where distinct static identity would not add safety. Raw primitives
+  belong at serialization and third-party API boundaries.
 
 ## Workflow
 
@@ -40,11 +44,13 @@ costs, or destructive actions.
 direnv allow
 uv sync
 poe hooks
+poe test
 poe check
 ```
 
-Use `apply_patch` for edits. Install hooks once per checkout. Commit hooks format/lint
-and run fast tests; the push hook runs the full gate including a live DCSS process.
+Use `apply_patch` for edits. Install hooks once per checkout. `poe test` and commit
+hooks run the fast unit suite; the push hook runs the full gate, parallelizing isolated
+live DCSS processes.
 Unix socket tests and NVIDIA access can fail inside the managed Codex sandbox; run
 those commands at the approved host boundary. This is an execution-environment
 constraint, not evidence of a host failure.

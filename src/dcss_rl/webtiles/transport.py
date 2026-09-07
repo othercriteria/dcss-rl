@@ -8,6 +8,7 @@ account-management machinery that is irrelevant to local training.
 from __future__ import annotations
 
 import json
+import select
 import socket
 import tempfile
 import time
@@ -17,6 +18,11 @@ from pathlib import Path
 from typing import cast
 
 from dcss_rl.schema import JsonObject
+from dcss_rl.units import Seconds
+
+_DEFAULT_TRANSPORT_TIMEOUT = Seconds(10.0)
+_DEFAULT_INPUT_QUIET_PERIOD = Seconds(0.01)
+_SOCKET_APPEARANCE_POLL_INTERVAL = Seconds(0.01)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,11 +64,13 @@ class WebtilesTransport:
         self,
         game_socket: Path,
         *,
-        timeout: float = 10.0,
+        timeout: Seconds = _DEFAULT_TRANSPORT_TIMEOUT,
+        input_quiet_period: Seconds = _DEFAULT_INPUT_QUIET_PERIOD,
         client_directory: Path | None = None,
     ) -> None:
         self.game_socket = Path(game_socket)
         self.timeout = timeout
+        self.input_quiet_period = input_quiet_period
         self._owned_directory: tempfile.TemporaryDirectory[str] | None = None
         if client_directory is None:
             self._owned_directory = tempfile.TemporaryDirectory(
@@ -85,7 +93,7 @@ class WebtilesTransport:
         while not self.game_socket.exists():
             if time.monotonic() >= deadline:
                 raise TimeoutError(f"DCSS socket did not appear: {self.game_socket}")
-            time.sleep(0.01)
+            time.sleep(_SOCKET_APPEARANCE_POLL_INTERVAL)
 
         transport = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         transport.settimeout(self.timeout)
@@ -133,8 +141,18 @@ class WebtilesTransport:
                 raise ValueError("DCSS WebTiles object keys must be strings")
             return Message(cast(JsonObject, decoded), control=control)
 
-    def receive_until_flush(self) -> ObservationBatch:
-        """Collect the complete state delta emitted before the next input boundary."""
+    def receive_until_flush(
+        self, *, quiet_period: Seconds | None = None
+    ) -> ObservationBatch:
+        """Collect deltas until DCSS flushes and becomes quiescent for input.
+
+        DCSS also flushes after each automatic travel/rest turn. Those are rendering
+        boundaries, not policy-action boundaries, so consecutive ready batches are
+        coalesced until the process stops emitting output.
+        """
+        if self._socket is None:
+            raise RuntimeError("WebTiles transport is not connected")
+        settle = self.input_quiet_period if quiet_period is None else quiet_period
         observations: list[Message] = []
         controls: list[Message] = []
         ordered: list[Message] = []
@@ -144,9 +162,11 @@ class WebtilesTransport:
             target = controls if message.control else observations
             target.append(message)
             if message.control and message.kind == "flush_messages":
-                return ObservationBatch(
-                    tuple(observations), tuple(controls), tuple(ordered)
-                )
+                readable, _, _ = select.select([self._socket], [], [], settle)
+                if not readable:
+                    return ObservationBatch(
+                        tuple(observations), tuple(controls), tuple(ordered)
+                    )
 
     def close(self) -> None:
         if self._socket is not None:

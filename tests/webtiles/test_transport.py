@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from dcss_rl.units import Seconds
 from dcss_rl.webtiles import WebtilesTransport
 
 
@@ -57,6 +58,43 @@ def test_receive_until_flush_reassembles_fragments(
     assert batch.observations[0].payload["hp"] == 12
     assert [message.kind for message in batch.controls] == ["flush_messages"]
     assert [message.kind for message in batch.messages] == ["player", "flush_messages"]
+
+
+def test_receive_until_flush_coalesces_automatic_turns(
+    game_socket: socket.socket, tmp_path: Path
+) -> None:
+    game_path = Path(game_socket.getsockname())
+    transport = WebtilesTransport(
+        game_path,
+        input_quiet_period=Seconds(0.05),
+        client_directory=tmp_path / "client",
+    )
+    transport.connect()
+    _, client_address = game_socket.recvfrom(4096)
+
+    def emit() -> None:
+        game_socket.sendto(b'{"msg":"input_mode","mode":0}\n', client_address)
+        game_socket.sendto(b'{"msg":"player","turn":1}\n', client_address)
+        game_socket.sendto(b'*{"msg":"flush_messages"}\n', client_address)
+        game_socket.sendto(b'{"msg":"player","turn":2}\n', client_address)
+        game_socket.sendto(b'{"msg":"input_mode","mode":1}\n', client_address)
+        game_socket.sendto(b'*{"msg":"flush_messages"}\n', client_address)
+
+    sender = threading.Thread(target=emit)
+    sender.start()
+    batch = transport.receive_until_flush()
+    sender.join()
+    transport.close()
+
+    assert [
+        message.payload.get("turn")
+        for message in batch.observations
+        if message.kind == "player"
+    ] == [1, 2]
+    assert [message.kind for message in batch.controls] == [
+        "flush_messages",
+        "flush_messages",
+    ]
 
 
 def test_send_key_rejects_strings_that_are_not_one_character(

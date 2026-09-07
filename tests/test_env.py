@@ -5,6 +5,7 @@ import pytest
 
 from dcss_rl.actions import Action, ActionKind
 from dcss_rl.env import DcssEnv, action_to_index, index_to_action
+from dcss_rl.units import GameSeed, Keycode, StepLimit
 from dcss_rl.webtiles import GameConfig
 
 _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
@@ -12,7 +13,11 @@ _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
 
 @pytest.mark.parametrize("kind", list(ActionKind))
 def test_fixed_action_catalog_round_trips(kind: ActionKind) -> None:
-    action = Action.menu_select(42) if kind is ActionKind.MENU_SELECT else Action(kind)
+    action = (
+        Action.menu_select(Keycode(42))
+        if kind is ActionKind.MENU_SELECT
+        else Action(kind)
+    )
     assert index_to_action(action_to_index(action)) == action
 
 
@@ -21,7 +26,11 @@ def test_fixed_action_catalog_round_trips(kind: ActionKind) -> None:
     not _DCSS_BINARY.is_file(), reason="local DCSS binary has not been built"
 )
 def test_gym_environment_resets_and_steps_real_trunk() -> None:
-    env = DcssEnv(_DCSS_BINARY, game_config=GameConfig(seed=7), max_steps=1)
+    env = DcssEnv(
+        _DCSS_BINARY,
+        game_config=GameConfig(seed=GameSeed(7)),
+        max_steps=StepLimit(1),
+    )
     try:
         observation, info = env.reset()
         assert env.observation_space.contains(observation)

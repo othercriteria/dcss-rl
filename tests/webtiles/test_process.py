@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from dcss_rl.observation import ObservationReducer
+from dcss_rl.units import GameSeed
 from dcss_rl.webtiles import GameConfig, ManagedGame
 
 _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
@@ -35,7 +36,7 @@ def test_prepare_isolates_mutable_game_paths(tmp_path: Path) -> None:
 def test_trunk_reaches_a_webtiles_input_boundary(tmp_path: Path) -> None:
     game = ManagedGame(
         _DCSS_BINARY,
-        config=GameConfig(name="integration", seed=1),
+        config=GameConfig(name="integration", seed=GameSeed(1)),
         run_root=tmp_path / "episode",
     )
     try:

@@ -24,7 +24,9 @@ poe check
 ```
 
 The installed commit hook auto-fixes Ruff issues and runs fast tests. The push hook
-runs the complete gate, including the live DCSS process integration test.
+runs the complete gate, including live DCSS process integration tests. `poe test` is
+the subsecond unit-test loop; `poe check` additionally runs isolated live games in
+parallel.
 
 For non-interactive use and CI, the equivalent explicit shell entry is
 `nix develop`.
@@ -62,6 +64,17 @@ semantic game-state delta.
 
 Every evaluation record should identify the DCSS commit, configuration, seed policy,
 agent checkpoint, reward specification, and terminal morgue/replay artifacts.
+
+Run the transparent scripted baseline over the fixed held-out suite with:
+
+```sh
+poe evaluate-scripted
+```
+
+The evaluator defaults to five concurrent isolated games. Override `--workers` when
+profiling another machine. Checked-in diagnostic seeds are separate from the untouched
+held-out manifest; generated trajectories, game directories, summaries, and
+`artifacts/champion.json` remain untracked.
 
 The current champion will be selected by a fixed held-out evaluation suite rather than
 by a hand-picked game. A future `poe watch-best` task will run that checkpoint locally

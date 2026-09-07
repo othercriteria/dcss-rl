@@ -13,12 +13,16 @@ dependencies = [
   "websockets>=15,<17",
 ]
 
+[project.scripts]
+dcss-rl = "dcss_rl.cli:main"
+
 [dependency-groups]
 dev = [
   "ty==0.0.31",
   "pytest>=8.4,<9",
   "pytest-asyncio>=1.1,<2",
   "pytest-cov>=6,<8",
+  "pytest-xdist>=3.8,<4",
 ]
 # Install explicitly with `uv sync --group train`. Keeping this out of the
 # default environment makes DCSS adapter work independent of CUDA/PyTorch.
@@ -55,16 +59,18 @@ select = ["E", "F", "I", "B", "UP", "RUF"]
 executor.type = "simple"
 
 [tool.poe.tasks]
-test = ".venv/bin/pytest"
+test = ".venv/bin/pytest -m 'not integration'"
+integration-test = ".venv/bin/pytest -m integration -n 3"
 lint = "ruff check ."
 format = "ruff format ."
 format-check = "ruff format --check ."
-check = ["test", "lint", "format-check", "typecheck"]
+check = ["test", "integration-test", "lint", "format-check", "typecheck"]
 typecheck = "ty check src tests"
 hooks = { shell = "pre-commit install --install-hooks && pre-commit install --hook-type pre-push" }
 dcss-fetch = "scripts/fetch_dcss.sh"
 dcss-build = "scripts/build_dcss.sh"
 dcss-smoke = "scripts/smoke_dcss.sh"
+evaluate-scripted = ".venv/bin/dcss-rl evaluate-scripted"
 
 [tool.ty.environment]
 python-version = "3.13"

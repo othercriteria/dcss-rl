@@ -1,0 +1,11 @@
+{
+  "suite_id": "worker-benchmark-v1",
+  "step_limit": 20,
+  "cases": [
+    {"case_id": "worker-101", "seed": 101},
+    {"case_id": "worker-202", "seed": 202},
+    {"case_id": "worker-303", "seed": 303},
+    {"case_id": "worker-404", "seed": 404},
+    {"case_id": "worker-505", "seed": 505}
+  ]
+}

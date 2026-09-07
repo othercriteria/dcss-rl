@@ -6,6 +6,7 @@ import pytest
 from dcss_rl.actions import Action, ActionKind
 from dcss_rl.env import DcssEnv, action_to_index
 from dcss_rl.trajectory import RecordingEnv, TrajectoryWriter
+from dcss_rl.units import GameSeed, StepLimit
 from dcss_rl.webtiles import GameConfig
 
 _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
@@ -17,7 +18,11 @@ _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
 )
 def test_records_replayable_raw_and_echo_segmented_trajectory(tmp_path: Path) -> None:
     path = tmp_path / "episode.jsonl"
-    base = DcssEnv(_DCSS_BINARY, game_config=GameConfig(seed=11), max_steps=1)
+    base = DcssEnv(
+        _DCSS_BINARY,
+        game_config=GameConfig(seed=GameSeed(11)),
+        max_steps=StepLimit(1),
+    )
     env = RecordingEnv(base, TrajectoryWriter(path), agent_id="test-agent")
     try:
         observation, _ = env.reset()

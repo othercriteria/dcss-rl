@@ -18,7 +18,10 @@ policy <- semantic snapshot <- stateful reducer <- WebTiles deltas
 DCSS fragments large JSON messages into datagrams and terminates each logical message
 with a newline. A starred message is server control. In particular,
 `*{"msg":"flush_messages"}` marks the point at which the emitted deltas form one
-atomic observation and DCSS is ready for more input.
+atomic rendering batch. Automatic travel and rest can emit several such batches before
+DCSS is ready for more input, so the transport coalesces consecutive batches until a
+short command-specific quiescence period. Multi-turn commands use a longer duration
+than ordinary actions; both durations carry an explicit `Seconds` type.
 
 ## Observations
 
@@ -55,6 +58,11 @@ slot for each byte-valued keycode. Each observation supplies a boolean mask over
 catalog. Policy-facing observations remain structured JSON-compatible dictionaries;
 their variable map and inventory sizes are validated by a small custom Gym space.
 
+Domain scalars are distinct types where accidental interchange is meaningful:
+`GameSeed`, `ActionIndex`, `Keycode`, `StepLimit`, `WorkerCount`, and `Seconds` do not
+silently cross application boundaries. Coordinates use a named tuple alias. Raw
+primitives are retained only where Gym, JSON, subprocess, or socket APIs require them.
+
 ## Trajectories and ECHO
 
 An episode record must be sufficient to reproduce, audit, and re-reduce a rollout:
@@ -84,6 +92,12 @@ branch/depth progress, XL, turns survived, and deaths. A documented ordering sel
 one champion manifest from a fixed suite. `watch-best` always runs that manifest (or a
 clearly labeled scripted champion before learned checkpoints exist) and records the
 selected seed policy so viewing cannot become cherry-picking.
+
+The checked-in diagnostic suite is used for policy and adapter development. Once a
+diagnostic seed has informed a code change it cannot be called held out. The held-out
+manifest therefore contains a disjoint, untouched seed set and is used only for
+champion evaluation. Independent cases execute concurrently; deterministic result
+ordering follows manifest order rather than completion order.
 
 ## Initial research comparisons
 

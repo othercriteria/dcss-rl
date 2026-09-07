@@ -13,6 +13,7 @@ from gymnasium import spaces
 from dcss_rl.actions import Action, ActionKind, encode_action, legal_actions
 from dcss_rl.observation import ObservationReducer, SemanticObservation
 from dcss_rl.schema import GymMetadata, ObservationData
+from dcss_rl.units import ActionIndex, Keycode, StepLimit
 from dcss_rl.webtiles import GameConfig, ManagedGame, ObservationBatch
 
 _COMMAND_ACTIONS = tuple(
@@ -48,25 +49,25 @@ class SemanticObservationSpace(gym.Space[ObservationData]):
         )
 
 
-def action_to_index(action: Action) -> int:
+def action_to_index(action: Action) -> ActionIndex:
     """Encode a structured action into the fixed Gym action catalog."""
     if action.kind is ActionKind.MENU_SELECT:
         if action.keycode is None or not 0 <= action.keycode < _KEYCODE_COUNT:
             raise ValueError("menu keycode must be in [0, 255]")
-        return _MENU_OFFSET + action.keycode
+        return ActionIndex(_MENU_OFFSET + action.keycode)
     try:
-        return _COMMAND_ACTIONS.index(action)
+        return ActionIndex(_COMMAND_ACTIONS.index(action))
     except ValueError as error:
         raise ValueError(f"action is not in the fixed catalog: {action}") from error
 
 
-def index_to_action(index: int) -> Action:
+def index_to_action(index: ActionIndex) -> Action:
     """Decode a fixed Gym action index into its structured representation."""
     if not 0 <= index < _MENU_OFFSET + _KEYCODE_COUNT:
         raise ValueError(f"action index out of range: {index}")
     if index < _MENU_OFFSET:
         return _COMMAND_ACTIONS[index]
-    return Action.menu_select(index - _MENU_OFFSET)
+    return Action.menu_select(Keycode(index - _MENU_OFFSET))
 
 
 def action_mask(observation: SemanticObservation) -> np.ndarray:
@@ -88,7 +89,8 @@ class DcssEnv(gym.Env[ObservationData, int]):
         *,
         game_config: GameConfig | None = None,
         starting_weapon_key: str = "c",
-        max_steps: int | None = None,
+        max_steps: StepLimit | None = None,
+        run_root: Path | None = None,
     ) -> None:
         super().__init__()
         if len(starting_weapon_key) != 1:
@@ -97,6 +99,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.game_config = game_config or GameConfig()
         self.starting_weapon_key = starting_weapon_key
         self.max_steps = max_steps
+        self.run_root = run_root
         self.action_space = spaces.Discrete(_MENU_OFFSET + _KEYCODE_COUNT)
         self.observation_space = SemanticObservationSpace()
         self.game: ManagedGame | None = None
@@ -127,7 +130,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
             background=self.game_config.background,
             seed=game_seed,
         )
-        self.game = ManagedGame(self.binary, config=config)
+        self.game = ManagedGame(self.binary, config=config, run_root=self.run_root)
         self.reducer = ObservationReducer()
         self.last_batch = self.game.start()
         exchange = [self.last_batch]
@@ -138,7 +141,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self._max_xl = 1
 
         if self.current.menu_type == "newgame-choice":
-            requested = Action.menu_select(ord(self.starting_weapon_key))
+            requested = Action.menu_select(Keycode(ord(self.starting_weapon_key)))
             keycode = encode_action(requested, self.current)
             self.last_batch = self.game.send_key(keycode)
             exchange.append(self.last_batch)
@@ -156,7 +159,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
     ) -> tuple[ObservationData, float, bool, bool, dict[str, Any]]:
         if self.game is None or self.reducer is None or self.current is None:
             raise RuntimeError("reset must be called before step")
-        structured_action = index_to_action(int(action))
+        structured_action = index_to_action(ActionIndex(action))
         keycode = encode_action(structured_action, self.current)
         previous_depth = self._max_depth
         previous_xl = self._max_xl

@@ -1,5 +1,6 @@
-from dcss_rl.observation import ObservationReducer, plain_text
+from dcss_rl.observation import MenuChoice, ObservationReducer, plain_text
 from dcss_rl.schema import JsonObject
+from dcss_rl.units import Keycode
 from dcss_rl.webtiles import Message, ObservationBatch
 
 
@@ -77,3 +78,28 @@ def test_reducer_omits_empty_inventory_slots() -> None:
     )
 
     assert observation.player["inv"] == {"0": {"quantity": 1, "name": "+0 hand axe"}}
+
+
+def test_reducer_promotes_more_and_text_prompts_to_semantic_choices() -> None:
+    reducer = ObservationReducer()
+    more = reducer.apply(batch({"msg": "input_mode", "mode": 5}))
+    prompt = reducer.apply(
+        batch(
+            {"msg": "input_mode", "mode": 7},
+            {
+                "msg": "msgs",
+                "messages": [
+                    {"text": "Increase (S)trength, (I)ntelligence, or (D)exterity?"}
+                ],
+            },
+        )
+    )
+
+    assert more.menu_type == "more"
+    assert more.choices == (MenuChoice(Keycode(ord(" ")), "continue"),)
+    assert prompt.menu_type == "prompt"
+    assert [choice.text for choice in prompt.choices] == [
+        "Strength",
+        "Intelligence",
+        "Dexterity",
+    ]
