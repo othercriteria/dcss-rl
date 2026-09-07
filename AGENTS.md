@@ -2,17 +2,30 @@
 
 ## Objective
 
-Build and validate an end-to-end DCSS RL MVP: robust local WebTiles environment,
-semantic observations and structured actions, reproducible trajectories with
-ECHO-compatible masks, scripted baseline, held-out champion evaluation, and a
-`watch-best` workflow for observing live or replayed play. Keep the public repository
-tested and documented.
+Deliver and validate a reproducible DCSS RL MVP on local, unmodified trunk: typed
+WebTiles boundaries, compact ECHO-ready trajectories, deterministic diagnostic and
+held-out evaluation, a scripted champion baseline, robust policy-input readiness,
+and `watch-best` live/replay observability. Keep the public repository tested and
+documented, retain fast development gates and semantic domain types, characterize
+parallel rollout scaling, and establish compatibility with recent stable releases.
 
-Current delivery criteria include explicit semantic scalar types, a subsecond unit
-loop and bounded full gate, characterized rollout-worker scaling, robust detection of
-true policy-input boundaries, disjoint diagnostic/held-out seeds, compact replayable
-trajectories, and an observable champion workflow. Treat these as parts of the MVP,
-not optional cleanup.
+The MVP finish line is evidence-backed rather than feature-count based:
+
+- A policy can run reproducibly from a fixed suite manifest and produce replayable
+  trajectories whose policy-action and next-environment targets remain distinct.
+- Champion selection uses only a fixed held-out suite, has explicit regression
+  thresholds, and can be observed without choosing a favorable episode by hand.
+- Policy-input readiness either uses a reliable upstream signal or has a documented,
+  adversarially tested fallback covering automatic multi-turn actions, prompts,
+  menus, and blocking CRT states.
+- Unit tests stay subsecond at current scale, the bounded full gate stays practical,
+  and rollout-worker scaling is measured at representative workloads rather than
+  assumed from a single worker count.
+- The same integration/trajectory smoke path passes on canonical trunk and at least
+  the two most recent selected stable releases, with exact revisions recorded.
+- The baseline provides a stable floor and a useful incremental learning signal even
+  before rune acquisition or ascension; depth progression is the current first
+  behavioral regression target.
 
 Work autonomously on routine architecture, implementation, dependency, experiment,
 commit, and publication decisions. Ask only about material scope changes, credentials,
