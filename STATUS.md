@@ -181,6 +181,13 @@ not the current bottleneck.
   at weight 1 to 47.6% at weight 10, but diagnostic-v2 depth-progress regressed from
   1,383 to 920. Agreement is useful optimizer telemetry, not a quality proxy; the
   stronger arm needs a full-budget test before changing objectives again.
+- Full-budget strong imitation improved diagnostic-v2 depth-progress to 1,795, but its
+  one locked heldout-v2 evaluation remained D:1 on every seed and failed at
+  `(0, 0, 0, 2500, 5, 6, 10.0)`. Replay showed the policy choosing rest 769 times where
+  its teacher requested rest only 14 times. PPO now exposes a typed teacher-balance
+  exponent: 0 is unweighted, 0.5 (the default) is square-root inverse, and 1 restores
+  the old full-inverse rule. The short square-root probe reduced rest/prompt collapse
+  but shifted some mass to movement oscillation; its full-budget result is pending.
 
 Next:
 

@@ -110,6 +110,7 @@ def main() -> None:
     ppo.add_argument("--value-weight", type=float, default=0.5)
     ppo.add_argument("--entropy-weight", type=float, default=0.01)
     ppo.add_argument("--imitation-weight", type=float, default=0.1)
+    ppo.add_argument("--teacher-balance-exponent", type=float, default=0.5)
     ppo.add_argument("--epochs-per-update", type=int, default=4)
     ppo.add_argument("--clip-ratio", type=float, default=0.2)
     ppo.add_argument("--explored-cell-reward", type=float, default=0.0)
@@ -236,6 +237,9 @@ def main() -> None:
                 value_weight=LossWeight(arguments.value_weight),
                 entropy_weight=LossWeight(arguments.entropy_weight),
                 imitation_weight=LossWeight(arguments.imitation_weight),
+                teacher_balance_exponent=Probability(
+                    arguments.teacher_balance_exponent
+                ),
                 epochs_per_update=EpochCount(arguments.epochs_per_update),
                 clip_ratio=Probability(arguments.clip_ratio),
                 explored_cell_reward=RewardWeight(arguments.explored_cell_reward),

@@ -49,6 +49,7 @@ class PpoCheckpointMetadata:
     echo_weight: float
     value_weight: float
     imitation_weight: float
+    teacher_balance_exponent: float
     explored_cell_reward: float
     depth_progress_reward: float
     experience_progress_reward: float

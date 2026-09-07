@@ -149,3 +149,18 @@ this journal exists to keep research velocity and direction visible.
   Both remained dominated by rest/prompt cycles. Decision: extend only weight 10 to
   the matched 40,960-decision budget to distinguish slow distillation from saturation;
   do not infer policy quality from agreement alone.
+- **2026-09-07 19:08 EDT — full strong-imitation v8 and heldout rejection.** At 40,960
+  decisions, weight 10 ended at 52.3% teacher agreement and improved diagnostic-v2
+  depth-progress to 1,795 (29.0% above v6-off), with aggregate max-depth sum 9. This
+  earned one locked heldout-v2 evaluation, where it remained D:1 on all five seeds and
+  failed the floor at `(0, 0, 0, 2500, 5, 6, 10.0)`. On those policy states the teacher
+  requested rest only 14 times while the policy chose it 769 times. Full inverse class
+  balancing gave each rare rest label roughly 44× the weight of common labels.
+  Decision: do not promote; make teacher balancing strength explicit and reduce the
+  default from full inverse to square-root inverse.
+- **2026-09-07 19:16 EDT — square-root balancing probe.** A matched 10,240-decision
+  weight-10 run with balance exponent 0.5 reached 45.6% teacher agreement and cut
+  rest/prompt actions roughly in half, but directional oscillation replaced part of
+  the collapse. Diagnostic-v2 depth-progress was 1,339. Decision: because the prior
+  exponent-1 arm rose from 920 at this budget to 1,795 at full budget, run the same
+  40,960-decision test before judging the new weighting rule.

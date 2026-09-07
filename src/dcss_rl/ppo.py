@@ -61,6 +61,7 @@ _DEFAULT_ECHO_WEIGHT = LossWeight(0.1)
 _DEFAULT_VALUE_WEIGHT = LossWeight(0.5)
 _DEFAULT_ENTROPY_WEIGHT = LossWeight(0.01)
 _DEFAULT_IMITATION_WEIGHT = LossWeight(0.1)
+_DEFAULT_TEACHER_BALANCE_EXPONENT = Probability(0.5)
 _DEFAULT_CLIP_RATIO = Probability(0.2)
 _DEFAULT_DISCOUNT = Probability(0.99)
 _DEFAULT_GAE_LAMBDA = Probability(0.95)
@@ -81,6 +82,7 @@ class PpoConfig:
     value_weight: LossWeight = _DEFAULT_VALUE_WEIGHT
     entropy_weight: LossWeight = _DEFAULT_ENTROPY_WEIGHT
     imitation_weight: LossWeight = _DEFAULT_IMITATION_WEIGHT
+    teacher_balance_exponent: Probability = _DEFAULT_TEACHER_BALANCE_EXPONENT
     clip_ratio: Probability = _DEFAULT_CLIP_RATIO
     discount: Probability = _DEFAULT_DISCOUNT
     gae_lambda: Probability = _DEFAULT_GAE_LAMBDA
@@ -107,6 +109,8 @@ class PpoConfig:
             raise ValueError("PPO discount and GAE lambda must be probabilities")
         if not 0 < self.clip_ratio < 1:
             raise ValueError("PPO clip ratio must be between zero and one")
+        if not 0 <= self.teacher_balance_exponent <= 1:
+            raise ValueError("teacher balance exponent must be a probability")
         if any(
             weight < 0
             for weight in (
@@ -391,6 +395,7 @@ def _checkpoint_metadata(
         echo_weight=config.echo_weight,
         value_weight=config.value_weight,
         imitation_weight=config.imitation_weight,
+        teacher_balance_exponent=config.teacher_balance_exponent,
         explored_cell_reward=config.explored_cell_reward,
         depth_progress_reward=config.depth_progress_reward,
         experience_progress_reward=config.experience_progress_reward,
@@ -566,8 +571,11 @@ def _ppo_update(
     teacher_counts = torch.bincount(teachers, minlength=model.config.action_count)
     teacher_weights = torch.zeros_like(teacher_counts, dtype=torch.float32)
     present_teacher_actions = teacher_counts > 0
-    teacher_weights[present_teacher_actions] = len(teachers) / (
+    inverse_frequency = len(teachers) / (
         present_teacher_actions.sum() * teacher_counts[present_teacher_actions]
+    )
+    teacher_weights[present_teacher_actions] = inverse_frequency.pow(
+        config.teacher_balance_exponent
     )
     last_losses = PpoLosses(0.0, 0.0, 0.0, 0.0)
     for _ in range(config.epochs_per_update):
