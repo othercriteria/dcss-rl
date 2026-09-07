@@ -59,6 +59,12 @@ semantic game-state delta.
 Every evaluation record should identify the DCSS commit, configuration, seed policy,
 agent checkpoint, reward specification, and terminal morgue/replay artifacts.
 
+The current champion will be selected by a fixed held-out evaluation suite rather than
+by a hand-picked game. A future `poe watch-best` task will run that checkpoint locally
+and expose native WebTiles spectating, while preserving completed showcase replays and
+morgues. Until a learned policy wins the benchmark, the champion may be a transparent
+scripted baseline.
+
 ## Licensing
 
 Project code is Apache-2.0. DCSS is an external GPLv2+ dependency fetched from its
