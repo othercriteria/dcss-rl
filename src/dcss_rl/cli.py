@@ -107,6 +107,8 @@ def main() -> None:
     ppo.add_argument("--value-weight", type=float, default=0.5)
     ppo.add_argument("--entropy-weight", type=float, default=0.01)
     ppo.add_argument("--imitation-weight", type=float, default=0.1)
+    ppo.add_argument("--epochs-per-update", type=int, default=4)
+    ppo.add_argument("--clip-ratio", type=float, default=0.2)
     ppo.add_argument("--seed", type=int, default=1)
     ppo.add_argument("--device", default="cuda")
     watch = commands.add_parser("watch-best")
@@ -191,7 +193,18 @@ def main() -> None:
         )
         return
     if arguments.command == "train-ppo":
-        from dcss_rl.ppo import PpoConfig, train_ppo
+        from dcss_rl.ppo import PpoConfig, PpoUpdateReport, train_ppo
+
+        def report_progress(update: PpoUpdateReport) -> None:
+            print(
+                f"update {update.update}: decisions={update.decisions}; "
+                f"rate={update.decision_rate:.2f}/s; "
+                f"episodes={update.completed_episodes}; "
+                f"mean_return={update.mean_completed_return:.3f}; "
+                f"losses={update.policy_loss:.3f}/{update.value_loss:.3f}/"
+                f"{update.echo_loss:.3f}",
+                flush=True,
+            )
 
         report = train_ppo(
             arguments.binary,
@@ -210,9 +223,12 @@ def main() -> None:
                 value_weight=LossWeight(arguments.value_weight),
                 entropy_weight=LossWeight(arguments.entropy_weight),
                 imitation_weight=LossWeight(arguments.imitation_weight),
+                epochs_per_update=EpochCount(arguments.epochs_per_update),
+                clip_ratio=Probability(arguments.clip_ratio),
                 device=arguments.device,
             ),
             policy_id=arguments.policy_id,
+            progress=report_progress,
         )
         print(
             f"checkpoint: {report.checkpoint}; decisions={report.decisions}; "

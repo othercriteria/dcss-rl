@@ -25,3 +25,19 @@ this journal exists to keep research velocity and direction visible.
   25.8 seconds, saved a restorable checkpoint, and reported finite losses (policy
   -0.021, value 0.402, ECHO 0.034). No episode completed in eight decisions per worker,
   as expected. Decision: amortize process startup with longer matched rollouts.
+- **2026-09-07 15:32–15:44 EDT — matched PPO v1 (2 × 2,560 decisions).** Four
+  128-step updates with five workers took about 4.5 minutes per arm. ECHO-on (weight
+  0.1) and ECHO-off (0.0) both completed five episodes with mean training return 11.8.
+  Their fallback-free diagnostic ranks were identical at `(0, 0, 6, 8, 11252, 33.0)`
+  over 1,000 decisions, with every episode horizon-truncated. PPO materially changed
+  v4 (68% raw argmax agreement; KL 0.051 on the recorded states), but the two arms had
+  100% argmax agreement and only `2.6e-5` mean absolute logit difference. Decision:
+  add per-update throughput/loss telemetry; a weight-0.1 ECHO ablation is behaviorally
+  underpowered at this budget, and longer training must rotate through more seeds.
+- **2026-09-07 15:47–15:54 EDT — synchronous PPO worker sweep (64 steps).** Five,
+  ten, and twenty workers processed 320, 640, and 1,280 decisions at 4.53, 5.63, and
+  7.29 decisions/s. Relative throughput was 1.00×, 1.24×, and 1.61× for 1×, 2×, and
+  4× processes; update latency rose from 71 to 114 to 176 seconds because each step
+  waits for the slowest DCSS automatic command. Decision: use 20 workers once for
+  full-seed breadth, but prefer an asynchronous actor queue over further synchronous
+  worker scaling.

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 
 import numpy as np
 import torch
@@ -27,9 +29,12 @@ from dcss_rl.schema import ObservationData
 from dcss_rl.units import (
     ActionIndex,
     BatchSize,
+    DecisionsPerSecond,
+    EpochCount,
     GameSeed,
     LearningRate,
     LossWeight,
+    Probability,
     RolloutLength,
     StepLimit,
     UpdateCount,
@@ -50,6 +55,10 @@ _DEFAULT_ECHO_WEIGHT = LossWeight(0.1)
 _DEFAULT_VALUE_WEIGHT = LossWeight(0.5)
 _DEFAULT_ENTROPY_WEIGHT = LossWeight(0.01)
 _DEFAULT_IMITATION_WEIGHT = LossWeight(0.1)
+_DEFAULT_CLIP_RATIO = Probability(0.2)
+_DEFAULT_DISCOUNT = Probability(0.99)
+_DEFAULT_GAE_LAMBDA = Probability(0.95)
+_DEFAULT_EPOCHS_PER_UPDATE = EpochCount(4)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,10 +73,10 @@ class PpoConfig:
     value_weight: LossWeight = _DEFAULT_VALUE_WEIGHT
     entropy_weight: LossWeight = _DEFAULT_ENTROPY_WEIGHT
     imitation_weight: LossWeight = _DEFAULT_IMITATION_WEIGHT
-    clip_ratio: float = 0.2
-    discount: float = 0.99
-    gae_lambda: float = 0.95
-    epochs_per_update: int = 4
+    clip_ratio: Probability = _DEFAULT_CLIP_RATIO
+    discount: Probability = _DEFAULT_DISCOUNT
+    gae_lambda: Probability = _DEFAULT_GAE_LAMBDA
+    epochs_per_update: EpochCount = _DEFAULT_EPOCHS_PER_UPDATE
     device: str = "cuda"
 
     def __post_init__(self) -> None:
@@ -104,6 +113,18 @@ class PpoReport:
     decisions: int
     completed_episodes: int
     mean_episode_return: float
+    policy_loss: float
+    value_loss: float
+    echo_loss: float
+
+
+@dataclass(frozen=True, slots=True)
+class PpoUpdateReport:
+    update: UpdateCount
+    decisions: int
+    decision_rate: DecisionsPerSecond
+    completed_episodes: int
+    mean_completed_return: float
     policy_loss: float
     value_loss: float
     echo_loss: float
@@ -204,6 +225,7 @@ def train_ppo(
     *,
     config: PpoConfig,
     policy_id: str,
+    progress: Callable[[PpoUpdateReport], None] | None = None,
 ) -> PpoReport:
     """Fine-tune an imitation checkpoint with concurrent on-policy PPO updates."""
     _seed_everything(config.seed)
@@ -219,7 +241,8 @@ def train_ppo(
     policy_loss = value_loss = echo_loss = 0.0
     try:
         with ThreadPoolExecutor(max_workers=config.workers) as executor:
-            for _ in range(config.updates):
+            for update_index in range(config.updates):
+                update_started = perf_counter()
                 rollout = _collect_rollout(
                     model, workers, executor, teacher, config=config
                 )
@@ -227,6 +250,23 @@ def train_ppo(
                 policy_loss, value_loss, echo_loss = _ppo_update(
                     model, optimizer, rollout, config=config
                 )
+                if progress is not None:
+                    update_decisions = int(config.rollout_length * config.workers)
+                    update_returns = rollout.completed_returns
+                    progress(
+                        PpoUpdateReport(
+                            UpdateCount(update_index + 1),
+                            update_decisions,
+                            DecisionsPerSecond(
+                                update_decisions / (perf_counter() - update_started)
+                            ),
+                            len(update_returns),
+                            float(np.mean(update_returns)) if update_returns else 0.0,
+                            policy_loss,
+                            value_loss,
+                            echo_loss,
+                        )
+                    )
     finally:
         for worker in workers:
             worker.close()
