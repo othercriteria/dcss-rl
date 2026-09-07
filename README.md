@@ -130,16 +130,16 @@ Online fine-tuning restores the same checkpoint and samples only legality-masked
 actions. `configs/online-train-v1.json` supplies 20 training-only seeds with longer
 500-decision horizons. Workers collect independent chunks without per-action barriers;
 worker-local seeded samplers make repeated runs deterministic across thread schedules.
-Optional exploration, XP-progress, and HP-potential rewards use only player-visible
-state and affect training environments only. Set `--echo-weight 0` for the matched
-ECHO-off ablation:
+Optional depth, exploration, XP-progress, and HP-potential rewards use only
+player-visible state and affect training environments only. Set `--echo-weight 0` for
+the matched ECHO-off ablation:
 
 ```sh
 dcss-rl train-ppo \
   --initial-checkpoint checkpoints/semantic-dagger-echo-v4.pt \
   --checkpoint checkpoints/ppo-echo-on.pt --policy-id ppo-echo-on \
   --suite configs/online-train-v1.json --updates 4 --rollout-length 128 \
-  --explored-cell-reward 0.01 --experience-progress-reward 1 \
+  --depth-progress-reward 20 --experience-progress-reward 1 \
   --hp-fraction-reward 1
 ```
 

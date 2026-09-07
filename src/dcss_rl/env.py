@@ -31,6 +31,7 @@ class RewardShaping:
     """Potential-style training rewards derived only from player-visible state."""
 
     explored_cell: RewardWeight = _ZERO_REWARD_WEIGHT
+    depth_progress: RewardWeight = _ZERO_REWARD_WEIGHT
     experience_progress: RewardWeight = _ZERO_REWARD_WEIGHT
     hp_fraction: RewardWeight = _ZERO_REWARD_WEIGHT
 
@@ -39,6 +40,7 @@ class RewardShaping:
             weight < 0
             for weight in (
                 self.explored_cell,
+                self.depth_progress,
                 self.experience_progress,
                 self.hp_fraction,
             )
@@ -277,9 +279,11 @@ def shaped_reward(
     current_cells = {(cell["x"], cell["y"]) for cell in current["cells"]}
     newly_explored = len(current_cells - previous_cells)
     experience_delta = _experience_potential(current) - _experience_potential(previous)
+    depth_delta = _depth_potential(current) - _depth_potential(previous)
     hp_delta = _hp_fraction(current) - _hp_fraction(previous)
     return float(
         shaping.explored_cell * newly_explored
+        + shaping.depth_progress * depth_delta
         + shaping.experience_progress * experience_delta
         + shaping.hp_fraction * hp_delta
     )
@@ -290,6 +294,10 @@ def _experience_potential(observation: ObservationData) -> float:
     xl = player.get("xl", 1)
     progress = player.get("progress", 0)
     return float(xl) + float(progress) / 100.0
+
+
+def _depth_potential(observation: ObservationData) -> float:
+    return float(observation["player"].get("depth", 1))
 
 
 def _hp_fraction(observation: ObservationData) -> float:

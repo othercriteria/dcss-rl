@@ -127,9 +127,10 @@ current bottleneck.
   20×64 workload reaches 44.66 decisions/s (6.13× faster), and an exact repeat produced
   bit-identical model tensors despite thread scheduling.
 - Training environments can add typed, player-visible potential rewards for newly
-  explored cells, fractional XP progress, and HP preservation. Defaults remain zero,
-  so headline evaluation rewards and old behavior are unchanged; selected weights are
-  stored in PPO checkpoint metadata.
+  explored cells, branch-local depth, fractional XP progress, and HP preservation.
+  Defaults remain zero, so headline evaluation rewards and old behavior are unchanged;
+  selected weights are stored in PPO checkpoint metadata. Online scripted imitation
+  is class-balanced so rare stair and tactical labels survive common explore actions.
 - PPO checkpoints are atomically replaced after every completed update, workers rotate
   through training seeds rather than returning to their initial seed, and transient
   DCSS startup timeouts receive three fresh-directory attempts. These were added after

@@ -47,14 +47,26 @@ def test_player_visible_death_ends_episode_before_post_game_ui() -> None:
 
 def test_dense_reward_uses_visible_potential_deltas() -> None:
     previous: ObservationData = {
-        "player": {"xl": 1, "progress": 50, "hp": 10, "hp_max": 20},
+        "player": {
+            "depth": 1,
+            "xl": 1,
+            "progress": 50,
+            "hp": 10,
+            "hp_max": 20,
+        },
         "cells": [{"x": 0, "y": 0, "g": "@"}],
         "messages": [],
         "menu": None,
         "input_mode": 1,
     }
     current: ObservationData = {
-        "player": {"xl": 2, "progress": 10, "hp": 15, "hp_max": 20},
+        "player": {
+            "depth": 2,
+            "xl": 2,
+            "progress": 10,
+            "hp": 15,
+            "hp_max": 20,
+        },
         "cells": [
             {"x": 0, "y": 0, "g": "."},
             {"x": 1, "y": 0, "g": "@"},
@@ -66,12 +78,13 @@ def test_dense_reward_uses_visible_potential_deltas() -> None:
     }
     shaping = RewardShaping(
         explored_cell=RewardWeight(0.1),
+        depth_progress=RewardWeight(5.0),
         experience_progress=RewardWeight(2.0),
         hp_fraction=RewardWeight(4.0),
     )
 
-    # 2 new cells * .1 + .6 levels * 2 + .25 HP fraction * 4
-    assert shaped_reward(previous, current, shaping=shaping) == pytest.approx(2.4)
+    # 2 new cells * .1 + 1 depth * 5 + .6 levels * 2 + .25 HP fraction * 4
+    assert shaped_reward(previous, current, shaping=shaping) == pytest.approx(7.4)
 
 
 def test_dense_reward_is_zero_by_default() -> None:

@@ -50,6 +50,7 @@ class PpoCheckpointMetadata:
     value_weight: float
     imitation_weight: float
     explored_cell_reward: float
+    depth_progress_reward: float
     experience_progress_reward: float
     hp_fraction_reward: float
     clip_ratio: float

@@ -82,6 +82,7 @@ class PpoConfig:
     gae_lambda: Probability = _DEFAULT_GAE_LAMBDA
     epochs_per_update: EpochCount = _DEFAULT_EPOCHS_PER_UPDATE
     explored_cell_reward: RewardWeight = _ZERO_REWARD_WEIGHT
+    depth_progress_reward: RewardWeight = _ZERO_REWARD_WEIGHT
     experience_progress_reward: RewardWeight = _ZERO_REWARD_WEIGHT
     hp_fraction_reward: RewardWeight = _ZERO_REWARD_WEIGHT
     device: str = "cuda"
@@ -110,6 +111,7 @@ class PpoConfig:
                 self.entropy_weight,
                 self.imitation_weight,
                 self.explored_cell_reward,
+                self.depth_progress_reward,
                 self.experience_progress_reward,
                 self.hp_fraction_reward,
             )
@@ -282,6 +284,7 @@ def train_ppo(
             index,
             RewardShaping(
                 explored_cell=config.explored_cell_reward,
+                depth_progress=config.depth_progress_reward,
                 experience_progress=config.experience_progress_reward,
                 hp_fraction=config.hp_fraction_reward,
             ),
@@ -364,6 +367,7 @@ def _checkpoint_metadata(
         value_weight=config.value_weight,
         imitation_weight=config.imitation_weight,
         explored_cell_reward=config.explored_cell_reward,
+        depth_progress_reward=config.depth_progress_reward,
         experience_progress_reward=config.experience_progress_reward,
         hp_fraction_reward=config.hp_fraction_reward,
         clip_ratio=config.clip_ratio,
@@ -534,6 +538,12 @@ def _ppo_update(
     )
     features, masks, actions, old_logs, advantages, returns, deltas, teachers = tensors
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+    teacher_counts = torch.bincount(teachers, minlength=model.config.action_count)
+    teacher_weights = torch.zeros_like(teacher_counts, dtype=torch.float32)
+    present_teacher_actions = teacher_counts > 0
+    teacher_weights[present_teacher_actions] = len(teachers) / (
+        present_teacher_actions.sum() * teacher_counts[present_teacher_actions]
+    )
     last_losses = (0.0, 0.0, 0.0)
     for _ in range(config.epochs_per_update):
         for indices in torch.randperm(len(actions), device=device).split(
@@ -552,7 +562,9 @@ def _ppo_update(
             policy_loss = -torch.minimum(unclipped, clipped).mean()
             value_loss = F.mse_loss(values, returns[indices])
             echo_loss = F.smooth_l1_loss(predicted_deltas, deltas[indices])
-            imitation_loss = F.cross_entropy(logits, teachers[indices])
+            imitation_loss = F.cross_entropy(
+                logits, teachers[indices], weight=teacher_weights
+            )
             loss = (
                 policy_loss
                 + config.value_weight * value_loss

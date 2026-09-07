@@ -71,3 +71,11 @@ this journal exists to keep research velocity and direction visible.
   accidentally returned every worker to its initial seed. Decision: atomically save
   each completed update, rotate seeds correctly, and retry transient starts up to
   three times in distinct directories before restarting the controlled experiment.
+- **2026-09-07 16:44 EDT — corrected dense ECHO-on v4 (20,480 decisions).** The
+  recoverable 16-update run completed 41 episodes at mean shaped return 30.77, but its
+  deterministic diagnostic rank regressed to zero depth-progress area: 573 of 1,000
+  actions were `explore`, and no game left D:1. Decision: exploration coverage is a
+  misaligned dominant reward here. Disable it, add a strong explicit depth potential,
+  and class-balance online teacher imitation so rare descent/tactical actions are not
+  overwhelmed by the common explore label. Do not run the ECHO-off mate for a reward
+  specification already falsified independently of ECHO.
