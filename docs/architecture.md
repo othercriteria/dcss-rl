@@ -51,6 +51,8 @@ protocol behaviors:
 - inventory entries with zero quantity are omitted from semantic output;
 - presentation markup is removed from policy-facing messages;
 - menus expose their visible prompt and offered hotkeys;
+- both widget-style `ui-push` menus and structured `menu` prompts expose their visible
+  titles and every accepted hotkey;
 - unknown fields remain available in raw trajectories even when not promoted to the
   semantic schema.
 

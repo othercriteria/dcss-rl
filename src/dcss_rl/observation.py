@@ -127,7 +127,7 @@ class ObservationReducer:
             elif message.kind == "input_mode":
                 mode = payload.get("mode")
                 self._input_mode = mode if isinstance(mode, int) else None
-            elif message.kind == "ui-push":
+            elif message.kind in {"ui-push", "menu"}:
                 self._menu = copy.deepcopy(payload)
             elif message.kind in {"ui-pop", "close_menu", "close_all_menus"}:
                 self._menu = None
@@ -232,13 +232,22 @@ class ObservationReducer:
         if self._menu is None:
             return None
         value = self._menu.get("type")
-        return value if isinstance(value, str) else "unknown"
+        if isinstance(value, str):
+            return value
+        tag = self._menu.get("tag")
+        return tag if isinstance(tag, str) else "unknown"
 
     def _prompt(self) -> str | None:
         if self._menu is None:
             return None
         prompt = self._menu.get("prompt")
-        return plain_text(prompt) if isinstance(prompt, str) else None
+        if isinstance(prompt, str):
+            return plain_text(prompt)
+        title = self._menu.get("title")
+        if isinstance(title, dict):
+            text = title.get("text")
+            return plain_text(text) if isinstance(text, str) else None
+        return None
 
     def _choices(self) -> tuple[MenuChoice, ...]:
         if self._menu is None:
@@ -263,6 +272,21 @@ class ObservationReducer:
                     label = value.get("label", "")
                     text = plain_text(label) if isinstance(label, str) else ""
                 choices.append(MenuChoice(Keycode(value["hotkey"]), text))
+        items = self._menu.get("items", [])
+        if isinstance(items, list):
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                text = item.get("text", "")
+                label = plain_text(text) if isinstance(text, str) else ""
+                hotkeys = item.get("hotkeys", [])
+                if not isinstance(hotkeys, list):
+                    continue
+                choices.extend(
+                    MenuChoice(Keycode(hotkey), label)
+                    for hotkey in hotkeys
+                    if isinstance(hotkey, int)
+                )
         return tuple(choices)
 
     @staticmethod

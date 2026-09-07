@@ -26,6 +26,7 @@ def test_command_mode_exposes_stable_structured_actions() -> None:
 
     assert Action(ActionKind.MOVE_N) in available
     assert Action(ActionKind.EXPLORE) in available
+    assert Action(ActionKind.CANCEL) not in available
     assert Action(ActionKind.STAIRS_DOWN) not in available
     assert encode_action(Action(ActionKind.MOVE_NW), observation()) == "y"
 

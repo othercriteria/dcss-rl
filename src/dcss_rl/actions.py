@@ -79,8 +79,11 @@ def legal_actions(observation: SemanticObservation) -> tuple[Action, ...]:
     return tuple(
         Action(kind)
         for kind in _COMMAND_KEYS
-        if kind not in {ActionKind.STAIRS_DOWN, ActionKind.STAIRS_UP}
-        or _stairs_affordance_visible(observation, kind)
+        if kind is not ActionKind.CANCEL
+        and (
+            kind not in {ActionKind.STAIRS_DOWN, ActionKind.STAIRS_UP}
+            or _stairs_affordance_visible(observation, kind)
+        )
     )
 
 

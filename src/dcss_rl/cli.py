@@ -214,7 +214,8 @@ def main() -> None:
                 f"episodes={update.completed_episodes}; "
                 f"mean_return={update.mean_completed_return:.3f}; "
                 f"losses={update.policy_loss:.3f}/{update.value_loss:.3f}/"
-                f"{update.echo_loss:.3f}",
+                f"{update.echo_loss:.3f}/{update.imitation_loss:.3f}; "
+                f"teacher_agreement={update.teacher_agreement:.3f}",
                 flush=True,
             )
 
@@ -253,7 +254,9 @@ def main() -> None:
             f"episodes={report.completed_episodes}; "
             f"mean_return={report.mean_episode_return:.3f}; "
             f"policy_loss={report.policy_loss:.3f}; "
-            f"value_loss={report.value_loss:.3f}; echo_loss={report.echo_loss:.3f}"
+            f"value_loss={report.value_loss:.3f}; echo_loss={report.echo_loss:.3f}; "
+            f"imitation_loss={report.imitation_loss:.3f}; "
+            f"teacher_agreement={report.teacher_agreement:.3f}"
         )
         return
     if arguments.command == "watch-best":

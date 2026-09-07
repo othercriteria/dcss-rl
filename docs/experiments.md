@@ -132,3 +132,12 @@ this journal exists to keep research velocity and direction visible.
   Decision: treat v6-off's +0.4% as noise, reject v6 without heldout access, retain
   ECHO-off as the cheaper arm, and change the learning/navigation recipe rather than
   merely extending this one.
+- **2026-09-07 18:47 EDT — structured-prompt root cause.** V6-off spent 937/2,500
+  decisions on cancel, but replay reconstruction showed 934 occurred in input mode 8
+  at a visible structured Yes/No menu (“Really rest while Zot is near?”). The reducer
+  only understood `ui-push` widgets and discarded upstream `menu` payloads, so the mask
+  failed closed to cancel without a way to answer. Promoting titles/items/hotkeys made
+  the exact deterministic v6-off rank unchanged but cut diagnostic-v2 from 125.12 to
+  21.00 seconds. It also exposed the deeper behavior: 1,867 selections answered yes,
+  then rest immediately stopped and prompted again. Decision: add online teacher
+  agreement and imitation-loss telemetry, then tune against the rest/prompt loop.

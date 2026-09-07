@@ -132,6 +132,8 @@ class PpoReport:
     policy_loss: float
     value_loss: float
     echo_loss: float
+    imitation_loss: float
+    teacher_agreement: Probability
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +146,16 @@ class PpoUpdateReport:
     policy_loss: float
     value_loss: float
     echo_loss: float
+    imitation_loss: float
+    teacher_agreement: Probability
+
+
+@dataclass(frozen=True, slots=True)
+class PpoLosses:
+    policy: float
+    value: float
+    echo: float
+    imitation: float
 
 
 @dataclass(slots=True)
@@ -300,7 +312,8 @@ def train_ppo(
         for index in range(config.workers)
     )
     completed_returns: list[float] = []
-    policy_loss = value_loss = echo_loss = 0.0
+    losses = PpoLosses(0.0, 0.0, 0.0, 0.0)
+    teacher_agreement = Probability(0.0)
     try:
         with ThreadPoolExecutor(max_workers=config.workers) as executor:
             for update_index in range(config.updates):
@@ -309,8 +322,9 @@ def train_ppo(
                     model, workers, executor, teacher, config=config
                 )
                 completed_returns.extend(rollout.completed_returns)
-                policy_loss, value_loss, echo_loss = _ppo_update(
-                    model, optimizer, rollout, config=config
+                losses = _ppo_update(model, optimizer, rollout, config=config)
+                teacher_agreement = Probability(
+                    float(np.mean(rollout.actions == rollout.teacher_actions))
                 )
                 mean_return = (
                     float(np.mean(completed_returns)) if completed_returns else 0.0
@@ -337,9 +351,11 @@ def train_ppo(
                             ),
                             len(update_returns),
                             float(np.mean(update_returns)) if update_returns else 0.0,
-                            policy_loss,
-                            value_loss,
-                            echo_loss,
+                            losses.policy,
+                            losses.value,
+                            losses.echo,
+                            losses.imitation,
+                            teacher_agreement,
                         )
                     )
     finally:
@@ -351,9 +367,11 @@ def train_ppo(
         int(config.updates * config.rollout_length * config.workers),
         len(completed_returns),
         mean_return,
-        policy_loss,
-        value_loss,
-        echo_loss,
+        losses.policy,
+        losses.value,
+        losses.echo,
+        losses.imitation,
+        teacher_agreement,
     )
 
 
@@ -528,7 +546,7 @@ def _ppo_update(
     rollout: _Rollout,
     *,
     config: PpoConfig,
-) -> tuple[float, float, float]:
+) -> PpoLosses:
     device = torch.device(config.device)
     tensors = tuple(
         torch.from_numpy(value).to(device)
@@ -551,7 +569,7 @@ def _ppo_update(
     teacher_weights[present_teacher_actions] = len(teachers) / (
         present_teacher_actions.sum() * teacher_counts[present_teacher_actions]
     )
-    last_losses = (0.0, 0.0, 0.0)
+    last_losses = PpoLosses(0.0, 0.0, 0.0, 0.0)
     for _ in range(config.epochs_per_update):
         for indices in torch.randperm(len(actions), device=device).split(
             config.minibatch_size
@@ -583,10 +601,11 @@ def _ppo_update(
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
             optimizer.step()
-            last_losses = (
+            last_losses = PpoLosses(
                 float(policy_loss.item()),
                 float(value_loss.item()),
                 float(echo_loss.item()),
+                float(imitation_loss.item()),
             )
     return last_losses
 

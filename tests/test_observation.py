@@ -64,6 +64,32 @@ def test_reducer_extracts_messages_and_menu_choices() -> None:
     assert observation.messages == ("Welcome!",)
 
 
+def test_reducer_extracts_structured_prompt_menu_hotkeys() -> None:
+    observation = ObservationReducer().apply(
+        batch(
+            {"msg": "input_mode", "mode": 8},
+            {
+                "msg": "menu",
+                "tag": "prompt",
+                "title": {"text": "<white>Really rest while Zot is near? "},
+                "items": [
+                    {"hotkeys": [89, 121], "text": " Y - Yes"},
+                    {"hotkeys": [78, 110], "text": " N - No"},
+                ],
+            },
+        )
+    )
+
+    assert observation.menu_type == "prompt"
+    assert observation.prompt == "Really rest while Zot is near?"
+    assert observation.choices == (
+        MenuChoice(Keycode(ord("Y")), "Y - Yes"),
+        MenuChoice(Keycode(ord("y")), "Y - Yes"),
+        MenuChoice(Keycode(ord("N")), "N - No"),
+        MenuChoice(Keycode(ord("n")), "N - No"),
+    )
+
+
 def test_reducer_omits_empty_inventory_slots() -> None:
     observation = ObservationReducer().apply(
         batch(

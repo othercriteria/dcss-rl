@@ -172,6 +172,11 @@ not the current bottleneck.
   depth-progress 1,385, 1,351, and 1,391 respectively; all survived 2,500 decisions,
   but three of five seeds remained on D:1. ECHO-off was cheaper and slightly stronger,
   but its +0.4% over v5 is noise rather than evidence for more of the same recipe.
+- Structured WebTiles `menu` prompts now retain their visible title, item labels, and
+  accepted hotkeys alongside widget-style menus. This removed a 934-action cancel
+  loop and reduced v6-off diagnostic-v2 replay from 125.12 to 21.00 seconds without
+  changing rank. The revealed failure is a repeated rest/confirm cycle; PPO telemetry
+  now reports teacher agreement and imitation loss explicitly for targeted tuning.
 
 Next:
 
