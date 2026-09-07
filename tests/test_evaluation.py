@@ -46,7 +46,7 @@ def test_loads_checked_in_heldout_suite() -> None:
 
 def test_broad_training_suite_is_unique_and_disjoint_from_evaluation() -> None:
     training = load_suite(Path("configs/online-train-v2.json"))
-    diagnostic = load_suite(Path("configs/diagnostic-v1.json"))
+    diagnostic = load_suite(Path("configs/diagnostic-v2.json"))
     heldout = load_suite(Path("configs/heldout-v2.json"))
     training_seeds = {case.seed for case in training.cases}
     evaluation_seeds = {case.seed for case in (*diagnostic.cases, *heldout.cases)}
@@ -56,6 +56,16 @@ def test_broad_training_suite_is_unique_and_disjoint_from_evaluation() -> None:
     assert len(training.cases) == 64
     assert len(training_seeds) == len(training.cases)
     assert training_seeds.isdisjoint(evaluation_seeds)
+
+
+def test_diagnostic_v2_extends_horizon_without_changing_seeds() -> None:
+    previous = load_suite(Path("configs/diagnostic-v1.json"))
+    current = load_suite(Path("configs/diagnostic-v2.json"))
+
+    assert current.step_limit == 500
+    assert tuple(case.seed for case in current.cases) == tuple(
+        case.seed for case in previous.cases
+    )
 
 
 def test_champion_selection_uses_documented_lexicographic_rank(

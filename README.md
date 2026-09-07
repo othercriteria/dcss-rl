@@ -131,6 +131,10 @@ Checkpoints and generated rollouts remain untracked. Learned candidates must fir
 improve the diagnostic track and then clear the checked-in held-out floor before
 promotion to the held-out champion track.
 
+The current diagnostic track reuses five explicitly known development seeds for 500
+decisions, long enough to distinguish sustained navigation and survival from an early
+descent. It is not a headline or promotion suite.
+
 Online fine-tuning restores the same checkpoint and samples only legality-masked
 actions. `configs/online-train-v2.json` supplies 64 training-only seeds with
 1,000-decision horizons. Workers collect independent chunks without per-action barriers;

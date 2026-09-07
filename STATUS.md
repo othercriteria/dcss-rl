@@ -16,6 +16,10 @@ rank is `(0, 0, 2448 depth-progress, 2060 decisions, max-depth sum 17, XL sum 11
 76.0 reward)`; the previous v1 depth-11 hybrid remains an explicit learned milestone,
 not a reusable heldout track.
 
+Development evaluation now uses `mibe-diagnostic-v2`, extending the same known five
+seeds from 200 to 500 decisions. Scripted-v3 calibrates rank
+`(0, 0, 2380, 1194, 20, 16, 115.0)` on this track.
+
 Completed:
 
 - Reproducible Nix flake, Python 3.13 `uv` project, Poe commands, and direnv entry.
@@ -163,6 +167,11 @@ not the current bottleneck.
   per-episode horizon from 500 to 1,000 decisions. Episode rotation strides by worker
   count, so concurrent workers consume disjoint seed blocks before wrapping rather
   than shifting into nearly complete overlap.
+- A matched 40,960-decision broad-seed v6 ablation did not materially improve the
+  fallback-free frontier. On diagnostic-v2, v5-off, v6-on, and v6-off reached
+  depth-progress 1,385, 1,351, and 1,391 respectively; all survived 2,500 decisions,
+  but three of five seeds remained on D:1. ECHO-off was cheaper and slightly stronger,
+  but its +0.4% over v5 is noise rather than evidence for more of the same recipe.
 
 Next:
 

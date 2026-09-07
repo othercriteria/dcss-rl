@@ -1,0 +1,11 @@
+{
+  "suite_id": "mibe-diagnostic-v2",
+  "step_limit": 500,
+  "cases": [
+    {"case_id": "diagnostic-v2-101", "seed": 101},
+    {"case_id": "diagnostic-v2-202", "seed": 202},
+    {"case_id": "diagnostic-v2-303", "seed": 303},
+    {"case_id": "diagnostic-v2-404", "seed": 404},
+    {"case_id": "diagnostic-v2-505", "seed": 505}
+  ]
+}

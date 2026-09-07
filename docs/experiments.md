@@ -120,3 +120,15 @@ this journal exists to keep research velocity and direction visible.
   seed block. Decision: stride episode rotations by worker count, with semantic worker,
   episode, case-count, and case-index types. A 20-worker/64-case schedule now covers
   0–19, 20–39, 40–59, then 60–63 plus 0–15 before repeating.
+- **2026-09-07 18:24–18:40 EDT — broad matched v6 ablation.** Starting from the same
+  fallback-free v5-off checkpoint, each arm consumed 40,960 decisions on the 64-seed,
+  1,000-horizon suite with identical depth/XP/HP shaping and teacher weight 1. ECHO-on
+  completed 72 episodes at mean shaped return 46.31; ECHO-off completed 73 at 56.20.
+  On the 200-step diagnostic, off appeared slightly better (depth-progress 491 versus
+  451, and v5-off's 482). Because every run still truncated, diagnostic-v2 extended
+  the same known seeds to 500 decisions. There, scripted-v3 calibrated at rank
+  `(0, 0, 2380, 1194, 20, 16, 115.0)`; v5-off scored 1,385 depth-progress, v6-on 1,351,
+  and v6-off 1,391, with every learned case surviving but three remaining on D:1.
+  Decision: treat v6-off's +0.4% as noise, reject v6 without heldout access, retain
+  ECHO-off as the cheaper arm, and change the learning/navigation recipe rather than
+  merely extending this one.
