@@ -132,8 +132,8 @@ improve the diagnostic track and then clear the checked-in held-out floor before
 promotion to the held-out champion track.
 
 Online fine-tuning restores the same checkpoint and samples only legality-masked
-actions. `configs/online-train-v1.json` supplies 20 training-only seeds with longer
-500-decision horizons. Workers collect independent chunks without per-action barriers;
+actions. `configs/online-train-v2.json` supplies 64 training-only seeds with
+1,000-decision horizons. Workers collect independent chunks without per-action barriers;
 worker-local seeded samplers make repeated runs deterministic across thread schedules.
 Optional depth, exploration, XP-progress, and HP-potential rewards use only
 player-visible state and affect training environments only. Set `--echo-weight 0` for
@@ -143,7 +143,7 @@ the matched ECHO-off ablation:
 dcss-rl train-ppo \
   --initial-checkpoint checkpoints/semantic-dagger-echo-v4.pt \
   --checkpoint checkpoints/ppo-echo-on.pt --policy-id ppo-echo-on \
-  --suite configs/online-train-v1.json --updates 4 --rollout-length 128 \
+  --suite configs/online-train-v2.json --updates 4 --rollout-length 128 \
   --depth-progress-reward 20 --experience-progress-reward 1 \
   --hp-fraction-reward 1
 ```

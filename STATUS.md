@@ -156,6 +156,11 @@ not the current bottleneck.
   DCSS RC options remove presentation sleeps from local agent play. The identical
   five-seed, 2,500-decision learned evaluation improved from 311.11 seconds (8.04/s)
   to 16.18 seconds (154.48/s), a 19.23× speed-up with exactly the same rank.
+- Post-change asynchronous PPO collection scales from 36.93 decisions/s at five
+  workers to 63.94 at ten and 97.93 at twenty, then declines to 93.28 at forty.
+  Twenty workers remain the measured knee and are 2.19× faster than the prior matched
+  collector. `online-train-v2` expands training from 20 to 64 disjoint seeds and its
+  per-episode horizon from 500 to 1,000 decisions.
 
 Next:
 

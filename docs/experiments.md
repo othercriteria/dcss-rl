@@ -108,3 +108,9 @@ this journal exists to keep research velocity and direction visible.
   decisions/s: 19.23× the original throughput with the same rank. Decision: retain the
   explicit readiness/fallback contract and delay-free local runtime, then remeasure PPO
   collection before increasing seed breadth and horizon.
+- **2026-09-07 18:09 EDT — post-latency asynchronous worker sweep.** Matched 64-step
+  chunks at 5, 10, 20, and 40 workers collected 320, 640, 1,280, and 2,560 decisions at
+  36.93, 63.94, 97.93, and 93.28 decisions/s. The 20-worker workload improved 2.19×
+  over its prior 44.66/s result; 40 workers regressed slightly. Decision: keep 20 as
+  the collector knee and spend the recovered wall clock on a 64-seed, 1,000-decision
+  training-only v2 suite rather than further process oversubscription.

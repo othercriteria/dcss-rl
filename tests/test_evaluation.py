@@ -44,6 +44,20 @@ def test_loads_checked_in_heldout_suite() -> None:
     assert len({case.seed for case in suite.cases}) == len(suite.cases)
 
 
+def test_broad_training_suite_is_unique_and_disjoint_from_evaluation() -> None:
+    training = load_suite(Path("configs/online-train-v2.json"))
+    diagnostic = load_suite(Path("configs/diagnostic-v1.json"))
+    heldout = load_suite(Path("configs/heldout-v2.json"))
+    training_seeds = {case.seed for case in training.cases}
+    evaluation_seeds = {case.seed for case in (*diagnostic.cases, *heldout.cases)}
+
+    assert training.suite_id == "online-train-v2"
+    assert training.step_limit == 1000
+    assert len(training.cases) == 64
+    assert len(training_seeds) == len(training.cases)
+    assert training_seeds.isdisjoint(evaluation_seeds)
+
+
 def test_champion_selection_uses_documented_lexicographic_rank(
     tmp_path: Path,
 ) -> None:
