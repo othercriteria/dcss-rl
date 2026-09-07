@@ -16,7 +16,7 @@ from dcss_rl.evaluation import (
     promote_champion,
 )
 from dcss_rl.policy import Policy, ScriptedMibePolicy
-from dcss_rl.replay import champion_trajectory, watch_replay
+from dcss_rl.replay import champion_trajectory, watch_grid, watch_replay
 from dcss_rl.units import (
     BatchSize,
     EpochCount,
@@ -25,7 +25,9 @@ from dcss_rl.units import (
     LearningRate,
     LossWeight,
     Probability,
+    RolloutLength,
     Seconds,
+    UpdateCount,
     ViewRadius,
     WorkerCount,
 )
@@ -85,6 +87,28 @@ def main() -> None:
     train.add_argument("--seed", type=int, default=1)
     train.add_argument("--device", default="cuda")
     train.add_argument("--relabel-scripted", action="store_true")
+    ppo = commands.add_parser("train-ppo")
+    ppo.add_argument("--initial-checkpoint", type=Path, required=True)
+    ppo.add_argument("--checkpoint", type=Path, required=True)
+    ppo.add_argument("--policy-id", required=True)
+    ppo.add_argument(
+        "--binary",
+        type=Path,
+        default=Path("vendor/crawl/crawl-ref/source/crawl"),
+    )
+    ppo.add_argument("--suite", type=Path, default=Path("configs/diagnostic-v1.json"))
+    ppo.add_argument("--run-root", type=Path, default=Path("artifacts/ppo-runs"))
+    ppo.add_argument("--updates", type=int, default=4)
+    ppo.add_argument("--rollout-length", type=int, default=128)
+    ppo.add_argument("--workers", type=int, default=5)
+    ppo.add_argument("--minibatch-size", type=int, default=256)
+    ppo.add_argument("--learning-rate", type=float, default=1e-4)
+    ppo.add_argument("--echo-weight", type=float, default=0.1)
+    ppo.add_argument("--value-weight", type=float, default=0.5)
+    ppo.add_argument("--entropy-weight", type=float, default=0.01)
+    ppo.add_argument("--imitation-weight", type=float, default=0.1)
+    ppo.add_argument("--seed", type=int, default=1)
+    ppo.add_argument("--device", default="cuda")
     watch = commands.add_parser("watch-best")
     watch.add_argument("--champion", type=Path, default=Path("artifacts/champion.json"))
     watch.add_argument("--case")
@@ -92,6 +116,13 @@ def main() -> None:
     watch.add_argument("--view-radius", type=int, default=10)
     watch.add_argument("--frame-limit", type=int)
     watch.add_argument("--no-animate", action="store_true")
+    grid = commands.add_parser("watch-grid")
+    grid.add_argument("--champion", type=Path, default=Path("artifacts/champion.json"))
+    grid.add_argument("--frame-delay-seconds", type=float, default=0.1)
+    grid.add_argument("--view-radius", type=int, default=5)
+    grid.add_argument("--columns", type=int, default=3)
+    grid.add_argument("--frame-limit", type=int)
+    grid.add_argument("--no-animate", action="store_true")
     arguments = parser.parse_args()
     if arguments.command == "compatibility-smoke":
         report = run_compatibility_smoke(
@@ -159,12 +190,56 @@ def main() -> None:
             f"validation_policy_loss={report.validation_policy_loss:.3f}"
         )
         return
+    if arguments.command == "train-ppo":
+        from dcss_rl.ppo import PpoConfig, train_ppo
+
+        report = train_ppo(
+            arguments.binary,
+            load_suite(arguments.suite),
+            arguments.initial_checkpoint,
+            arguments.checkpoint,
+            arguments.run_root,
+            config=PpoConfig(
+                seed=arguments.seed,
+                updates=UpdateCount(arguments.updates),
+                rollout_length=RolloutLength(arguments.rollout_length),
+                workers=WorkerCount(arguments.workers),
+                minibatch_size=BatchSize(arguments.minibatch_size),
+                learning_rate=LearningRate(arguments.learning_rate),
+                echo_weight=LossWeight(arguments.echo_weight),
+                value_weight=LossWeight(arguments.value_weight),
+                entropy_weight=LossWeight(arguments.entropy_weight),
+                imitation_weight=LossWeight(arguments.imitation_weight),
+                device=arguments.device,
+            ),
+            policy_id=arguments.policy_id,
+        )
+        print(
+            f"checkpoint: {report.checkpoint}; decisions={report.decisions}; "
+            f"episodes={report.completed_episodes}; "
+            f"mean_return={report.mean_episode_return:.3f}; "
+            f"policy_loss={report.policy_loss:.3f}; "
+            f"value_loss={report.value_loss:.3f}; echo_loss={report.echo_loss:.3f}"
+        )
+        return
     if arguments.command == "watch-best":
         trajectory = champion_trajectory(arguments.champion, arguments.case)
         watch_replay(
             trajectory,
             frame_delay=Seconds(arguments.frame_delay_seconds),
             view_radius=ViewRadius(arguments.view_radius),
+            frame_limit=FrameLimit(arguments.frame_limit)
+            if arguments.frame_limit is not None
+            else None,
+            animate=not arguments.no_animate,
+        )
+        return
+    if arguments.command == "watch-grid":
+        watch_grid(
+            arguments.champion,
+            frame_delay=Seconds(arguments.frame_delay_seconds),
+            view_radius=ViewRadius(arguments.view_radius),
+            columns=arguments.columns,
             frame_limit=FrameLimit(arguments.frame_limit)
             if arguments.frame_limit is not None
             else None,

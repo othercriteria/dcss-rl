@@ -2,20 +2,21 @@
 
 ## Objective
 
-Build and evaluate the first learning-based DCSS agent that materially exceeds the
-scripted Minotaur Berserker baseline on survival and depth progression, using compact
-ECHO-style trajectories and the local RTX 4090. Deliver a reproducible training
-pipeline, curriculum and checkpoint format, locked diagnostic and held-out regression
-suites, automatic champion promotion, and `watch-best` observation of learned play.
-Resolve or sharply characterize policy-input readiness and measure rollout/training
-throughput well enough to identify the next bottleneck.
+Train and promote a predominantly autonomous DCSS agent that matches or exceeds the
+current depth-11 held-out champion while substantially reducing dependence on the
+scripted fallback. Scale training across broader seed sets and longer episode
+horizons, add online masked actor-critic/PPO fine-tuning, compare matched ECHO-on and
+ECHO-off runs, and characterize rollout throughput and policy quality as learned-action
+coverage rises. Preserve locked held-out promotion, checkpointed replay, and
+champion replay/grid observability; use survival, XL, depth, and eventually rune acquisition
+as the curriculum frontier.
 
 The learning milestone is evidence-backed rather than feature-count based:
 
-- A learned policy and its preprocessing can be restored from a versioned checkpoint
-  and run reproducibly from a fixed suite manifest.
-- Training uses policy/value objectives plus an ECHO-style auxiliary prediction target
-  derived from the next player-visible semantic state; ablations can disable it.
+- A fallback-free learned policy and its preprocessing can be restored from a
+  versioned checkpoint and run reproducibly from a fixed suite manifest.
+- Online training uses masked clipped PPO/value objectives; matched runs can enable or
+  disable an ECHO auxiliary target derived from the next player-visible semantic state.
 - Champion selection uses only a fixed held-out suite, has explicit regression
   thresholds, and can be observed without choosing a favorable episode by hand.
 - Policy-input readiness either uses a reliable upstream signal or has a documented,
@@ -26,9 +27,9 @@ The learning milestone is evidence-backed rather than feature-count based:
   assumed from a single worker count.
 - The same integration/trajectory smoke path passes on canonical trunk and at least
   the two most recent selected stable releases, with exact revisions recorded.
-- The learned candidate materially exceeds the locked scripted baseline on survival
-  and depth progression before held-out champion promotion. Diagnostic improvements
-  alone do not satisfy the milestone.
+- The predominantly autonomous candidate matches or exceeds the current held-out
+  champion's depth-11 rank before promotion. Diagnostic improvements and a hybrid whose
+  gains mainly come from its scripted fallback do not satisfy the milestone.
 
 Work autonomously on routine architecture, implementation, dependency, experiment,
 commit, and publication decisions. Ask only about material scope changes, credentials,
@@ -84,4 +85,5 @@ constraint, not evidence of a host failure.
 
 Read `STATUS.md` before starting substantial work and keep it current when milestones,
 architecture, commands, or blockers change. Detailed decisions live in
-`docs/architecture.md`.
+`docs/architecture.md`. Keep `docs/experiments.md` as a selective timestamped record
+of experiment hypothesis, wall-clock cost, outcome, and next decision.

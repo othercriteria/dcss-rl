@@ -1,0 +1,26 @@
+{
+  "suite_id": "online-train-v1",
+  "step_limit": 500,
+  "cases": [
+    {"case_id": "online-1001", "seed": 1001},
+    {"case_id": "online-1013", "seed": 1013},
+    {"case_id": "online-1027", "seed": 1027},
+    {"case_id": "online-1039", "seed": 1039},
+    {"case_id": "online-1051", "seed": 1051},
+    {"case_id": "online-1063", "seed": 1063},
+    {"case_id": "online-1087", "seed": 1087},
+    {"case_id": "online-1099", "seed": 1099},
+    {"case_id": "online-1117", "seed": 1117},
+    {"case_id": "online-1129", "seed": 1129},
+    {"case_id": "online-1151", "seed": 1151},
+    {"case_id": "online-1163", "seed": 1163},
+    {"case_id": "online-1177", "seed": 1177},
+    {"case_id": "online-1193", "seed": 1193},
+    {"case_id": "online-1201", "seed": 1201},
+    {"case_id": "online-1217", "seed": 1217},
+    {"case_id": "online-1231", "seed": 1231},
+    {"case_id": "online-1249", "seed": 1249},
+    {"case_id": "online-1277", "seed": 1277},
+    {"case_id": "online-1291", "seed": 1291}
+  ]
+}

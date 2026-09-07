@@ -39,6 +39,21 @@ class CheckpointTrainingMetadata:
 
 
 @dataclass(frozen=True, slots=True)
+class PpoCheckpointMetadata:
+    training_method: str
+    seed: int
+    updates: int
+    rollout_steps: int
+    worker_count: int
+    learning_rate: float
+    echo_weight: float
+    value_weight: float
+    imitation_weight: float
+    clip_ratio: float
+    mean_episode_return: float
+
+
+@dataclass(frozen=True, slots=True)
 class PolicyProposal:
     action: ActionIndex
     confidence: Probability
@@ -161,7 +176,7 @@ def save_checkpoint(
     *,
     model: SemanticActorCritic,
     policy_id: str,
-    training_metadata: CheckpointTrainingMetadata,
+    training_metadata: CheckpointTrainingMetadata | PpoCheckpointMetadata,
 ) -> None:
     """Persist weights plus every contract needed for deterministic restoration."""
     path = Path(path)

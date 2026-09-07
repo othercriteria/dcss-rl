@@ -83,10 +83,12 @@ profiling another machine. Checked-in diagnostic seeds are separate from the unt
 held-out manifest; generated trajectories, game directories, summaries, and
 `artifacts/champion.json` remain untracked.
 
-Watch the first manifest-ordered episode from the current champion:
+Watch the first manifest-ordered episode from the held-out champion, or animate every
+held-out seed together as a compact terminal grid:
 
 ```sh
-poe watch-best
+poe watch-heldout-champion
+poe watch-heldout-grid
 ```
 
 Held-out and development leaders are deliberately separate. Diagnostic evaluations
@@ -94,13 +96,16 @@ promote monotonically to `artifacts/dev-champion.json`; observe that track with:
 
 ```sh
 poe evaluate-scripted-diagnostic
-poe watch-dev-best
+poe watch-diagnostic-leader
+poe watch-diagnostic-grid
 ```
 
 The terminal viewer reconstructs both legacy full-snapshot trajectories and compact
 schema-v2 deltas. Pass `--case CASE_ID` to inspect a specifically labeled suite case;
 the default deliberately follows manifest order instead of selecting a flattering
-showcase seed.
+showcase seed. Grid panels remain on their final frame and visibly distinguish death
+(`☠`), horizon truncation (`◇`), and eventual ascension (`★`). The older `watch-best`
+and `watch-dev-best` Poe names remain temporary aliases.
 
 Champion promotion is gated by the checked-in held-out regression floor. Until a
 learned policy exceeds it, the champion may be the transparent scripted baseline.
@@ -119,7 +124,18 @@ dcss-rl evaluate-learned --checkpoint checkpoints/candidate.pt
 
 Checkpoints and generated rollouts remain untracked. Learned candidates must first
 improve the diagnostic track and then clear the checked-in held-out floor before
-promotion to `watch-best`.
+promotion to the held-out champion track.
+
+Online fine-tuning restores the same checkpoint and samples only legality-masked
+actions. `configs/online-train-v1.json` supplies 20 training-only seeds with longer
+500-decision horizons. Set `--echo-weight 0` for the matched ECHO-off ablation:
+
+```sh
+dcss-rl train-ppo \
+  --initial-checkpoint checkpoints/semantic-dagger-echo-v4.pt \
+  --checkpoint checkpoints/ppo-echo-on.pt --policy-id ppo-echo-on \
+  --suite configs/online-train-v1.json --updates 4 --rollout-length 128
+```
 
 `configs/curriculum-v1.json` records the exact bootstrap, DAgger, confidence gate,
 and held-out promotion stages used by the first learned champion. It references only

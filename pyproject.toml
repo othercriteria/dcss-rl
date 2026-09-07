@@ -73,6 +73,11 @@ dcss-smoke = "scripts/smoke_dcss.sh"
 compatibility-smoke = ".venv/bin/dcss-rl compatibility-smoke"
 evaluate-scripted = ".venv/bin/dcss-rl evaluate-scripted --threshold configs/heldout-regression-v1.json"
 evaluate-scripted-diagnostic = ".venv/bin/dcss-rl evaluate-scripted --suite configs/diagnostic-v1.json --champion artifacts/dev-champion.json"
+watch-heldout-champion = ".venv/bin/dcss-rl watch-best --champion artifacts/champion.json"
+watch-diagnostic-leader = ".venv/bin/dcss-rl watch-best --champion artifacts/dev-champion.json"
+watch-heldout-grid = ".venv/bin/dcss-rl watch-grid --champion artifacts/champion.json"
+watch-diagnostic-grid = ".venv/bin/dcss-rl watch-grid --champion artifacts/dev-champion.json"
+# Transitional aliases; prefer the track-specific names above.
 watch-best = ".venv/bin/dcss-rl watch-best"
 watch-dev-best = ".venv/bin/dcss-rl watch-best --champion artifacts/dev-champion.json"
 

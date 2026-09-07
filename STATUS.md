@@ -48,7 +48,7 @@ Completed:
   reconstructible semantic patches while preserving raw WebTiles messages and distinct
   policy/environment loss segments. On the matched five-case 20-step workload,
   trajectory JSONL fell from 7.81 MiB to 1.48 MiB (81%).
-- `poe watch-best` resolves the champion manifest and renders a deterministic,
+- `poe watch-heldout-champion` resolves the champion manifest and renders a deterministic,
   player-centered terminal replay. It supports both the existing schema-v1 champion
   and new schema-v2 trajectories and defaults to manifest order, not a cherry-picked
   episode.
@@ -77,8 +77,10 @@ Completed:
   flora, and permits BFS to enter stair feature cells. Its diagnostic rank is
   `(0, 0, 20, 18, 3287, 155.0)`, providing a materially stronger multi-depth teacher.
 - Canonical held-out and diagnostic leaders now have separate monotonic promotion
-  tracks. `poe watch-best` remains held-out-only; `poe watch-dev-best` exposes the
-  current diagnostic leader without weakening champion hygiene.
+  tracks. `poe watch-heldout-champion` remains held-out-only;
+  `poe watch-diagnostic-leader` exposes the current diagnostic leader without weakening
+  champion hygiene. Their corresponding `*-grid` tasks animate all manifest seeds in
+  parallel and mark death, horizon truncation, and ascension explicitly.
 - The confidence-gated DAgger-v4 agent matches the depth-20 diagnostic expert while
   making 23.7% of diagnostic decisions neurally. It cleared the locked held-out floor
   and became canonical with rank `(0, 0, 11, 8, 2155, 18.0)`, versus scripted-v2's

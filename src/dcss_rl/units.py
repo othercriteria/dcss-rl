@@ -23,5 +23,7 @@ LossWeight = NewType("LossWeight", float)
 Probability = NewType("Probability", float)
 CheckpointId = NewType("CheckpointId", str)
 DecisionsPerSecond = NewType("DecisionsPerSecond", float)
+UpdateCount = NewType("UpdateCount", int)
+RolloutLength = NewType("RolloutLength", int)
 
 type Coordinate = tuple[int, int]

@@ -1,10 +1,18 @@
 import json
 from pathlib import Path
 
-from dcss_rl.replay import champion_trajectory, render_frame, replay_frames
+import pytest
+
+from dcss_rl.replay import (
+    champion_episodes,
+    champion_trajectory,
+    render_frame,
+    replay_frames,
+    watch_grid,
+)
 from dcss_rl.schema import ObservationData
 from dcss_rl.trajectory import observation_delta
-from dcss_rl.units import ViewRadius
+from dcss_rl.units import FrameLimit, Seconds, ViewRadius
 
 
 def state(*, hp: int, x: int = 0) -> ObservationData:
@@ -51,8 +59,16 @@ def test_champion_defaults_to_first_manifest_case(tmp_path: Path) -> None:
             {
                 "summary": {
                     "episodes": [
-                        {"case_id": "first", "trajectory": "first.jsonl"},
-                        {"case_id": "second", "trajectory": "second.jsonl"},
+                        {
+                            "case_id": "first",
+                            "outcome": "dead",
+                            "trajectory": "first.jsonl",
+                        },
+                        {
+                            "case_id": "second",
+                            "outcome": "won",
+                            "trajectory": "second.jsonl",
+                        },
                     ]
                 }
             }
@@ -61,3 +77,54 @@ def test_champion_defaults_to_first_manifest_case(tmp_path: Path) -> None:
 
     assert champion_trajectory(manifest) == Path("first.jsonl")
     assert champion_trajectory(manifest, "second") == Path("second.jsonl")
+    assert [episode.outcome for episode in champion_episodes(manifest)] == [
+        "dead",
+        "won",
+    ]
+
+
+def test_watch_grid_marks_terminal_outcomes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    trajectories = []
+    for case_id in ("dead-seed", "winning-seed"):
+        path = tmp_path / f"{case_id}.jsonl"
+        path.write_text(
+            json.dumps({"type": "episode", "initial": {"observation": state(hp=20)}})
+            + "\n"
+        )
+        trajectories.append(path)
+    manifest = tmp_path / "champion.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "episodes": [
+                        {
+                            "case_id": "dead-seed",
+                            "outcome": "dead",
+                            "trajectory": str(trajectories[0]),
+                        },
+                        {
+                            "case_id": "winning-seed",
+                            "outcome": "won",
+                            "trajectory": str(trajectories[1]),
+                        },
+                    ]
+                }
+            }
+        )
+    )
+
+    watch_grid(
+        manifest,
+        frame_delay=Seconds(0),
+        view_radius=ViewRadius(5),
+        columns=2,
+        frame_limit=FrameLimit(1),
+        animate=False,
+    )
+
+    output = capsys.readouterr().out
+    assert "☠ DEAD" in output
+    assert "★ ASCENDED" in output
