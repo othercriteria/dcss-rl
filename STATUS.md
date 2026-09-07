@@ -188,6 +188,13 @@ not the current bottleneck.
   exponent: 0 is unweighted, 0.5 (the default) is square-root inverse, and 1 restores
   the old full-inverse rule. The short square-root probe reduced rest/prompt collapse
   but shifted some mass to movement oscillation; its full-budget result is pending.
+- Full-budget balance exponents 0.5 and 0.75 scored diagnostic-v2 depth-progress 1,263
+  and 1,377. Square-root reached aggregate max-depth 13 but died early; the midpoint
+  returned to passive survival. Neither beats full-inverse v8's 1,795, and v8 failed
+  heldout. The next ablation separates online imitation from PPO/value gradients.
+- A controlled current-build check measured 99.17 decisions/s at 20 workers and
+  102.58/104.58 at 24. The 3.4–5.5% gain is modest but repeatable, so new training runs
+  use 24 workers while 40 remains demonstrably beyond the scaling knee.
 
 Next:
 

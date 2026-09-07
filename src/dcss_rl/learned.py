@@ -47,6 +47,7 @@ class PpoCheckpointMetadata:
     worker_count: int
     learning_rate: float
     echo_weight: float
+    policy_weight: float
     value_weight: float
     imitation_weight: float
     teacher_balance_exponent: float

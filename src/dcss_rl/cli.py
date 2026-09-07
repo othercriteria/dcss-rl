@@ -107,6 +107,7 @@ def main() -> None:
     ppo.add_argument("--minibatch-size", type=int, default=256)
     ppo.add_argument("--learning-rate", type=float, default=1e-4)
     ppo.add_argument("--echo-weight", type=float, default=0.1)
+    ppo.add_argument("--policy-weight", type=float, default=1.0)
     ppo.add_argument("--value-weight", type=float, default=0.5)
     ppo.add_argument("--entropy-weight", type=float, default=0.01)
     ppo.add_argument("--imitation-weight", type=float, default=0.1)
@@ -234,6 +235,7 @@ def main() -> None:
                 minibatch_size=BatchSize(arguments.minibatch_size),
                 learning_rate=LearningRate(arguments.learning_rate),
                 echo_weight=LossWeight(arguments.echo_weight),
+                policy_weight=LossWeight(arguments.policy_weight),
                 value_weight=LossWeight(arguments.value_weight),
                 entropy_weight=LossWeight(arguments.entropy_weight),
                 imitation_weight=LossWeight(arguments.imitation_weight),

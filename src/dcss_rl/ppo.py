@@ -58,6 +58,7 @@ _DEFAULT_WORKERS = WorkerCount(5)
 _DEFAULT_BATCH_SIZE = BatchSize(256)
 _DEFAULT_LEARNING_RATE = LearningRate(1e-4)
 _DEFAULT_ECHO_WEIGHT = LossWeight(0.1)
+_DEFAULT_POLICY_WEIGHT = LossWeight(1.0)
 _DEFAULT_VALUE_WEIGHT = LossWeight(0.5)
 _DEFAULT_ENTROPY_WEIGHT = LossWeight(0.01)
 _DEFAULT_IMITATION_WEIGHT = LossWeight(0.1)
@@ -79,6 +80,7 @@ class PpoConfig:
     minibatch_size: BatchSize = _DEFAULT_BATCH_SIZE
     learning_rate: LearningRate = _DEFAULT_LEARNING_RATE
     echo_weight: LossWeight = _DEFAULT_ECHO_WEIGHT
+    policy_weight: LossWeight = _DEFAULT_POLICY_WEIGHT
     value_weight: LossWeight = _DEFAULT_VALUE_WEIGHT
     entropy_weight: LossWeight = _DEFAULT_ENTROPY_WEIGHT
     imitation_weight: LossWeight = _DEFAULT_IMITATION_WEIGHT
@@ -115,6 +117,7 @@ class PpoConfig:
             weight < 0
             for weight in (
                 self.echo_weight,
+                self.policy_weight,
                 self.value_weight,
                 self.entropy_weight,
                 self.imitation_weight,
@@ -393,6 +396,7 @@ def _checkpoint_metadata(
         worker_count=config.workers,
         learning_rate=config.learning_rate,
         echo_weight=config.echo_weight,
+        policy_weight=config.policy_weight,
         value_weight=config.value_weight,
         imitation_weight=config.imitation_weight,
         teacher_balance_exponent=config.teacher_balance_exponent,
@@ -599,7 +603,7 @@ def _ppo_update(
                 logits, teachers[indices], weight=teacher_weights
             )
             loss = (
-                policy_loss
+                config.policy_weight * policy_loss
                 + config.value_weight * value_loss
                 - config.entropy_weight * distribution.entropy().mean()
                 + config.echo_weight * echo_loss

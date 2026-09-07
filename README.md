@@ -143,7 +143,9 @@ Optional depth, exploration, XP-progress, and HP-potential rewards use only
 player-visible state and affect training environments only. Set `--echo-weight 0` for
 the matched ECHO-off ablation. Teacher class balancing uses square-root inverse
 frequency by default; `--teacher-balance-exponent 0` disables it and `1` restores full
-inverse balancing:
+inverse balancing. Setting `--policy-weight 0 --value-weight 0 --echo-weight 0
+--entropy-weight 0` isolates online DAgger imitation while retaining autonomous,
+legality-masked policy collection:
 
 ```sh
 dcss-rl train-ppo \

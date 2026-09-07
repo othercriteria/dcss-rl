@@ -164,3 +164,16 @@ this journal exists to keep research velocity and direction visible.
   the collapse. Diagnostic-v2 depth-progress was 1,339. Decision: because the prior
   exponent-1 arm rose from 920 at this budget to 1,795 at full budget, run the same
   40,960-decision test before judging the new weighting rule.
+- **2026-09-07 19:27–19:43 EDT — full balance-exponent sweep.** At 40,960 decisions,
+  exponent 0.5 reached 64.6% teacher agreement and made substantially more progress
+  per wall-clock second, but diagnostic-v2 included two early deaths and ranked
+  `(0, 0, 1263, 1662, 13, 10, 54.0)`: more aggregate max depth, worse sustained depth
+  area. Exponent 0.75 ended at 63.6% agreement but reverted to the passive frontier at
+  `(0, 0, 1377, 2500, 8, 8, 39.0)`. Decision: interpolation does not beat exponent-1
+  v8's 1,795 depth area, which itself failed heldout. Separate online imitation from
+  PPO/value gradients for the next ablation.
+- **2026-09-07 19:39 EDT — 24-worker check.** On the fixed initial policy and 64-step
+  chunks, the current build measured 99.17 decisions/s at 20 workers and 102.58 then
+  104.58/s at 24. The reproducible gain is 3.4–5.5%, not the expected 20%, but is cheap
+  enough to adopt. Decision: use 24 workers and therefore 3,072 decisions/update for
+  the next fresh experiment.
