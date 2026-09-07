@@ -123,11 +123,12 @@ The frozen scripted-v2 held-out rank is also checked in as a regression floor. T
 standard scripted evaluation command verifies that floor before writing a champion
 manifest. Threshold comparison uses the same lexicographic metric ordering as
 champion selection, so improvement on a higher-priority milestone is not vetoed by a
-lower-priority aggregate. Rank v3 orders wins, runes, decision-weighted depth progress
-(`sum(depth - 1)`), decision-weighted XL progress (`sum(XL - 1)`), bounded policy
-decisions survived, aggregate maximum-depth frontier, then shaped reward. D:1 idling
-therefore contributes no depth progress, while reaching deeper earlier and surviving
-there accumulates credit. It deliberately excludes raw DCSS game turns: automatic
+lower-priority aggregate. Rank v4 orders wins, runes, decision-weighted depth progress
+(`sum(depth - 1)`), bounded policy decisions survived, aggregate maximum-depth
+frontier, final/maximum XL, then shaped reward. D:1 idling therefore contributes no
+depth progress, while reaching deeper earlier and surviving there accumulates credit.
+XL is monotonic in normal play, so integrating it over decisions would reward risky
+front-loading rather than additional progression. The rank deliberately excludes raw DCSS game turns: automatic
 rest/travel can advance thousands of turns behind one policy decision and therefore
 makes that count an exploitable survival proxy. The initial depth-progress coordinate
 is valid for the Dungeon-only curriculum; branch play requires a versioned mapping

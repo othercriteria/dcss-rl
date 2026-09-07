@@ -1,5 +1,5 @@
 {
   "suite_id": "mibe-heldout-v1",
   "baseline_policy_id": "scripted-mibe-v2",
-  "minimum_rank": [0, 0, 0, 2172, 2500, 5, 50.0]
+  "minimum_rank": [0, 0, 0, 2500, 5, 10, 50.0]
 }

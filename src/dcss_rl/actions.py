@@ -76,7 +76,20 @@ def legal_actions(observation: SemanticObservation) -> tuple[Action, ...]:
     if observation.input_mode != 1:
         return (Action(ActionKind.CANCEL),)
 
-    return tuple(Action(kind) for kind in _COMMAND_KEYS)
+    return tuple(
+        Action(kind)
+        for kind in _COMMAND_KEYS
+        if kind not in {ActionKind.STAIRS_DOWN, ActionKind.STAIRS_UP}
+        or _stairs_affordance_visible(observation, kind)
+    )
+
+
+def _stairs_affordance_visible(
+    observation: SemanticObservation, kind: ActionKind
+) -> bool:
+    direction = "down" if kind is ActionKind.STAIRS_DOWN else "up"
+    phrase = f"staircase leading {direction} here"
+    return any(phrase in message.casefold() for message in observation.messages)
 
 
 def encode_action(action: Action, observation: SemanticObservation) -> str | int:

@@ -10,6 +10,12 @@ The Nix/Python environment and upstream trunk build are working. The current loc
 DCSS checkout was validated at commit `96832895d0253f9d7290d370efe32bf0614679a8`
 (`0.35-a0-999-g96832895d0`) with a WebTiles build.
 
+Canonical evaluation now uses `mibe-heldout-v2`. Heldout-v1 was retired after its
+failure traces informed contextual stair-action masking. The v2 scripted-v3 incumbent
+rank is `(0, 0, 2448 depth-progress, 2060 decisions, max-depth sum 17, XL sum 11,
+76.0 reward)`; the previous v1 depth-11 hybrid remains an explicit learned milestone,
+not a reusable heldout track.
+
 Completed:
 
 - Reproducible Nix flake, Python 3.13 `uv` project, Poe commands, and direnv entry.
@@ -60,8 +66,8 @@ Completed:
   schema-v2 recording, and exact replay reconstruction against any binary. It passes
   on trunk plus 0.34.1 (`1eebc1a2892e1c89776a0d7a10691f8dac8d9796`) and 0.33.1
   (`9cb173b281c11a5177f40b8c0662bacd3aac2717`).
-- `configs/heldout-regression-v1.json` locks the scripted-v2 held-out rank-v3 vector
-  `(0, 0, 0, 2172, 2500, 5, 50.0)`; `poe evaluate-scripted` enforces it before champion
+- `configs/heldout-regression-v1.json` locks the scripted-v2 held-out rank-v4 vector
+  `(0, 0, 0, 2500, 5, 10, 50.0)`; `poe evaluate-scripted` enforces it before champion
   promotion.
 - PyTorch 2.14.0+cu130 sees the RTX 4090 and completes CUDA tensor operations without
   a flake change. A versioned fixed-width semantic actor/value model, ECHO
@@ -135,12 +141,17 @@ current bottleneck.
   through training seeds rather than returning to their initial seed, and transient
   DCSS startup timeouts receive three fresh-directory attempts. These were added after
   a 20-seed experiment lost seven otherwise healthy updates at an episode restart.
-- Champion rank v3 uses decision-weighted depth/XL progress and bounded policy survival
-  after wins and runes, with maximum depth retained as a later frontier tie-breaker.
-  Raw game turns were removed because rest/travel can inflate them behind one action.
+- Champion rank v4 uses decision-weighted depth progress and bounded policy survival
+  after wins and runes, with maximum depth and monotonic XL as later frontier measures.
+  Raw game turns were removed because rest/travel can inflate them behind one action;
+  XL area was removed because it rewards risky front-loading rather than more XP.
 - DCSS can abort when an overlong run directory produces a Unix socket path beyond
   Linux's 107-byte payload limit. Managed games now reject such paths before launch
   with a clear instruction to shorten the output root.
+- Evaluation reports each case immediately on completion while retaining manifest
+  ordering for summaries and ranks. Champion-track activation validates suite/rank
+  versions, archives the prior canonical manifest, and atomically cuts all heldout
+  viewers to the selected replacement; `watch-heldout-grid` now resolves heldout-v2.
 
 Next:
 

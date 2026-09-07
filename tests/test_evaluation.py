@@ -7,6 +7,7 @@ from dcss_rl.evaluation import (
     EpisodeResult,
     EvaluationSummary,
     RegressionThreshold,
+    activate_champion_track,
     assert_meets_regression_threshold,
     load_regression_threshold,
     load_suite,
@@ -27,7 +28,6 @@ def result(
         policy_steps=policy_steps,
         game_turns=turns,
         depth_progress_area=DecisionProgressArea(max(depth - 1, 0) * policy_steps),
-        xl_progress_area=DecisionProgressArea(max(xl - 1, 0) * policy_steps),
         max_depth=depth,
         max_xl=xl,
         runes=0,
@@ -70,7 +70,7 @@ def test_rejects_comparing_different_suites(tmp_path: Path) -> None:
 def test_checked_in_regression_threshold_matches_frozen_baseline() -> None:
     threshold = load_regression_threshold(Path("configs/heldout-regression-v1.json"))
 
-    assert threshold.minimum_rank == (0, 0, 0, 2172, 2500, 5, 50.0)
+    assert threshold.minimum_rank == (0, 0, 0, 2500, 5, 10, 50.0)
 
 
 def test_rejects_rank_below_regression_threshold() -> None:
@@ -140,5 +140,34 @@ def test_promoting_same_policy_migrates_older_rank_spec(tmp_path: Path) -> None:
 
     assert promote_champion(candidate, destination)
     migrated = json.loads(destination.read_text())
-    assert migrated["rank_spec_version"] == 3
+    assert migrated["rank_spec_version"] == 4
     assert migrated["rank"][2] == 10
+
+
+def test_activates_validated_champion_track_and_archives_previous(
+    tmp_path: Path,
+) -> None:
+    old = tmp_path / "champion.json"
+    candidate = tmp_path / "candidate.json"
+    archive = tmp_path / "archive" / "champion-v1.json"
+    old.write_text('{"suite_id": "old"}')
+    candidate.write_text(
+        json.dumps(
+            {
+                "suite_id": "new",
+                "policy_id": "winner",
+                "rank_spec_version": 4,
+            }
+        )
+    )
+
+    activation = activate_champion_track(
+        candidate,
+        old,
+        expected_suite_id="new",
+        archive_manifest=archive,
+    )
+
+    assert activation.policy_id == "winner"
+    assert json.loads(old.read_text())["suite_id"] == "new"
+    assert json.loads(archive.read_text())["suite_id"] == "old"

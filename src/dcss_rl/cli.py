@@ -9,6 +9,8 @@ from typing import NoReturn
 
 from dcss_rl.compatibility import run_compatibility_smoke
 from dcss_rl.evaluation import (
+    EvaluationProgress,
+    activate_champion_track,
     assert_meets_regression_threshold,
     evaluate_policy,
     load_regression_threshold,
@@ -50,7 +52,7 @@ def main() -> None:
         type=Path,
         default=Path("vendor/crawl/crawl-ref/source/crawl"),
     )
-    evaluate.add_argument("--suite", type=Path, default=Path("configs/heldout-v1.json"))
+    evaluate.add_argument("--suite", type=Path, default=Path("configs/heldout-v2.json"))
     evaluate.add_argument("--output", type=Path)
     evaluate.add_argument("--workers", type=int, default=5)
     evaluate.add_argument("--threshold", type=Path)
@@ -130,6 +132,11 @@ def main() -> None:
     grid.add_argument("--columns", type=int, default=3)
     grid.add_argument("--frame-limit", type=int)
     grid.add_argument("--no-animate", action="store_true")
+    activate = commands.add_parser("activate-champion-track")
+    activate.add_argument("--candidate", type=Path, required=True)
+    activate.add_argument("--champion", type=Path, required=True)
+    activate.add_argument("--suite", type=Path, required=True)
+    activate.add_argument("--archive", type=Path)
     arguments = parser.parse_args()
     if arguments.command == "compatibility-smoke":
         report = run_compatibility_smoke(
@@ -273,6 +280,19 @@ def main() -> None:
             animate=not arguments.no_animate,
         )
         return
+    if arguments.command == "activate-champion-track":
+        suite = load_suite(arguments.suite)
+        activation = activate_champion_track(
+            arguments.candidate,
+            arguments.champion,
+            expected_suite_id=suite.suite_id,
+            archive_manifest=arguments.archive,
+        )
+        print(
+            f"activated {activation.suite_id} champion {activation.policy_id!r} at "
+            f"{activation.canonical_manifest}; archived={activation.archived_manifest}"
+        )
+        return
     _unreachable(arguments.command)
 
 
@@ -310,7 +330,14 @@ def _evaluate(
     if output is None:
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         output = Path("artifacts/evaluations") / f"{policy.policy_id}-{timestamp}"
-    summary = evaluate_policy(binary, policy, suite, output, workers=workers)
+    summary = evaluate_policy(
+        binary,
+        policy,
+        suite,
+        output,
+        workers=workers,
+        progress=_print_evaluation_progress,
+    )
     if threshold_path is not None:
         assert_meets_regression_threshold(
             summary, load_regression_threshold(threshold_path)
@@ -327,6 +354,17 @@ def _evaluate(
 
 def _unreachable(value: object) -> NoReturn:
     raise AssertionError(f"unhandled command: {value!r}")
+
+
+def _print_evaluation_progress(progress: EvaluationProgress) -> None:
+    print(
+        f"case {progress.completed_cases}/{progress.total_cases} "
+        f"{progress.case_id}: {progress.outcome}; steps={progress.policy_steps}; "
+        f"D:{progress.max_depth}; XL:{progress.max_xl}; "
+        f"elapsed={progress.elapsed_seconds:.1f}s; "
+        f"completed-rate={progress.decision_rate:.2f}/s",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

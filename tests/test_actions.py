@@ -12,9 +12,13 @@ from dcss_rl.units import Keycode
 
 
 def observation(
-    *, menu_type: str | None = None, choices: tuple[MenuChoice, ...] = (), mode: int = 1
+    *,
+    menu_type: str | None = None,
+    choices: tuple[MenuChoice, ...] = (),
+    messages: tuple[str, ...] = (),
+    mode: int = 1,
 ) -> SemanticObservation:
-    return SemanticObservation({}, (), (), menu_type, None, choices, mode)
+    return SemanticObservation({}, (), messages, menu_type, None, choices, mode)
 
 
 def test_command_mode_exposes_stable_structured_actions() -> None:
@@ -22,8 +26,23 @@ def test_command_mode_exposes_stable_structured_actions() -> None:
 
     assert Action(ActionKind.MOVE_N) in available
     assert Action(ActionKind.EXPLORE) in available
-    assert Action(ActionKind.STAIRS_DOWN) in available
+    assert Action(ActionKind.STAIRS_DOWN) not in available
     assert encode_action(Action(ActionKind.MOVE_NW), observation()) == "y"
+
+
+def test_stairs_require_visible_under_player_affordance() -> None:
+    downstairs = observation(
+        messages=("There is a stone staircase leading down here.",)
+    )
+    upstairs = observation(messages=("There is a stone staircase leading up here.",))
+
+    assert Action(ActionKind.STAIRS_DOWN) in legal_actions(downstairs)
+    assert Action(ActionKind.STAIRS_UP) not in legal_actions(downstairs)
+    assert Action(ActionKind.STAIRS_UP) in legal_actions(upstairs)
+    assert Action(ActionKind.STAIRS_DOWN) not in legal_actions(upstairs)
+
+    with pytest.raises(IllegalAction):
+        encode_action(Action(ActionKind.STAIRS_DOWN), observation())
 
 
 def test_menu_actions_are_derived_from_visible_choices() -> None:

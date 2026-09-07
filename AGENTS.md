@@ -3,8 +3,8 @@
 ## Objective
 
 Train and promote a predominantly autonomous DCSS agent that matches or exceeds the
-current depth-11 held-out champion while substantially reducing dependence on the
-scripted fallback. Scale training across broader seed sets and longer episode
+retired v1 depth-11 learned milestone and the current heldout-v2 scripted incumbent
+while eliminating dependence on the scripted fallback. Scale training across broader seed sets and longer episode
 horizons, add online masked actor-critic/PPO fine-tuning, compare matched ECHO-on and
 ECHO-off runs, and characterize rollout throughput and policy quality as learned-action
 coverage rises. Preserve locked held-out promotion, checkpointed replay, and
@@ -27,8 +27,8 @@ The learning milestone is evidence-backed rather than feature-count based:
   assumed from a single worker count.
 - The same integration/trajectory smoke path passes on canonical trunk and at least
   the two most recent selected stable releases, with exact revisions recorded.
-- The predominantly autonomous candidate matches or exceeds the current held-out
-  champion's depth-11 rank before promotion. Diagnostic improvements and a hybrid whose
+- The predominantly autonomous candidate matches or exceeds the retired v1
+  depth-11 milestone and current heldout-v2 champion before promotion. Diagnostic improvements and a hybrid whose
   gains mainly come from its scripted fallback do not satisfy the milestone.
 
 Work autonomously on routine architecture, implementation, dependency, experiment,

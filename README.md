@@ -107,9 +107,14 @@ showcase seed. Grid panels remain on their final frame and visibly distinguish d
 (`☠`), horizon truncation (`◇`), and eventual ascension (`★`). The older `watch-best`
 and `watch-dev-best` Poe names remain temporary aliases.
 
-Champion promotion is gated by the checked-in held-out regression floor. Until a
+Champion promotion is gated by the checked-in heldout-v2 regression floor. Until a
 learned policy exceeds it, the champion may be the transparent scripted baseline.
 Native WebTiles spectating can later complement the deterministic completed replay.
+
+Heldout-v1 was retired after its failure traces directly informed contextual stair
+masking. Its manifest remains archived locally for audit, but it is never reused for
+promotion. A validated track-activation command atomically archives the old canonical
+manifest and cuts every heldout viewer over to a calibrated replacement track.
 
 The optional training stack provides a versioned semantic actor/value model with an
 ECHO next-state-delta head. A behavior-cloning or scripted-relabel DAgger run is

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,7 +30,7 @@ from dcss_rl.webtiles import GameConfig
 _DEFAULT_EVALUATION_WORKERS = WorkerCount(1)
 _ZERO_SECONDS = Seconds(0.0)
 type EvaluationRank = tuple[int, int, int, int, int, int, float]
-RANK_SPEC_VERSION = 3
+RANK_SPEC_VERSION = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +55,6 @@ class EpisodeResult:
     policy_steps: int
     game_turns: int
     depth_progress_area: DecisionProgressArea
-    xl_progress_area: DecisionProgressArea
     max_depth: int
     max_xl: int
     runes: int
@@ -77,9 +77,9 @@ class EvaluationSummary:
             sum(episode.outcome == "won" for episode in self.episodes),
             sum(episode.runes for episode in self.episodes),
             sum(episode.depth_progress_area for episode in self.episodes),
-            sum(episode.xl_progress_area for episode in self.episodes),
             sum(episode.policy_steps for episode in self.episodes),
             sum(episode.max_depth for episode in self.episodes),
+            sum(episode.max_xl for episode in self.episodes),
             sum(episode.total_reward for episode in self.episodes),
         )
 
@@ -92,12 +92,33 @@ class EvaluationSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class EvaluationProgress:
+    case_id: str
+    completed_cases: int
+    total_cases: int
+    outcome: str
+    policy_steps: int
+    max_depth: int
+    max_xl: int
+    elapsed_seconds: Seconds
+    decision_rate: DecisionsPerSecond
+
+
+@dataclass(frozen=True, slots=True)
 class RegressionThreshold:
     """Minimum acceptable champion rank for one fixed evaluation suite."""
 
     suite_id: str
     baseline_policy_id: str
     minimum_rank: EvaluationRank
+
+
+@dataclass(frozen=True, slots=True)
+class ChampionTrackActivation:
+    suite_id: str
+    policy_id: str
+    canonical_manifest: Path
+    archived_manifest: Path | None
 
 
 def load_suite(path: Path) -> EvaluationSuite:
@@ -177,21 +198,42 @@ def evaluate_policy(
     output_directory: Path,
     *,
     workers: WorkerCount = _DEFAULT_EVALUATION_WORKERS,
+    progress: Callable[[EvaluationProgress], None] | None = None,
 ) -> EvaluationSummary:
     """Run one policy over every fixed case and persist auditable artifacts."""
     output_directory.mkdir(parents=True, exist_ok=False)
     if workers < 1:
         raise ValueError("evaluation workers must be positive")
     started = perf_counter()
+    completed_decisions = 0
+    episode_by_index: dict[int, EpisodeResult] = {}
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        episodes = tuple(
-            executor.map(
-                lambda case: _run_episode(
-                    binary, policy, suite, case, output_directory
-                ),
-                suite.cases,
-            )
-        )
+        future_indices: dict[Future[EpisodeResult], int] = {
+            executor.submit(
+                _run_episode, binary, policy, suite, case, output_directory
+            ): index
+            for index, case in enumerate(suite.cases)
+        }
+        for completed_cases, future in enumerate(as_completed(future_indices), start=1):
+            result = future.result()
+            episode_by_index[future_indices[future]] = result
+            completed_decisions += result.policy_steps
+            if progress is not None:
+                elapsed = Seconds(perf_counter() - started)
+                progress(
+                    EvaluationProgress(
+                        result.case_id,
+                        completed_cases,
+                        len(suite.cases),
+                        result.outcome,
+                        result.policy_steps,
+                        result.max_depth,
+                        result.max_xl,
+                        elapsed,
+                        DecisionsPerSecond(completed_decisions / elapsed),
+                    )
+                )
+        episodes = tuple(episode_by_index[index] for index in range(len(suite.cases)))
     summary = EvaluationSummary(
         suite.suite_id,
         policy.policy_id,
@@ -263,6 +305,46 @@ def promote_champion(candidate: EvaluationSummary, destination: Path) -> bool:
     return True
 
 
+def activate_champion_track(
+    candidate_manifest: Path,
+    canonical_manifest: Path,
+    *,
+    expected_suite_id: str,
+    archive_manifest: Path | None = None,
+) -> ChampionTrackActivation:
+    """Atomically activate a calibrated champion track after strict validation."""
+    candidate_path = Path(candidate_manifest)
+    canonical_path = Path(canonical_manifest)
+    decoded: object = json.loads(candidate_path.read_text())
+    if not isinstance(decoded, dict):
+        raise ValueError("candidate champion manifest must be an object")
+    candidate = cast(dict[str, object], decoded)
+    suite_id = candidate.get("suite_id")
+    policy_id = candidate.get("policy_id")
+    if not isinstance(suite_id, str) or suite_id != expected_suite_id:
+        raise ValueError(
+            f"candidate track is for {suite_id!r}, not {expected_suite_id!r}"
+        )
+    if candidate.get("rank_spec_version") != RANK_SPEC_VERSION:
+        raise ValueError("candidate track does not use the current rank specification")
+    if not isinstance(policy_id, str):
+        raise ValueError("candidate champion manifest lacks a policy ID")
+    archived: Path | None = None
+    if canonical_path.exists():
+        if archive_manifest is None:
+            raise ValueError("replacing a canonical track requires an archive path")
+        archived = Path(archive_manifest)
+        if archived.exists():
+            raise FileExistsError(archived)
+        archived.parent.mkdir(parents=True, exist_ok=True)
+        archived.write_bytes(canonical_path.read_bytes())
+    canonical_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = canonical_path.with_suffix(f"{canonical_path.suffix}.tmp")
+    temporary.write_bytes(candidate_path.read_bytes())
+    temporary.replace(canonical_path)
+    return ChampionTrackActivation(suite_id, policy_id, canonical_path, archived)
+
+
 def _stored_rank(raw_rank: list[object]) -> EvaluationRank:
     return (
         int(_number(raw_rank[0])),
@@ -305,7 +387,6 @@ def _run_episode(
     )
     total_reward = 0.0
     depth_progress_area = DecisionProgressArea(0)
-    xl_progress_area = DecisionProgressArea(0)
     outcome = "unknown"
     observation, info = env.reset()
     try:
@@ -320,9 +401,6 @@ def _run_episode(
             depth_progress_area = DecisionProgressArea(
                 depth_progress_area + max(player.get("depth", 1) - 1, 0)
             )
-            xl_progress_area = DecisionProgressArea(
-                xl_progress_area + max(player.get("xl", 1) - 1, 0)
-            )
             if terminated or truncated:
                 raw_outcome = info.get("outcome")
                 outcome = raw_outcome if isinstance(raw_outcome, str) else "truncated"
@@ -336,7 +414,6 @@ def _run_episode(
             _required_int(info, "steps"),
             player.get("turn", 0),
             depth_progress_area,
-            xl_progress_area,
             _required_int(info, "max_depth"),
             _required_int(info, "max_xl"),
             0,

@@ -57,6 +57,10 @@ this journal exists to keep research velocity and direction visible.
   depth/XL progress area ahead of bounded survival, retaining maximum depth only as a
   later frontier tie-breaker. Branch curricula must replace the Dungeon-local depth
   coordinate with a versioned topology-aware mapping before they become eligible.
+- **2026-09-07 16:55 EDT — XL-area correction.** XL is monotonic in normal play, unlike
+  reversible dungeon depth. Integrating it over decisions rewards early/risky XP gain
+  rather than more eventual XP. Decision: rank v4 retains depth-progress area but uses
+  final/maximum XL only, after bounded survival and maximum-depth frontier.
 - **2026-09-07 16:25 EDT — asynchronous collector and dense-reward smoke.** The
   matched 20-worker × 64-step workload rose from 7.29 to 44.66 decisions/s (6.13×)
   after removing per-action barriers. A full repeat reached 44.63 decisions/s and
@@ -79,3 +83,17 @@ this journal exists to keep research velocity and direction visible.
   and class-balance online teacher imitation so rare descent/tactical actions are not
   overwhelmed by the common explore label. Do not run the ECHO-off mate for a reward
   specification already falsified independently of ECHO.
+- **2026-09-07 17:10 EDT — v5 ablation and heldout rejection.** With depth-aligned
+  shaping and class-balanced teacher loss, ECHO-on reached diagnostic depth-progress
+  461; matched ECHO-off reached 482 (4.6% higher), with both surviving all 1,000
+  decisions. ECHO-off was selected, but heldout-v1 produced zero progress and 953
+  ineffective `stairs_down` actions. The visible under-player stair message cleanly
+  distinguishes all recorded legitimate descents. Decision: mask stairs to that UI
+  affordance. Because heldout-v1 directly informed this adapter change, retire it from
+  promotion and establish disjoint heldout-v2 before evaluating the corrected policy.
+- **2026-09-07 17:22 EDT — heldout-v2 calibration.** Scripted-v3 established rank
+  `(0, 0, 2448, 2060, 17, 11, 76.0)` on five new seeds. The pre-existing confidence
+  hybrid tied every metric except surviving 2,059 rather than 2,060 decisions, so the
+  scripted policy remained incumbent. A validated atomic activation archived v1 and
+  cut the canonical viewer over to v2. Evaluation now streams completion-order case
+  telemetry while persisting summaries in manifest order.
