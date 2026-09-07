@@ -123,7 +123,10 @@ The frozen scripted-v2 held-out rank is also checked in as a regression floor. T
 standard scripted evaluation command verifies that floor before writing a champion
 manifest. Threshold comparison uses the same lexicographic metric ordering as
 champion selection, so improvement on a higher-priority milestone is not vetoed by a
-lower-priority aggregate.
+lower-priority aggregate. Rank v2 orders wins, runes, aggregate maximum depth, XL,
+bounded policy decisions survived, then shaped reward. It deliberately excludes raw
+DCSS game turns: automatic rest/travel can advance thousands of turns behind one
+policy decision and therefore makes that count an exploitable survival proxy.
 
 ## Initial research comparisons
 

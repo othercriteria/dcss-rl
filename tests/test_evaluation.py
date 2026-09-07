@@ -16,13 +16,15 @@ from dcss_rl.evaluation import (
 from dcss_rl.units import GameSeed
 
 
-def result(*, depth: int, xl: int, turns: int, reward: float = 0.0) -> EpisodeResult:
+def result(
+    *, depth: int, xl: int, turns: int, reward: float = 0.0, policy_steps: int = 10
+) -> EpisodeResult:
     return EpisodeResult(
         case_id="case",
         seed=GameSeed(1),
         outcome="dead",
         total_reward=reward,
-        policy_steps=10,
+        policy_steps=policy_steps,
         game_turns=turns,
         max_depth=depth,
         max_xl=xl,
@@ -69,7 +71,7 @@ def test_checked_in_regression_threshold_matches_frozen_baseline() -> None:
         "mibe-heldout-v1",
         "candidate",
         "now",
-        (result(depth=5, xl=10, turns=3516, reward=50.0),),
+        (result(depth=5, xl=10, turns=3516, reward=50.0, policy_steps=2500),),
     )
 
     assert_meets_regression_threshold(summary, threshold)
@@ -107,3 +109,40 @@ def test_champion_promotion_is_monotonic(tmp_path: Path) -> None:
     assert promote_champion(strong, destination)
     assert not promote_champion(weak, destination)
     assert json.loads(destination.read_text())["policy_id"] == "strong"
+
+
+def test_rank_uses_bounded_policy_survival_not_inflatable_game_turns() -> None:
+    rests = EvaluationSummary(
+        "suite",
+        "rests",
+        "now",
+        (result(depth=2, xl=2, turns=5000, policy_steps=5),),
+    )
+    survives = EvaluationSummary(
+        "suite",
+        "survives",
+        "now",
+        (result(depth=2, xl=2, turns=50, policy_steps=10),),
+    )
+
+    assert survives.rank > rests.rank
+
+
+def test_promoting_same_policy_migrates_embedded_v1_rank(tmp_path: Path) -> None:
+    destination = tmp_path / "champion.json"
+    candidate = EvaluationSummary(
+        "suite",
+        "policy",
+        "now",
+        (result(depth=2, xl=2, turns=5000, policy_steps=10),),
+    )
+    select_champion((candidate,), destination)
+    manifest = json.loads(destination.read_text())
+    del manifest["rank_spec_version"]
+    manifest["rank"][4] = 5000
+    destination.write_text(json.dumps(manifest))
+
+    assert promote_champion(candidate, destination)
+    migrated = json.loads(destination.read_text())
+    assert migrated["rank_spec_version"] == 2
+    assert migrated["rank"][4] == 10

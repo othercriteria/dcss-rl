@@ -22,6 +22,7 @@ from dcss_rl.webtiles import GameConfig
 _DEFAULT_EVALUATION_WORKERS = WorkerCount(1)
 _ZERO_SECONDS = Seconds(0.0)
 type EvaluationRank = tuple[int, int, int, int, int, float]
+RANK_SPEC_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +69,7 @@ class EvaluationSummary:
             sum(episode.runes for episode in self.episodes),
             sum(episode.max_depth for episode in self.episodes),
             sum(episode.max_xl for episode in self.episodes),
-            sum(episode.game_turns for episode in self.episodes),
+            sum(episode.policy_steps for episode in self.episodes),
             sum(episode.total_reward for episode in self.episodes),
         )
 
@@ -207,6 +208,7 @@ def select_champion(
         destination,
         {
             "schema_version": 1,
+            "rank_spec_version": RANK_SPEC_VERSION,
             "suite_id": champion.suite_id,
             "policy_id": champion.policy_id,
             "rank": list(champion.rank),
@@ -232,13 +234,10 @@ def promote_champion(candidate: EvaluationSummary, destination: Path) -> bool:
             )
         if not isinstance(raw_rank, list) or len(raw_rank) != 6:
             raise ValueError("champion manifest has an invalid rank")
-        existing_rank: EvaluationRank = (
-            int(raw_rank[0]),
-            int(raw_rank[1]),
-            int(raw_rank[2]),
-            int(raw_rank[3]),
-            int(raw_rank[4]),
-            float(raw_rank[5]),
+        existing_rank = (
+            _stored_rank(raw_rank)
+            if decoded.get("rank_spec_version") == RANK_SPEC_VERSION
+            else _migrate_v1_rank(decoded)
         )
         if candidate.rank < existing_rank or (
             candidate.rank == existing_rank
@@ -247,6 +246,61 @@ def promote_champion(candidate: EvaluationSummary, destination: Path) -> bool:
             return False
     select_champion((candidate,), destination)
     return True
+
+
+def _stored_rank(raw_rank: list[object]) -> EvaluationRank:
+    return (
+        int(_number(raw_rank[0])),
+        int(_number(raw_rank[1])),
+        int(_number(raw_rank[2])),
+        int(_number(raw_rank[3])),
+        int(_number(raw_rank[4])),
+        float(_number(raw_rank[5])),
+    )
+
+
+def _migrate_v1_rank(manifest: dict[object, object]) -> EvaluationRank:
+    """Recompute bounded-survival rank from episode data embedded in v1 manifests."""
+    summary = manifest.get("summary")
+    if not isinstance(summary, dict):
+        raise ValueError("v1 champion manifest lacks an embedded summary")
+    episodes = cast(dict[str, object], summary).get("episodes")
+    if not isinstance(episodes, list) or not episodes:
+        raise ValueError("v1 champion manifest lacks embedded episodes")
+    required = (
+        "outcome",
+        "runes",
+        "max_depth",
+        "max_xl",
+        "policy_steps",
+        "total_reward",
+    )
+    if any(
+        not isinstance(episode, dict) or any(field not in episode for field in required)
+        for episode in episodes
+    ):
+        raise ValueError("v1 champion episodes cannot be migrated to rank v2")
+    typed_episodes = cast(list[dict[str, object]], episodes)
+    return (
+        sum(_text(episode["outcome"]) == "won" for episode in typed_episodes),
+        sum(int(_number(episode["runes"])) for episode in typed_episodes),
+        sum(int(_number(episode["max_depth"])) for episode in typed_episodes),
+        sum(int(_number(episode["max_xl"])) for episode in typed_episodes),
+        sum(int(_number(episode["policy_steps"])) for episode in typed_episodes),
+        sum(float(_number(episode["total_reward"])) for episode in typed_episodes),
+    )
+
+
+def _number(value: object) -> int | float:
+    if not isinstance(value, (int, float)):
+        raise ValueError("champion rank field must be numeric")
+    return value
+
+
+def _text(value: object) -> str:
+    if not isinstance(value, str):
+        raise ValueError("champion outcome must be text")
+    return value
 
 
 def _run_episode(

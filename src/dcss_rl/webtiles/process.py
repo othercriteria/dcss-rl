@@ -10,12 +10,13 @@ from pathlib import Path
 from types import TracebackType
 from typing import BinaryIO
 
-from dcss_rl.units import GameSeed, Keycode, Seconds
+from dcss_rl.units import GameSeed, Keycode, Seconds, UnixSocketPathBytes
 from dcss_rl.webtiles.transport import ObservationBatch, WebtilesTransport
 
 _DEFAULT_GAME_TIMEOUT = Seconds(15.0)
 _AUTOMATIC_COMMAND_QUIET_PERIOD = Seconds(0.5)
 _PROCESS_SHUTDOWN_TIMEOUT = Seconds(3.0)
+_MAX_UNIX_SOCKET_PATH_BYTES = UnixSocketPathBytes(107)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +72,12 @@ class ManagedGame:
     def _prepare(self) -> Path:
         if not self.binary.is_file():
             raise FileNotFoundError(f"DCSS binary not found: {self.binary}")
+        socket_path_bytes = len(bytes(self.socket_path))
+        if socket_path_bytes > _MAX_UNIX_SOCKET_PATH_BYTES:
+            raise ValueError(
+                f"DCSS socket path is {socket_path_bytes} bytes; Linux permits at most "
+                f"{_MAX_UNIX_SOCKET_PATH_BYTES}. Choose a shorter run/output path."
+            )
         self.run_root.mkdir(parents=True, exist_ok=True)
         self.morgue_path.mkdir(exist_ok=True)
         self.save_path.mkdir(exist_ok=True)

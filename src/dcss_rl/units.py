@@ -25,5 +25,6 @@ CheckpointId = NewType("CheckpointId", str)
 DecisionsPerSecond = NewType("DecisionsPerSecond", float)
 UpdateCount = NewType("UpdateCount", int)
 RolloutLength = NewType("RolloutLength", int)
+UnixSocketPathBytes = NewType("UnixSocketPathBytes", int)
 
 type Coordinate = tuple[int, int]

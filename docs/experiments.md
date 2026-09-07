@@ -28,7 +28,7 @@ this journal exists to keep research velocity and direction visible.
 - **2026-09-07 15:32–15:44 EDT — matched PPO v1 (2 × 2,560 decisions).** Four
   128-step updates with five workers took about 4.5 minutes per arm. ECHO-on (weight
   0.1) and ECHO-off (0.0) both completed five episodes with mean training return 11.8.
-  Their fallback-free diagnostic ranks were identical at `(0, 0, 6, 8, 11252, 33.0)`
+  Their fallback-free diagnostic ranks were identical at `(0, 0, 6, 8, 1000, 33.0)`
   over 1,000 decisions, with every episode horizon-truncated. PPO materially changed
   v4 (68% raw argmax agreement; KL 0.051 on the recorded states), but the two arms had
   100% argmax agreement and only `2.6e-5` mean absolute logit difference. Decision:
@@ -41,3 +41,12 @@ this journal exists to keep research velocity and direction visible.
   waits for the slowest DCSS automatic command. Decision: use 20 workers once for
   full-seed breadth, but prefer an asynchronous actor queue over further synchronous
   worker scaling.
+- **2026-09-07 15:55–16:10 EDT — broad strong-ECHO PPO v2 (10,240 decisions).**
+  Twenty workers, eight 64-step updates, 16 optimizer epochs, and ECHO weight 1.0
+  completed in about 11 minutes. Twenty-two episodes averaged return 10.96; throughput
+  ranged from 7.27 to 19.47 decisions/s as expensive automatic commands varied. The
+  fallback-free diagnostic frontier remained depth sum 6, XL sum 8, reward 33. Raw
+  game turns rose from 11,252 to 21,545 without progression, exposing an exploitable
+  rank tie-breaker. Decision: rank bounded policy survival instead of automatic game
+  turns; do not spend on the matched strong-ECHO-off arm until the learning signal or
+  collection architecture changes.

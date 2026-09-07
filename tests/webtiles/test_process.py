@@ -29,6 +29,15 @@ def test_prepare_isolates_mutable_game_paths(tmp_path: Path) -> None:
     assert f"morgue_dir = {game.morgue_path}" in rc_path.read_text()
 
 
+def test_rejects_overlong_unix_socket_path_before_start(tmp_path: Path) -> None:
+    binary = tmp_path / "crawl"
+    binary.touch()
+    game = ManagedGame(binary, run_root=tmp_path / ("long-path-" * 12))
+
+    with pytest.raises(ValueError, match="Choose a shorter run/output path"):
+        game.start()
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(
     not _DCSS_BINARY.is_file(), reason="local DCSS binary has not been built"

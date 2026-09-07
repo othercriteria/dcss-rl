@@ -61,7 +61,7 @@ Completed:
   on trunk plus 0.34.1 (`1eebc1a2892e1c89776a0d7a10691f8dac8d9796`) and 0.33.1
   (`9cb173b281c11a5177f40b8c0662bacd3aac2717`).
 - `configs/heldout-regression-v1.json` locks the scripted-v2 held-out rank
-  `(0, 0, 5, 10, 3516, 50.0)`; `poe evaluate-scripted` enforces it before champion
+  `(0, 0, 5, 10, 2500, 50.0)`; `poe evaluate-scripted` enforces it before champion
   promotion.
 - PyTorch 2.14.0+cu130 sees the RTX 4090 and completes CUDA tensor operations without
   a flake change. A versioned fixed-width semantic actor/value model, ECHO
@@ -75,7 +75,7 @@ Completed:
   not GPU training, is currently the dominant wall-time cost.
 - Scripted-v3 fixes sparse monster handling, ignores positively identified stationary
   flora, and permits BFS to enter stair feature cells. Its diagnostic rank is
-  `(0, 0, 20, 18, 3287, 155.0)`, providing a materially stronger multi-depth teacher.
+  `(0, 0, 20, 18, 851, 155.0)`, providing a materially stronger multi-depth teacher.
 - Canonical held-out and diagnostic leaders now have separate monotonic promotion
   tracks. `poe watch-heldout-champion` remains held-out-only;
   `poe watch-diagnostic-leader` exposes the current diagnostic leader without weakening
@@ -83,8 +83,8 @@ Completed:
   parallel and mark death, horizon truncation, and ascension explicitly.
 - The confidence-gated DAgger-v4 agent matches the depth-20 diagnostic expert while
   making 23.7% of diagnostic decisions neurally. It cleared the locked held-out floor
-  and became canonical with rank `(0, 0, 11, 8, 2155, 18.0)`, versus scripted-v2's
-  `(0, 0, 5, 10, 3516, 50.0)`. Held-out learned-action coverage was 2.4%, an explicit
+  and became canonical with rank `(0, 0, 11, 8, 1240, 18.0)`, versus scripted-v2's
+  `(0, 0, 5, 10, 2500, 50.0)`. Held-out learned-action coverage was 2.4%, an explicit
   limitation and the next optimization target. The canonical trajectory records
   checkpoint SHA-256 `e8e1f37e4fa28517a38a01c42eb79c0ba034a016366d39c9c9eb22a0f6b5975b`;
   its first manifest episode reaches D:2 at step 34.
@@ -113,6 +113,23 @@ broader rollout suites and longer horizons are affordable next steps. DCSS inter
 automatic-command work remains the dominant per-episode cost; GPU capacity is not the
 current bottleneck.
 
+- Online legality-masked PPO now supports concurrent seeded rollouts, GAE, clipped
+  policy/value losses, optional scripted imitation and ECHO auxiliaries, portable
+  checkpoints, and per-update throughput/loss telemetry. A matched 2,560-decision
+  ECHO-on/off pair was behaviorally identical; a 10,240-decision, 20-seed strong-ECHO
+  run also held the pure diagnostic frontier at depth sum 6 / XL sum 8. These are
+  working negative results: the next gain needs a denser learning signal or collector
+  change, not merely more synchronous updates.
+- Synchronous online rollout scaling at 5/10/20 workers was 4.53/5.63/7.29 decisions/s.
+  Stragglers from long automatic commands make an asynchronous actor queue the likely
+  next scaling step.
+- Champion rank v2 uses bounded policy decisions survived after wins, runes, depth,
+  and XL; raw game turns were removed because rest/travel can inflate them behind one
+  policy action. Legacy manifests migrate from their embedded episode summaries.
+- DCSS can abort when an overlong run directory produces a Unix socket path beyond
+  Linux's 107-byte payload limit. Managed games now reject such paths before launch
+  with a clear instruction to shorten the output root.
+
 Next:
 
 1. Increase autonomous learned-action coverage beyond 23.7% diagnostic / 2.4%
@@ -135,7 +152,7 @@ The installed hooks and both hook stages pass, including the live DCSS integrati
 
 ## Environment notes
 
-The host has an RTX 4090 with 24,564 MiB VRAM and driver 610.57.04. The managed Codex
+The host has an RTX 4090 with 24,564 MiB VRAM and driver 610.57.04. PyTorch CUDA
+training and inference have been exercised successfully. The managed Codex
 sandbox may hide `/dev/nvidia*` and prohibit Unix socket binding; approved host-boundary
-commands see both correctly. Training dependencies are an optional `uv` group and have
-not yet been GPU-smoke-tested.
+commands see both correctly. Training dependencies remain an optional `uv` group.
