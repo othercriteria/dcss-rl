@@ -184,6 +184,7 @@ def save_checkpoint(
     """Persist weights plus every contract needed for deterministic restoration."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(f"{path.suffix}.tmp")
     torch.save(
         {
             "schema_version": CHECKPOINT_SCHEMA_VERSION,
@@ -193,5 +194,6 @@ def save_checkpoint(
             "policy_id": policy_id,
             "training_metadata": asdict(training_metadata),
         },
-        path,
+        temporary_path,
     )
+    temporary_path.replace(path)

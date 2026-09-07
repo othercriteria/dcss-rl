@@ -64,3 +64,10 @@ this journal exists to keep research velocity and direction visible.
   0.01, XP-progress 1.0, and HP-potential 1.0 yielded finite losses and one completed
   episode. Decision: use this foundation for controlled 20-seed dense-reward runs;
   further synchronous worker tuning is no longer the immediate bottleneck.
+- **2026-09-07 16:31 EDT — dense PPO v3 interrupted after update 7.** Early updates
+  reached 47–64 decisions/s and several completed episodes had shaped returns above
+  25, but a fresh-game handshake timed out. Because checkpointing occurred only after
+  all 16 updates, no candidate survived. Audit also found that the worker seed formula
+  accidentally returned every worker to its initial seed. Decision: atomically save
+  each completed update, rotate seeds correctly, and retry transient starts up to
+  three times in distinct directories before restarting the controlled experiment.

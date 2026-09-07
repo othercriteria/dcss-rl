@@ -130,6 +130,10 @@ current bottleneck.
   explored cells, fractional XP progress, and HP preservation. Defaults remain zero,
   so headline evaluation rewards and old behavior are unchanged; selected weights are
   stored in PPO checkpoint metadata.
+- PPO checkpoints are atomically replaced after every completed update, workers rotate
+  through training seeds rather than returning to their initial seed, and transient
+  DCSS startup timeouts receive three fresh-directory attempts. These were added after
+  a 20-seed experiment lost seven otherwise healthy updates at an episode restart.
 - Champion rank v3 uses decision-weighted depth/XL progress and bounded policy survival
   after wins and runes, with maximum depth retained as a later frontier tie-breaker.
   Raw game turns were removed because rest/travel can inflate them behind one action.

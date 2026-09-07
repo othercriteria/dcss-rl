@@ -62,6 +62,7 @@ _DEFAULT_DISCOUNT = Probability(0.99)
 _DEFAULT_GAE_LAMBDA = Probability(0.95)
 _DEFAULT_EPOCHS_PER_UPDATE = EpochCount(4)
 _ZERO_REWARD_WEIGHT = RewardWeight(0.0)
+_GAME_START_ATTEMPTS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,23 +191,36 @@ class _Worker:
 
     def _reset(self) -> None:
         case = self.suite.cases[
-            (self.worker_index + self.episode_index * len(self.suite.cases))
-            % len(self.suite.cases)
+            (self.worker_index + self.episode_index) % len(self.suite.cases)
         ]
-        run_root = (
-            self.root
-            / f"worker-{self.worker_index}"
-            / (f"episode-{self.episode_index}-{case.case_id}")
-        )
+        episode_index = self.episode_index
         self.episode_index += 1
-        self.env = DcssEnv(
-            self.binary,
-            game_config=GameConfig(seed=GameSeed(case.seed)),
-            max_steps=StepLimit(self.suite.step_limit),
-            run_root=run_root,
-            reward_shaping=self.reward_shaping,
-        )
-        observation, info = self.env.reset()
+        last_timeout: TimeoutError | None = None
+        for attempt in range(_GAME_START_ATTEMPTS):
+            run_root = (
+                self.root
+                / f"worker-{self.worker_index}"
+                / f"episode-{episode_index}-{case.case_id}-attempt-{attempt}"
+            )
+            self.env = DcssEnv(
+                self.binary,
+                game_config=GameConfig(seed=GameSeed(case.seed)),
+                max_steps=StepLimit(self.suite.step_limit),
+                run_root=run_root,
+                reward_shaping=self.reward_shaping,
+            )
+            try:
+                observation, info = self.env.reset()
+                break
+            except TimeoutError as error:
+                last_timeout = error
+                self.env.close()
+                self.env = None
+        else:
+            raise RuntimeError(
+                f"worker {self.worker_index} could not start {case.case_id} after "
+                f"{_GAME_START_ATTEMPTS} attempts"
+            ) from last_timeout
         mask = info.get("action_mask")
         if not isinstance(mask, np.ndarray) or mask.dtype != np.bool_:
             raise RuntimeError("environment returned an invalid action mask")
@@ -288,6 +302,19 @@ def train_ppo(
                 policy_loss, value_loss, echo_loss = _ppo_update(
                     model, optimizer, rollout, config=config
                 )
+                mean_return = (
+                    float(np.mean(completed_returns)) if completed_returns else 0.0
+                )
+                save_checkpoint(
+                    output_checkpoint,
+                    model=model,
+                    policy_id=policy_id,
+                    training_metadata=_checkpoint_metadata(
+                        config,
+                        updates=UpdateCount(update_index + 1),
+                        mean_episode_return=mean_return,
+                    ),
+                )
                 if progress is not None:
                     update_decisions = int(config.rollout_length * config.workers)
                     update_returns = rollout.completed_returns
@@ -309,10 +336,27 @@ def train_ppo(
         for worker in workers:
             worker.close()
     mean_return = float(np.mean(completed_returns)) if completed_returns else 0.0
-    metadata = PpoCheckpointMetadata(
+    return PpoReport(
+        output_checkpoint,
+        int(config.updates * config.rollout_length * config.workers),
+        len(completed_returns),
+        mean_return,
+        policy_loss,
+        value_loss,
+        echo_loss,
+    )
+
+
+def _checkpoint_metadata(
+    config: PpoConfig,
+    *,
+    updates: UpdateCount,
+    mean_episode_return: float,
+) -> PpoCheckpointMetadata:
+    return PpoCheckpointMetadata(
         training_method="masked-ppo",
         seed=config.seed,
-        updates=config.updates,
+        updates=updates,
         rollout_steps=config.rollout_length,
         worker_count=config.workers,
         learning_rate=config.learning_rate,
@@ -323,22 +367,7 @@ def train_ppo(
         experience_progress_reward=config.experience_progress_reward,
         hp_fraction_reward=config.hp_fraction_reward,
         clip_ratio=config.clip_ratio,
-        mean_episode_return=mean_return,
-    )
-    save_checkpoint(
-        output_checkpoint,
-        model=model,
-        policy_id=policy_id,
-        training_metadata=metadata,
-    )
-    return PpoReport(
-        output_checkpoint,
-        int(config.updates * config.rollout_length * config.workers),
-        len(completed_returns),
-        mean_return,
-        policy_loss,
-        value_loss,
-        echo_loss,
+        mean_episode_return=mean_episode_return,
     )
 
 
