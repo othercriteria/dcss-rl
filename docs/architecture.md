@@ -50,6 +50,11 @@ Legality is deliberately narrow: an action is legal when it is valid for the vis
 UI state. It does not imply success or tactical wisdom. Unknown input modes fail closed
 to cancel-only behavior.
 
+Gym uses a fixed discrete catalog: stable command actions followed by one menu-selection
+slot for each byte-valued keycode. Each observation supplies a boolean mask over that
+catalog. Policy-facing observations remain structured JSON-compatible dictionaries;
+their variable map and inventory sizes are validated by a small custom Gym space.
+
 ## Trajectories and ECHO
 
 An episode record must be sufficient to reproduce, audit, and re-reduce a rollout:

@@ -22,20 +22,23 @@ Completed:
   and UI input mode; tested on a real Minotaur Berserker game.
 - Repository hooks: commit-time Ruff auto-fixes and fast tests, plus a pre-push full
   gate that exercises a live DCSS process.
+- Fixed Gym action catalog with reversible structured-action encoding and per-state
+  boolean legality masks.
+- Gymnasium environment that starts a real isolated game, completes MiBe hand-axe
+  creation, steps structured actions, emits semantic dictionaries, and reports basic
+  depth/XL/terminal rewards. Its live trunk test passes.
 
 In progress:
 
-- Structured actions and fail-closed syntactic legality masks (`actions.py` exists but
-  is not yet integrated with a Gym environment).
+- Raw and semantic episode records with explicit ECHO masks.
 
 Next:
 
-1. Connect structured actions to a Gym environment.
-2. Define raw + semantic episode records and explicit ECHO action/observation masks.
-3. Implement a deterministic scripted MiBe baseline and fixed train/eval seed policy.
-4. Add aggregate evaluation, champion manifest, and regression thresholds.
-5. Add `watch-best` via native WebTiles live spectating and durable replay/morgues.
-6. Test trunk plus at least releases 0.34.1 and 0.33.1.
+1. Define raw + semantic episode records and explicit ECHO action/observation masks.
+2. Implement a deterministic scripted MiBe baseline and fixed train/eval seed policy.
+3. Add aggregate evaluation, champion manifest, and regression thresholds.
+4. Add `watch-best` via native WebTiles live spectating and durable replay/morgues.
+5. Test trunk plus at least releases 0.34.1 and 0.33.1.
 
 ## Verified commands
 
