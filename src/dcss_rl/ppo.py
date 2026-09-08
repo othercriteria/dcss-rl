@@ -14,6 +14,7 @@ from time import perf_counter
 import numpy as np
 import torch
 from numpy.typing import NDArray
+from torch import Tensor
 from torch.distributions import Categorical
 from torch.nn import functional as F
 
@@ -81,6 +82,7 @@ _DEFAULT_CLIP_RATIO = Probability(0.2)
 _DEFAULT_DISCOUNT = Probability(0.99)
 _DEFAULT_GAE_LAMBDA = Probability(0.95)
 _DEFAULT_EPOCHS_PER_UPDATE = EpochCount(4)
+_ZERO_UPDATES = UpdateCount(0)
 _ZERO_REWARD_WEIGHT = RewardWeight(0.0)
 _GAME_START_ATTEMPTS = 3
 
@@ -111,6 +113,7 @@ class PpoConfig:
     experience_progress_reward: RewardWeight = _ZERO_REWARD_WEIGHT
     hp_fraction_reward: RewardWeight = _ZERO_REWARD_WEIGHT
     action_history_length: ActionHistoryLength | None = None
+    new_action_warmup_updates: UpdateCount = _ZERO_UPDATES
     device: str = "cuda"
 
     def __post_init__(self) -> None:
@@ -126,6 +129,8 @@ class PpoConfig:
             raise ValueError("PPO counts must be positive")
         if self.action_history_length is not None and self.action_history_length < 0:
             raise ValueError("action history length cannot be negative")
+        if self.new_action_warmup_updates < 0:
+            raise ValueError("new-action warmup updates cannot be negative")
         if self.learning_rate <= 0:
             raise ValueError("PPO learning rate must be positive")
         if self.inference_batch_wait < 0:
@@ -463,6 +468,7 @@ def train_ppo(
     _seed_everything(config.seed)
     restored = LearnedPolicy(initial_checkpoint, device=config.device)
     model = restored.model
+    established_action_count = restored.checkpoint_action_count
     model = align_action_count(model, int(ACTION_COUNT))
     if config.action_history_length is not None:
         model = add_action_history(model, config.action_history_length)
@@ -509,6 +515,10 @@ def train_ppo(
                     if config.aggregate_imitation_replay
                     else (rollout,),
                     config=config,
+                    trainable_action_start=established_action_count
+                    if update_index < config.new_action_warmup_updates
+                    and established_action_count < model.config.action_count
+                    else None,
                 )
                 optimization_finished = perf_counter()
                 teacher_agreement = Probability(
@@ -611,6 +621,7 @@ def _checkpoint_metadata(
         clip_ratio=config.clip_ratio,
         mean_episode_return=mean_episode_return,
         action_history_length=action_history_length,
+        new_action_warmup_updates=config.new_action_warmup_updates,
     )
 
 
@@ -773,6 +784,7 @@ def _ppo_update(
     *,
     imitation_replay: tuple[_Rollout, ...],
     config: PpoConfig,
+    trainable_action_start: int | None = None,
 ) -> PpoLosses:
     device = torch.device(config.device)
     tensors = tuple(
@@ -856,8 +868,26 @@ def _ppo_update(
             )
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
+            established_weight: Tensor | None = None
+            established_bias: Tensor | None = None
+            if trainable_action_start is not None:
+                _restrict_gradients_to_new_actions(model, trainable_action_start)
+                established_weight = (
+                    model.policy_head.weight[:trainable_action_start].detach().clone()
+                )
+                established_bias = (
+                    model.policy_head.bias[:trainable_action_start].detach().clone()
+                )
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
             optimizer.step()
+            if established_weight is not None and established_bias is not None:
+                with torch.no_grad():
+                    model.policy_head.weight[:trainable_action_start].copy_(
+                        established_weight
+                    )
+                    model.policy_head.bias[:trainable_action_start].copy_(
+                        established_bias
+                    )
             last_losses = PpoLosses(
                 float(policy_loss.item()),
                 float(value_loss.item()),
@@ -865,6 +895,22 @@ def _ppo_update(
                 float(imitation_loss.item()),
             )
     return last_losses
+
+
+def _restrict_gradients_to_new_actions(
+    model: SemanticActorCritic, action_start: int
+) -> None:
+    """Preserve the established policy while fitting appended action rows."""
+    for parameter in model.parameters():
+        if (
+            parameter is not model.policy_head.weight
+            and parameter is not model.policy_head.bias
+        ):
+            parameter.grad = None
+    if model.policy_head.weight.grad is not None:
+        model.policy_head.weight.grad[:action_start].zero_()
+    if model.policy_head.bias.grad is not None:
+        model.policy_head.bias.grad[:action_start].zero_()
 
 
 def _seed_everything(seed: int) -> None:

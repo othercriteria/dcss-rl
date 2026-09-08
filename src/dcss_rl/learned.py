@@ -67,6 +67,7 @@ class PpoCheckpointMetadata:
     clip_ratio: float
     mean_episode_return: float
     action_history_length: int = 0
+    new_action_warmup_updates: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +138,7 @@ class LearnedPolicy:
                 int(raw_config.get("action_history_length", 0))
             ),
         )
+        self.checkpoint_action_count = config.action_count
         self.model = SemanticActorCritic(config).to(device)
         self.model.load_state_dict(payload["model_state"])
         self.model = align_action_count(self.model, int(ACTION_COUNT))

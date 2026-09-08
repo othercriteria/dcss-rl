@@ -188,6 +188,11 @@ changing established indices. This permits adding player-visible multi-step UI f
 such as opening Trog's ability menu and selecting Berserk, without invalidating prior
 policies or encoding a privileged macro.
 
+An optional staged warmup fits only appended policy-head rows. Established encoder and
+action parameters are restored after each optimizer step (including AdamW decay), so
+the old policy cannot catastrophically forget while a cold action class learns a
+useful separator. Later updates may deliberately unfreeze the full network.
+
 Diagnostic and held-out champion manifests are separate monotonic tracks. A candidate
 can replace a track only when its metric vector strictly outranks the existing
 same-suite manifest; cross-suite promotion is rejected.

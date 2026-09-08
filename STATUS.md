@@ -279,6 +279,11 @@ not the current bottleneck.
   and action-history slots migrate automatically. Scripted-v7 selects visible Berserk
   and waits out targetless Berserk instead of no-op autoexploring; its corrected
   diagnostic rank is 23,509 and it reaches D:7.
+- Direct end-to-end Berserk DAgger catastrophically forgot the incumbent: all 16
+  diagnostic snapshots scored at most 8,107. A 10× lower learning rate preserved
+  more behavior (best 35,249) but selected Berserk zero times and failed heldout at
+  13,348 versus champion v29's 16,853. New-action warmup can now train only appended
+  head rows while preserving the established encoder and logits.
 - Heldout-v3 was retired after its v24 traces motivated action history; v26's apparent
   promotion there is not treated as headline evidence. Untouched heldout-v4 was first
   calibrated with pre-intervention v23 at 8,822. The already-frozen history v26 and

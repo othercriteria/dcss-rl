@@ -158,6 +158,9 @@ The structured catalog includes the ordinary ability-menu command while menu cho
 remain player-visible masked key actions. Older checkpoints are expanded append-only,
 preserving all established command and menu-key indices. The scripted MiBe teacher can
 therefore invoke Berserk through the same two policy decisions available to learners.
+When appending actions, `--new-action-warmup-updates N` restricts the first `N`
+optimizer phases to the new policy-head rows, preserving established encoder and
+action rows before joint fine-tuning.
 
 The current diagnostic track reuses five explicitly known development seeds for 500
 decisions, long enough to distinguish sustained navigation and survival from an early

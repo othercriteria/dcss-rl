@@ -104,6 +104,7 @@ def main() -> None:
     ppo.add_argument("--updates", type=int, default=4)
     ppo.add_argument("--rollout-length", type=int, default=128)
     ppo.add_argument("--action-history-length", type=int)
+    ppo.add_argument("--new-action-warmup-updates", type=int, default=0)
     ppo.add_argument("--workers", type=int, default=5)
     ppo.add_argument("--inference-batch-size", type=int, default=64)
     ppo.add_argument("--inference-batch-wait-seconds", type=float, default=0.001)
@@ -251,6 +252,9 @@ def main() -> None:
                 )
                 if arguments.action_history_length is not None
                 else None,
+                new_action_warmup_updates=UpdateCount(
+                    arguments.new_action_warmup_updates
+                ),
                 workers=WorkerCount(arguments.workers),
                 inference_batch_size=InferenceBatchSize(arguments.inference_batch_size),
                 inference_batch_wait=Seconds(arguments.inference_batch_wait_seconds),

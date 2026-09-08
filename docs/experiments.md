@@ -326,3 +326,10 @@ this journal exists to keep research velocity and direction visible.
   autoexplore as a no-time loop. Waiting until the status expires fixed it, raising the
   scripted diagnostic from 7,970 to 23,509 and reaching D:7. Decision: train the new
   action online from the current learned champion; do not use a hidden two-key macro.
+- **2026-09-08 00:00–00:14 EDT — Berserk catastrophic forgetting.** A matched
+  98,304-decision DAgger run against scripted-v7 shifted initial agreement from 64.7%
+  to 54.1% and every retained diagnostic checkpoint collapsed below 8,107. Reducing
+  learning rate 10× produced a best update at 35,249, but it invoked abilities zero
+  times and its one heldout attempt scored 13,348 below v29's 16,853. Decision: the
+  appended class needs a head-only acquisition stage; preserve all old parameters
+  until the new action has a useful logit, then unfreeze jointly.
