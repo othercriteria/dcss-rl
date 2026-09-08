@@ -45,6 +45,9 @@ def test_stairs_require_visible_under_player_affordance() -> None:
     with pytest.raises(IllegalAction):
         encode_action(Action(ActionKind.STAIRS_DOWN), observation())
 
+    hatch = observation(messages=("There is an escape hatch in the floor here.",))
+    assert Action(ActionKind.STAIRS_DOWN) in legal_actions(hatch)
+
 
 def test_menu_actions_are_derived_from_visible_choices() -> None:
     menu = observation(

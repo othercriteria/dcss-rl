@@ -85,6 +85,22 @@ def test_ignores_stationary_flora() -> None:
     assert ScriptedMibePolicy().decide(state).action == Action(ActionKind.EXPLORE)
 
 
+def test_waits_when_autoexplore_reports_unseen_monsters() -> None:
+    state = observation(messages=["There are monsters nearby!"])
+
+    assert ScriptedMibePolicy().decide(state).action == Action(ActionKind.WAIT)
+
+
+def test_waits_instead_of_no_op_rest_during_blocking_damage() -> None:
+    state = observation(
+        hp=2,
+        hp_max=20,
+        messages=["There is a lethal amount of poison in your body!"],
+    )
+
+    assert ScriptedMibePolicy().decide(state).action == Action(ActionKind.WAIT)
+
+
 def test_treats_sparse_monster_delta_as_tactical() -> None:
     state = observation(
         cells=[

@@ -12,11 +12,13 @@ from numpy.typing import NDArray
 from dcss_rl.schema import CellView, ObservationData
 from dcss_rl.units import Coordinate, FeatureCount
 
-FEATURE_SPEC_VERSION = 2
+FEATURE_SPEC_VERSION = 3
+_LEGACY_FEATURE_SPEC_VERSION = 2
 LOCAL_RADIUS = 5
 _SIDE = 2 * LOCAL_RADIUS + 1
 _MAP_CHANNELS = 9
-_SCALAR_FEATURES = 56
+_LEGACY_SCALAR_FEATURES = 56
+_SCALAR_FEATURES = 64
 FEATURE_COUNT = FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _SCALAR_FEATURES)
 
 type FeatureVector = NDArray[np.float32]
@@ -25,9 +27,20 @@ _ITEM_GLYPHS = frozenset(")([!?%$=:|/\\}")
 _WALL_GLYPHS = frozenset({" ", "#", "≈", "♣"})
 
 
-def encode_observation(observation: ObservationData) -> FeatureVector:
+def feature_count(spec_version: int) -> FeatureCount:
+    """Return the fixed width for a supported versioned feature contract."""
+    if spec_version == _LEGACY_FEATURE_SPEC_VERSION:
+        return FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _LEGACY_SCALAR_FEATURES)
+    if spec_version == FEATURE_SPEC_VERSION:
+        return FEATURE_COUNT
+    raise ValueError(f"unsupported feature specification {spec_version}")
+
+
+def encode_observation(
+    observation: ObservationData, *, spec_version: int = FEATURE_SPEC_VERSION
+) -> FeatureVector:
     """Encode one semantic observation without learned or fitted preprocessing."""
-    result = np.zeros(FEATURE_COUNT, dtype=np.float32)
+    result = np.zeros(feature_count(spec_version), dtype=np.float32)
     player = observation["player"]
     position = player.get("pos", {"x": 0, "y": 0})
     origin_x, origin_y = position["x"], position["y"]
@@ -104,6 +117,21 @@ def encode_observation(observation: ObservationData) -> FeatureVector:
         *monster_step,
         *stair_step,
     )
+    if spec_version >= 3:
+        menu_type = (
+            observation["menu"]["type"] if observation["menu"] is not None else None
+        )
+        scalar = (
+            *scalar,
+            float(menu_type == "shop"),
+            float(menu_type == "more"),
+            float(menu_type == "prompt"),
+            float("done waiting" in messages),
+            float("done exploring" in messages),
+            float("lethal amount of poison" in messages),
+            float("you are on fire" in messages),
+            float("nearby" in messages),
+        )
     result[offset:] = scalar
     return result
 

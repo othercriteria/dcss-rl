@@ -11,7 +11,7 @@ import numpy as np
 import torch
 from torch import Tensor, nn
 
-from dcss_rl.features import FEATURE_COUNT, FEATURE_SPEC_VERSION, encode_observation
+from dcss_rl.features import FEATURE_SPEC_VERSION, encode_observation, feature_count
 from dcss_rl.policy import Policy
 from dcss_rl.schema import ObservationData
 from dcss_rl.units import ActionIndex, CheckpointId, Probability
@@ -23,6 +23,7 @@ CHECKPOINT_SCHEMA_VERSION = 1
 class ModelConfig:
     action_count: int
     hidden_size: int = 256
+    feature_spec_version: int = FEATURE_SPEC_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,14 +77,16 @@ class SemanticActorCritic(nn.Module):
         super().__init__()
         self.config = config
         self.encoder = nn.Sequential(
-            nn.Linear(FEATURE_COUNT, config.hidden_size),
+            nn.Linear(feature_count(config.feature_spec_version), config.hidden_size),
             nn.GELU(),
             nn.Linear(config.hidden_size, config.hidden_size),
             nn.GELU(),
         )
         self.policy_head = nn.Linear(config.hidden_size, config.action_count)
         self.value_head = nn.Linear(config.hidden_size, 1)
-        self.echo_head = nn.Linear(config.hidden_size, FEATURE_COUNT)
+        self.echo_head = nn.Linear(
+            config.hidden_size, feature_count(config.feature_spec_version)
+        )
 
     def forward(self, features: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         encoded = self.encoder(features)
@@ -104,14 +107,17 @@ class LearnedPolicy:
             raise ValueError("checkpoint must contain an object")
         if payload.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
             raise ValueError("unsupported checkpoint schema")
-        if payload.get("feature_spec_version") != FEATURE_SPEC_VERSION:
-            raise ValueError("checkpoint feature specification does not match")
+        raw_feature_spec_version = payload.get("feature_spec_version")
+        if not isinstance(raw_feature_spec_version, int):
+            raise ValueError("checkpoint lacks a feature specification")
+        feature_count(raw_feature_spec_version)
         raw_config = payload.get("model_config")
         if not isinstance(raw_config, dict):
             raise ValueError("checkpoint lacks model configuration")
         config = ModelConfig(
             action_count=int(raw_config["action_count"]),
             hidden_size=int(raw_config["hidden_size"]),
+            feature_spec_version=raw_feature_spec_version,
         )
         self.model = SemanticActorCritic(config).to(device)
         self.model.load_state_dict(payload["model_state"])
@@ -132,7 +138,11 @@ class LearnedPolicy:
     def propose(
         self, observation: ObservationData, action_mask: np.ndarray
     ) -> PolicyProposal:
-        features = torch.from_numpy(encode_observation(observation)).to(self.device)
+        features = torch.from_numpy(
+            encode_observation(
+                observation, spec_version=self.model.config.feature_spec_version
+            )
+        ).to(self.device)
         mask = torch.from_numpy(action_mask).to(self.device)
         with torch.inference_mode():
             logits, _, _ = self.model(features.unsqueeze(0))
@@ -195,7 +205,7 @@ def save_checkpoint(
     torch.save(
         {
             "schema_version": CHECKPOINT_SCHEMA_VERSION,
-            "feature_spec_version": FEATURE_SPEC_VERSION,
+            "feature_spec_version": model.config.feature_spec_version,
             "model_config": asdict(model.config),
             "model_state": model.state_dict(),
             "policy_id": policy_id,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -82,17 +83,23 @@ def legal_actions(observation: SemanticObservation) -> tuple[Action, ...]:
         if kind is not ActionKind.CANCEL
         and (
             kind not in {ActionKind.STAIRS_DOWN, ActionKind.STAIRS_UP}
-            or _stairs_affordance_visible(observation, kind)
+            or stairs_affordance_visible(observation.messages, kind)
         )
     )
 
 
-def _stairs_affordance_visible(
-    observation: SemanticObservation, kind: ActionKind
-) -> bool:
+def stairs_affordance_visible(messages: Iterable[str], kind: ActionKind) -> bool:
+    """Recognize player-visible DCSS wording for an under-player stair action."""
     direction = "down" if kind is ActionKind.STAIRS_DOWN else "up"
-    phrase = f"staircase leading {direction} here"
-    return any(phrase in message.casefold() for message in observation.messages)
+    phrases = (
+        f"staircase leading {direction} here",
+        "escape hatch in the floor"
+        if kind is ActionKind.STAIRS_DOWN
+        else "escape hatch in the ceiling",
+    )
+    return any(
+        phrase in message.casefold() for message in messages for phrase in phrases
+    )
 
 
 def encode_action(action: Action, observation: SemanticObservation) -> str | int:

@@ -338,6 +338,10 @@ class _InferenceBatcher:
         self._thread = Thread(target=self._run, name="ppo-inference", daemon=True)
         self._thread.start()
 
+    @property
+    def feature_spec_version(self) -> int:
+        return self._model.config.feature_spec_version
+
     def infer(self, feature: FloatArray, mask: BoolArray) -> _InferenceResult:
         future: Future[_InferenceResult] = Future()
         with self._state_lock:
@@ -615,7 +619,9 @@ def _collect_worker_rollout(
     completed_returns: list[float] = []
     for _ in range(config.rollout_length):
         observation, mask = worker.ready()
-        feature = encode_observation(observation)
+        feature = encode_observation(
+            observation, spec_version=batcher.feature_spec_version
+        )
         inference = batcher.infer(feature, mask)
         probabilities = inference.probabilities
         value = inference.value
@@ -623,7 +629,9 @@ def _collect_worker_rollout(
         next_observation, reward, done, completed_return = worker.step(
             ActionIndex(action)
         )
-        next_feature = encode_observation(next_observation)
+        next_feature = encode_observation(
+            next_observation, spec_version=batcher.feature_spec_version
+        )
         features.append(feature)
         masks.append(mask)
         actions.append(action)
@@ -639,7 +647,9 @@ def _collect_worker_rollout(
     final_value = 0.0
     if not dones[-1]:
         final_observation, final_mask = worker.ready()
-        final_feature = encode_observation(final_observation)
+        final_feature = encode_observation(
+            final_observation, spec_version=batcher.feature_spec_version
+        )
         final_value = batcher.infer(final_feature, final_mask).value
     reward_array = np.asarray(rewards, dtype=np.float32)[:, None]
     value_array = np.asarray(values, dtype=np.float32)[:, None]

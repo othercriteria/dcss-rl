@@ -237,3 +237,29 @@ this journal exists to keep research velocity and direction visible.
   `(0, 0, 1167, 2152, 11, 8, 38.0)`. Decision: aggregation fixes forgetting, while
   fitting strength exposes the survival/depth frontier; repeated opposing actions now
   motivate explicit policy memory rather than more large scalar sweeps.
+- **2026-09-07 21:28–21:48 EDT — expert cleanup and learned promotion.** Scripted-v6
+  fixed unseen-monster, escape-hatch, poison, and fire stalls. Its 64-seed curriculum
+  reached aggregate max-depth 257 with 63 deaths and only one truncation in 9,123
+  decisions. An unweighted clone plus eight-update aggregate DAgger produced v21,
+  which survived all diagnostic-v2 cases at rank `(0, 0, 3122, 2500, 12, 10, 71.0)`.
+  Its one earned heldout-v2 evaluation scored `(0, 0, 2744, 2091, 12, 7, 31.0)`,
+  exceeding the scripted incumbent and becoming the first fallback-free canonical
+  champion beyond the retired depth-11 milestone. Decision: promote v21; retain deaths
+  as curriculum rather than optimize inert survival.
+- **2026-09-07 21:49–22:01 EDT — feature v3 and heldout rollover.** Heldout-v2 traces
+  revealed shop and confirmation repetition, so the track was retired. Before testing
+  the resulting feature change, v21 locked disjoint heldout-v3 at
+  `(0, 0, 2416, 2120, 13, 12, 84.0)`. Feature-v3 explicitly represents prompt/shop and
+  blocking message state while old checkpoints retain v2 preprocessing. A plain v3
+  clone led diagnostic depth area at 3,472 but failed heldout-v3 at
+  `(0, 0, 528, 1687, 8, 8, 19.0)`. A subsequent aggregate run was interrupted after
+  four of eight updates during session compaction and is not treated as a completed
+  experiment. Decision: rerun it from the same initial checkpoint; do not tune from
+  heldout-v3 failure details.
+- **2026-09-07 22:05 EDT — early-death objective audit.** Sparse environment reward
+  charges death -10, equal to one XL gain, immediately resets the worker, and retains
+  the terminal trajectory. Evaluation does not count deaths directly, but its
+  decision-weighted depth area forfeits all remaining horizon opportunity and can
+  prefer safe lingering. Decision: keep useful tactical death feedback for now and
+  design a versioned discovered-coverage/depth rank that rewards progress without
+  either stalling or treating fast experimental failure as globally ruinous.

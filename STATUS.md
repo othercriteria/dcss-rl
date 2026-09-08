@@ -10,11 +10,13 @@ The Nix/Python environment and upstream trunk build are working. The current loc
 DCSS checkout was validated at commit `96832895d0253f9d7290d370efe32bf0614679a8`
 (`0.35-a0-999-g96832895d0`) with a WebTiles build.
 
-Canonical evaluation now uses `mibe-heldout-v2`. Heldout-v1 was retired after its
-failure traces informed contextual stair-action masking. The v2 scripted-v3 incumbent
-rank is `(0, 0, 2448 depth-progress, 2060 decisions, max-depth sum 17, XL sum 11,
-76.0 reward)`; the previous v1 depth-11 hybrid remains an explicit learned milestone,
-not a reusable heldout track.
+Canonical evaluation now uses `mibe-heldout-v3`. The fallback-free
+`scripted-v6-dagger-v21` checkpoint calibrated the untouched suite at
+`(0, 0, 2416 depth-progress, 2120 decisions, max-depth sum 13, XL sum 12,
+84.0 reward)`. It first earned promotion on heldout-v2 at
+`(0, 0, 2744, 2091, 12, 7, 31.0)`, exceeding that track's scripted-v3 incumbent and
+the retired depth-11 learned milestone. Heldout-v2 was then retired because its traces
+informed the next feature design; v3 was locked before that design was evaluated.
 
 Development evaluation now uses `mibe-diagnostic-v2`, extending the same known five
 seeds from 200 to 500 decisions. Scripted-v3 calibrates rank
@@ -232,14 +234,35 @@ not the current bottleneck.
   to 74.3% and reached D:5/D:3 in two cases but incurred one death, ranking
   `(0, 0, 1167, 2152, 11, 8, 38.0)`. Explicit action/history memory is now a stronger
   hypothesis than further coarse imitation-weight sweeps.
+- Scripted-v6 recognizes floor/ceiling escape hatches as stair affordances, advances
+  blocking poison/fire states, and handles broader nearby-monster wording. Its clean
+  64-seed/1,000-step curriculum produced 9,123 decisions, 63 deaths, one truncation,
+  and aggregate max-depth 257. Death/reset trajectories remain useful feedback; the
+  sparse death reward is only -10, while evaluation's lingering-sensitive depth area
+  is the more likely source of excessive early-death penalties.
+- Unweighted behavior cloning followed by eight-update aggregate DAgger produced the
+  fallback-free `scripted-v6-dagger-v21` policy. It led diagnostic-v2 at
+  `(0, 0, 3122, 2500, 12, 10, 71.0)`, survived every case deterministically, then
+  cleared heldout-v2 and became the canonical learned champion.
+- Feature specification v3 adds explicit shop/more/prompt, completed-wait/explore,
+  lethal-poison, on-fire, and nearby-monster inputs. Checkpoint loading and online
+  collection preserve v2 widths, so promoted v21 remains reproducible. A v3 clone
+  improved diagnostic depth area to 3,472 but failed the freshly locked heldout-v3
+  floor at `(0, 0, 528, 1687, 8, 8, 19.0)` and was not promoted.
+- Canonical track activation archived heldout-v2 and installed heldout-v3 without
+  candidate-informed seed selection. Diagnostic evaluation is non-promoting unless a
+  champion path is explicit, preventing cross-suite manifest comparisons.
 
 Next:
 
-1. Increase autonomous learned-action coverage beyond 23.7% diagnostic / 2.4%
-   held-out while retaining or improving the depth-11 held-out champion rank.
-2. Remeasure PPO collection after the input-boundary/runtime speed-up, then broaden
-   training seed sets and episode horizons under matched ECHO-on/off budgets.
-3. Improve survival/XL after depth progress, then expand toward rune curricula.
+1. Continue feature-v3 aggregate DAgger without using heldout-v3 traces, then promote
+   only after diagnostic improvement and one locked heldout evaluation.
+2. Replace lingering-sensitive ranking with a versioned player-visible progress metric
+   (likely discovered traversable coverage plus depth) that neither rewards stalling
+   nor makes early reset intrinsically catastrophic; recalibrate on untouched data.
+3. Run matched masked PPO/ECHO-on/off experiments from the strongest learned policy,
+   then expand toward longer horizons and rune curricula. Explicit action/history
+   memory is a subsequent ablation for oscillation and repeated-prompt failures.
 
 ## Verified commands
 

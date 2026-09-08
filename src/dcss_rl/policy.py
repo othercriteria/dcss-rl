@@ -8,7 +8,7 @@ from typing import Protocol
 
 import numpy as np
 
-from dcss_rl.actions import Action, ActionKind
+from dcss_rl.actions import Action, ActionKind, stairs_affordance_visible
 from dcss_rl.env import action_to_index
 from dcss_rl.schema import CellView, ObservationData
 from dcss_rl.units import ActionIndex, CheckpointId, Coordinate, Keycode
@@ -56,7 +56,7 @@ _IGNORED_STATIONARY_MONSTERS = frozenset(
 class ScriptedMibePolicy:
     """Deterministic MiBe baseline using only the semantic player view."""
 
-    policy_id = "scripted-mibe-v4"
+    policy_id = "scripted-mibe-v6"
     checkpoint_id = None
 
     def decide(self, observation: ObservationData) -> PolicyDecision:
@@ -109,6 +109,12 @@ class ScriptedMibePolicy:
                     _move_toward(position, adjacent[0]), "attack adjacent monster"
                 )
 
+        messages = " ".join(observation["messages"]).casefold()
+        if "lethal amount of poison" in messages or "you are on fire" in messages:
+            return PolicyDecision(
+                Action(ActionKind.WAIT), "advance blocking damage-over-time state"
+            )
+
         hp = observation["player"].get("hp")
         hp_max = observation["player"].get("hp_max")
         if (
@@ -128,17 +134,12 @@ class ScriptedMibePolicy:
                     _move_toward(position, step), "approach visible monster"
                 )
 
-        if any(
-            "staircase leading down here" in message.casefold()
-            for message in observation["messages"]
-        ):
+        if stairs_affordance_visible(observation["messages"], ActionKind.STAIRS_DOWN):
             return PolicyDecision(
                 Action(ActionKind.STAIRS_DOWN), "descend stairs under player"
             )
 
-        if any(
-            " is nearby" in message.casefold() for message in observation["messages"]
-        ):
+        if "nearby" in messages:
             return PolicyDecision(Action(ActionKind.WAIT), "wait for nearby threat")
 
         if position is not None:
