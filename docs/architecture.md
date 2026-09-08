@@ -363,6 +363,19 @@ allows clipped-PPO timing experiments to adapt their critic while preserving rep
 conditional menu logits. The setting is checkpointed; exact ownership audits require
 an explicit value-head allowance and still reject any encoder or unrelated row drift.
 
+The optional `ModelConfig.ability_residual_version` is a separate architecture
+contract (0 means absent, including old checkpoints; 1 enables an 18-parameter
+linear head). Version 1 uses the existing feature-v5 flags for active Berserk,
+cooldown, Berserk presence, applicability, and inapplicability. It adds learned
+corrections only to a/X/cancel logits when the ability-menu flag is set. It neither
+changes the legality mask nor prescribes the correct action. Zero initialization
+preserves original outputs; outside ability menus the original logits are selected
+directly, preserving shops and other prompts even after residual learning. Value
+and ECHO heads remain unchanged when base parameters are frozen. Checkpoint loading
+and model-expansion helpers preserve the version/tensors or reject incompatibility.
+Residual-only audits require an explicit allowance and a same-configuration,
+zero-enabled reference; they do not silently treat a version-0 checkpoint as version 1.
+
 PPO's opt-in raw rollout recording uses the existing trajectory writer after successful
 reset and before terminal cleanup. Before each collection, an immutable versioned
 checkpoint is saved under the run's exclusive `collector-checkpoints` directory.

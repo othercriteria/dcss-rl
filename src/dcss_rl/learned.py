@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import asdict, dataclass
+from copy import deepcopy
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from threading import Lock
+from typing import NewType
 
 import numpy as np
 import torch
 from torch import Tensor, nn
 
+from dcss_rl.actions import Action, ActionKind
 from dcss_rl.coverage import ReplayCoverage
-from dcss_rl.env import ACTION_COUNT
+from dcss_rl.env import ACTION_COUNT, action_to_index
 from dcss_rl.features import FEATURE_SPEC_VERSION, encode_observation, feature_count
 from dcss_rl.history import encode_action_history
 from dcss_rl.policy import ActionHistory, Policy
@@ -22,12 +25,24 @@ from dcss_rl.units import (
     ActionIndex,
     CheckpointId,
     FeatureSpecVersion,
+    Keycode,
     Probability,
 )
 from dcss_rl.webtiles.cache import StaticDataIdentity
 
 CHECKPOINT_SCHEMA_VERSION = 1
 _ZERO_ACTION_HISTORY_LENGTH = ActionHistoryLength(0)
+AbilityResidualVersion = NewType("AbilityResidualVersion", int)
+_NO_ABILITY_RESIDUAL = AbilityResidualVersion(0)
+_ABILITY_RESIDUAL_V1 = AbilityResidualVersion(1)
+_ABILITY_FLAGS_OFFSET = int(feature_count(FeatureSpecVersion(4)))
+_ABILITY_RESIDUAL_INPUTS = tuple(_ABILITY_FLAGS_OFFSET + i for i in (0, 1, 3, 4, 5))
+_ABILITY_MENU_FLAG = _ABILITY_FLAGS_OFFSET + 2
+_ABILITY_RESIDUAL_ROWS = (
+    action_to_index(Action.menu_select(Keycode(ord("a")))),
+    action_to_index(Action.menu_select(Keycode(ord("X")))),
+    action_to_index(Action(ActionKind.CANCEL)),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +51,20 @@ class ModelConfig:
     hidden_size: int = 256
     feature_spec_version: FeatureSpecVersion = FEATURE_SPEC_VERSION
     action_history_length: ActionHistoryLength = _ZERO_ACTION_HISTORY_LENGTH
+    ability_residual_version: AbilityResidualVersion = _NO_ABILITY_RESIDUAL
+
+    def __post_init__(self) -> None:
+        if self.ability_residual_version not in {
+            _NO_ABILITY_RESIDUAL,
+            _ABILITY_RESIDUAL_V1,
+        }:
+            raise ValueError("unsupported ability residual version")
+        if self.ability_residual_version and (
+            self.feature_spec_version < 5 or self.action_count < ACTION_COUNT
+        ):
+            raise ValueError(
+                "ability residual requires feature spec >=5 and full action catalog"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +160,9 @@ class SemanticActorCritic(nn.Module):
         self.echo_head = nn.Linear(
             config.hidden_size, feature_count(config.feature_spec_version)
         )
+        self.ability_residual_head = (
+            _zero_ability_residual() if config.ability_residual_version else None
+        )
 
     @property
     def input_layer(self) -> nn.Linear:
@@ -143,13 +175,26 @@ class SemanticActorCritic(nn.Module):
     def forward(
         self, features: Tensor, action_history: Tensor | None = None
     ) -> tuple[Tensor, Tensor, Tensor]:
+        semantic_features = features
         if self.config.action_history_length:
             if action_history is None:
                 raise ValueError("model requires action-history features")
             features = torch.cat((features, action_history), dim=-1)
         encoded = self.encoder(features)
+        logits = self.policy_head(encoded)
+        if self.ability_residual_head is not None:
+            corrections = self.ability_residual_head(
+                semantic_features[..., list(_ABILITY_RESIDUAL_INPUTS)]
+            )
+            rows = list(_ABILITY_RESIDUAL_ROWS)
+            original = logits[..., rows]
+            logits[..., rows] = torch.where(
+                semantic_features[..., _ABILITY_MENU_FLAG, None] == 1,
+                original + corrections,
+                original,
+            )
         return (
-            self.policy_head(encoded),
+            logits,
             self.value_head(encoded).squeeze(-1),
             self.echo_head(encoded),
         )
@@ -179,6 +224,9 @@ class LearnedPolicy:
             feature_spec_version=feature_spec_version,
             action_history_length=ActionHistoryLength(
                 int(raw_config.get("action_history_length", 0))
+            ),
+            ability_residual_version=AbilityResidualVersion(
+                int(raw_config.get("ability_residual_version", 0))
             ),
         )
         self.checkpoint_action_count = config.action_count
@@ -272,6 +320,31 @@ class ConfidenceGatedPolicy:
             return self._learned_decisions / total if total else 0.0
 
 
+def _zero_ability_residual() -> nn.Linear:
+    head = nn.Linear(5, 3)
+    nn.init.zeros_(head.weight)
+    nn.init.zeros_(head.bias)
+    return head
+
+
+def enable_ability_residual(model: SemanticActorCritic) -> SemanticActorCritic:
+    """Clone a compatible model with an explicitly versioned zero logit residual.
+
+    Existing residuals are preserved, never reset. The gate selects an observed
+    UI context only; all scores inside that context remain learned and legality
+    masking is unchanged.
+    """
+    config = replace(model.config, ability_residual_version=_ABILITY_RESIDUAL_V1)
+    expanded = deepcopy(model)
+    expanded.config = config
+    if expanded.ability_residual_head is None:
+        parameter = next(model.parameters())
+        expanded.ability_residual_head = _zero_ability_residual().to(
+            device=parameter.device, dtype=parameter.dtype
+        )
+    return expanded
+
+
 def add_action_history(
     model: SemanticActorCritic, length: ActionHistoryLength
 ) -> SemanticActorCritic:
@@ -286,6 +359,7 @@ def add_action_history(
             hidden_size=model.config.hidden_size,
             feature_spec_version=model.config.feature_spec_version,
             action_history_length=length,
+            ability_residual_version=model.config.ability_residual_version,
         )
     ).to(next(model.parameters()).device)
     old_state = model.state_dict()
@@ -322,6 +396,7 @@ def align_feature_spec(
             hidden_size=model.config.hidden_size,
             feature_spec_version=feature_spec_version,
             action_history_length=model.config.action_history_length,
+            ability_residual_version=model.config.ability_residual_version,
         )
     ).to(next(model.parameters()).device)
     old = model.state_dict()
@@ -361,6 +436,7 @@ def align_action_count(
             hidden_size=model.config.hidden_size,
             feature_spec_version=model.config.feature_spec_version,
             action_history_length=model.config.action_history_length,
+            ability_residual_version=model.config.ability_residual_version,
         )
     ).to(next(model.parameters()).device)
     old = model.state_dict()

@@ -8,12 +8,14 @@ import torch
 from dcss_rl.actions import Action, ActionKind
 from dcss_rl.checkpoint_audit import audit_checkpoint, main
 from dcss_rl.env import ACTION_COUNT, action_to_index
-from dcss_rl.learned import ModelConfig, SemanticActorCritic
+from dcss_rl.learned import ModelConfig, SemanticActorCritic, enable_ability_residual
 
 
-def _checkpoint(path: Path, *, change: str = "none") -> None:
+def _checkpoint(path: Path, *, change: str = "none", residual: bool = False) -> None:
     torch.manual_seed(4)
     model = SemanticActorCritic(ModelConfig(ACTION_COUNT, hidden_size=4))
+    if residual:
+        model = enable_ability_residual(model)
     ability = action_to_index(Action(ActionKind.ABILITIES))
     with torch.no_grad():
         if change == "ability":
@@ -26,6 +28,9 @@ def _checkpoint(path: Path, *, change: str = "none") -> None:
             model.policy_head.weight[action_to_index(Action(ActionKind.CANCEL)), 0] += (
                 0.1
             )
+        elif change == "residual":
+            assert model.ability_residual_head is not None
+            model.ability_residual_head.bias[0] += 0.1
     targets = [0] * ACTION_COUNT
     targets[ability] = 2
     legal = [2] * ACTION_COUNT
@@ -86,6 +91,37 @@ def test_value_head_permission_does_not_allow_encoder_or_policy_changes(
     assert report.comparison.ownership_passed is (change == "value")
     with pytest.raises(ValueError, match="requires --reference"):
         audit_checkpoint(current, allow_value_head=True)
+
+
+@pytest.mark.parametrize("change", ["residual", "value", "hidden", "cancel"])
+def test_residual_ownership_is_explicit_and_does_not_allow_base_changes(
+    tmp_path: Path, change: str
+) -> None:
+    baseline, current = tmp_path / "zero.pt", tmp_path / "trained.pt"
+    _checkpoint(baseline, residual=True)
+    _checkpoint(current, residual=True, change=change)
+    report = audit_checkpoint(current, baseline, allow_ability_residual=True)
+    assert report.config.ability_residual_version == 1
+    assert report.comparison is not None
+    assert report.comparison.allowed_ability_residual
+    assert report.comparison.ownership_passed is (change == "residual")
+    strict = audit_checkpoint(current, baseline, allowed_rows=())
+    assert strict.comparison is not None
+    assert strict.comparison.ownership_passed is False
+
+
+def test_residual_audit_does_not_implicitly_migrate_original_checkpoint(
+    tmp_path: Path,
+) -> None:
+    baseline, current = tmp_path / "base.pt", tmp_path / "residual.pt"
+    _checkpoint(baseline)
+    _checkpoint(current, residual=True)
+    report = audit_checkpoint(current, baseline, allow_ability_residual=True)
+    assert report.comparison is not None
+    assert report.comparison.ownership_passed is False
+    assert report.comparison.incompatibilities
+    with pytest.raises(ValueError, match="requires --reference"):
+        audit_checkpoint(current, allow_ability_residual=True)
 
 
 def test_shapes_and_configuration_are_not_silently_migrated(tmp_path: Path) -> None:

@@ -14,7 +14,7 @@ from torch import Tensor
 
 from dcss_rl.actions import Action, ActionKind
 from dcss_rl.env import ACTION_COUNT, action_to_index, index_to_action
-from dcss_rl.learned import ModelConfig
+from dcss_rl.learned import AbilityResidualVersion, ModelConfig
 from dcss_rl.units import (
     ActionCount,
     ActionHistoryLength,
@@ -66,6 +66,7 @@ class TensorComparison:
     allowed_policy_rows: tuple[ActionIndex, ...] | None
     ownership_passed: bool | None
     allowed_value_head: bool = False
+    allowed_ability_residual: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +158,11 @@ def load_checkpoint_contents(path: Path) -> CheckpointContents:
         action_history_length=ActionHistoryLength(
             _integer(config.get("action_history_length", 0), "action_history_length")
         ),
+        ability_residual_version=AbilityResidualVersion(
+            _integer(
+                config.get("ability_residual_version", 0), "ability_residual_version"
+            )
+        ),
     )
     state: TensorState = {}
     for name, tensor in _object(raw.get("model_state"), "model_state").items():
@@ -201,10 +207,24 @@ def compare_checkpoints(
     allowed_rows: tuple[ActionIndex, ...] | None = None,
     *,
     allow_value_head: bool = False,
+    allow_ability_residual: bool = False,
 ) -> TensorComparison:
     incompatible: list[str] = []
     if current.config != reference.config:
         incompatible.append("model configuration differs; no migration is performed")
+    if allow_ability_residual:
+        if current.config.ability_residual_version != 1:
+            incompatible.append(
+                "ability residual ownership requires residual version 1"
+            )
+        for checkpoint in (current, reference):
+            for name, shape in (
+                ("ability_residual_head.weight", (3, 5)),
+                ("ability_residual_head.bias", (3,)),
+            ):
+                tensor = checkpoint.state.get(name)
+                if tensor is None or tuple(tensor.shape) != shape:
+                    incompatible.append(f"{name}: missing or invalid residual tensor")
     changed_rows: set[ActionIndex] = set()
     changed_non_policy: list[str] = []
     for name in sorted(current.state.keys() | reference.state.keys()):
@@ -229,14 +249,19 @@ def compare_checkpoints(
         not 0 <= row < current.config.action_count for row in allowed_rows
     ):
         incompatible.append("declared allowed policy row is outside checkpoint catalog")
+    allowed_non_policy = (
+        {"value_head.weight", "value_head.bias"} if allow_value_head else set()
+    )
+    if allow_ability_residual:
+        allowed_non_policy.update(
+            {"ability_residual_head.weight", "ability_residual_head.bias"}
+        )
     passed = (
         None
         if allowed_rows is None
         else (
             not incompatible
-            and set(changed_non_policy).issubset(
-                {"value_head.weight", "value_head.bias"} if allow_value_head else set()
-            )
+            and set(changed_non_policy).issubset(allowed_non_policy)
             and changed_rows.issubset(allowed_rows)
         )
     )
@@ -249,6 +274,7 @@ def compare_checkpoints(
         allowed_rows,
         passed,
         allow_value_head,
+        allow_ability_residual,
     )
 
 
@@ -258,8 +284,9 @@ def audit_checkpoint(
     *,
     allowed_rows: tuple[ActionIndex, ...] | None = None,
     allow_value_head: bool = False,
+    allow_ability_residual: bool = False,
 ) -> CheckpointAudit:
-    if allow_value_head and allowed_rows is None:
+    if (allow_value_head or allow_ability_residual) and allowed_rows is None:
         allowed_rows = ()
     if allowed_rows is not None and reference is None:
         raise ValueError("an allowed-row ownership contract requires --reference")
@@ -272,7 +299,11 @@ def audit_checkpoint(
         current.coverage,
         baseline.sha256 if baseline is not None else None,
         compare_checkpoints(
-            current, baseline, allowed_rows, allow_value_head=allow_value_head
+            current,
+            baseline,
+            allowed_rows,
+            allow_value_head=allow_value_head,
+            allow_ability_residual=allow_ability_residual,
         )
         if baseline is not None
         else None,
@@ -291,6 +322,7 @@ def main() -> None:
     )
     parser.add_argument("--allow-menu-key", action="append")
     parser.add_argument("--allow-value-head", action="store_true")
+    parser.add_argument("--allow-ability-residual", action="store_true")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     allowed: tuple[ActionIndex, ...] | None = None
@@ -317,6 +349,7 @@ def main() -> None:
             args.reference,
             allowed_rows=allowed,
             allow_value_head=args.allow_value_head,
+            allow_ability_residual=args.allow_ability_residual,
         )
     except ValueError as error:
         parser.error(str(error))

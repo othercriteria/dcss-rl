@@ -17,7 +17,7 @@ from typing import NewType, cast
 
 import msgspec
 
-from dcss_rl.units import ActionCount, RolloutLength, Seconds, WorkerCount
+from dcss_rl.units import ActionCount, RolloutLength, Seconds, StepLimit, WorkerCount
 from dcss_rl.webtiles.cache import (
     StaticCachePreparationStage,
     StaticCachePreparationTiming,
@@ -53,6 +53,11 @@ class BenchmarkConfig:
     workers: WorkerCount = _DEFAULT_WORKERS
     rollout_length: RolloutLength = _DEFAULT_ROLLOUT
     collect_static_cache_timing: bool = False
+    frozen_policy: bool = False
+
+    def __post_init__(self) -> None:
+        if self.frozen_policy and self.anchor_roots:
+            raise ValueError("frozen-policy benchmark must not supply anchor roots")
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +118,11 @@ class BenchmarkReport:
     prime_seconds: Seconds | None = None
     arms: list[ArmReport] = field(default_factory=list)
     tensor_comparison: TensorComparison | None = None
+    frozen_tensor_comparisons: dict[CacheArm, TensorComparison] = field(
+        default_factory=dict
+    )
+    policy_parity_report: str | None = None
+    policy_rollout_matched: bool | None = None
     completed: bool = False
     caveats: tuple[str, ...] = (
         "Single off/on pair; fixed ordering has no replicate error estimate.",
@@ -158,13 +168,13 @@ def benchmark_command(config: BenchmarkConfig, arm: CacheArm) -> tuple[str, ...]
         "--learning-rate",
         "0.0001",
         "--policy-weight",
-        "1",
+        "0" if config.frozen_policy else "1",
         "--value-weight",
-        "0.5",
+        "0" if config.frozen_policy else "0.5",
         "--entropy-weight",
-        "0.01",
+        "0" if config.frozen_policy else "0.01",
         "--imitation-weight",
-        "0.1",
+        "0" if config.frozen_policy else "0.1",
         "--teacher-balance-exponent",
         "0.5",
         "--echo-weight",
@@ -183,10 +193,39 @@ def benchmark_command(config: BenchmarkConfig, arm: CacheArm) -> tuple[str, ...]
     if arm is CacheArm.ON:
         command.extend(("--static-data-cache", str(config.static_data_cache)))
     if config.collect_static_cache_timing:
+        command.append("--collect-static-cache-timing")
+    if config.collect_static_cache_timing or config.frozen_policy:
+        command.append("--record-rollout-trajectories")
+    if config.frozen_policy:
+        # Zero losses alone do not prevent AdamW decay. Empty selective warmup
+        # ownership removes encoder/value/ECHO gradients and restores every
+        # policy row after optimizer.step(). Preflight forbids appended rows.
         command.extend(
-            ("--collect-static-cache-timing", "--record-rollout-trajectories")
+            (
+                "--new-action-warmup-updates",
+                "1",
+                "--short-cycle-cost",
+                "0",
+                "--no-aggregate-imitation-replay",
+            )
         )
     return tuple(command)
+
+
+def validate_frozen_checkpoint(path: Path) -> None:
+    from dcss_rl.checkpoint_audit import load_checkpoint_contents
+    from dcss_rl.env import ACTION_COUNT
+    from dcss_rl.features import FEATURE_SPEC_VERSION
+
+    checkpoint = load_checkpoint_contents(path)
+    if (
+        checkpoint.config.action_count != ACTION_COUNT
+        or checkpoint.config.feature_spec_version != FEATURE_SPEC_VERSION
+        or checkpoint.config.action_history_length
+    ):
+        raise ValueError(
+            "frozen-policy benchmark requires current action/features and no history"
+        )
 
 
 def read_reset_cache_timings(
@@ -288,13 +327,15 @@ def run_benchmark(config: BenchmarkConfig) -> BenchmarkReport:
     for path in (config.output, config.run_root):
         if path.exists() or path.is_symlink():
             raise FileExistsError(path)
+    if config.frozen_policy:
+        validate_frozen_checkpoint(config.checkpoint)
     cache = StaticDataCache.load(config.static_data_cache, binary=config.binary)
     trajectories = tuple(
         path
         for root in config.anchor_roots
         for path in sorted(root.rglob("trajectory.jsonl"))
     )
-    if not trajectories:
+    if not trajectories and not config.frozen_policy:
         raise ValueError("matched benchmark requires nonempty anchor replay")
     source_digests = _source_digests()
     report = BenchmarkReport(
@@ -319,14 +360,15 @@ def run_benchmark(config: BenchmarkConfig) -> BenchmarkReport:
     config.output.mkdir(parents=True)
     config.run_root.mkdir(parents=True)
     _record(report)
-    print(f"Priming {len(trajectories)} anchor trajectories", flush=True)
-    started = perf_counter()
-    prepare_imitation_replay(
-        trajectories,
-        teacher=ScriptedMibePolicy(),
-        cache_directory=config.imitation_cache,
-    )
-    report.prime_seconds = Seconds(perf_counter() - started)
+    if not config.frozen_policy:
+        print(f"Priming {len(trajectories)} anchor trajectories", flush=True)
+        started = perf_counter()
+        prepare_imitation_replay(
+            trajectories,
+            teacher=ScriptedMibePolicy(),
+            cache_directory=config.imitation_cache,
+        )
+        report.prime_seconds = Seconds(perf_counter() - started)
     _record(report)
     for arm in CacheArm:
         if _source_digests() != source_digests:
@@ -377,13 +419,41 @@ def run_benchmark(config: BenchmarkConfig) -> BenchmarkReport:
             or metrics.decisions != config.workers * config.rollout_length
         ):
             raise RuntimeError("benchmark transition budget mismatch")
-        if not metrics.anchor_cache_hit:
+        if config.frozen_policy:
+            comparison = compare_checkpoint_tensors(
+                config.checkpoint, config.output / f"{arm}.pt"
+            )
+            report.frozen_tensor_comparisons[arm] = comparison
+            _record(report)
+            if comparison.differing or metrics.anchor_samples:
+                raise RuntimeError(
+                    "frozen-policy arm changed model tensors or loaded anchors"
+                )
+        elif not metrics.anchor_cache_hit:
             raise RuntimeError(
                 "anchor replay was not warm after priming; pair confounded"
             )
     report.tensor_comparison = compare_checkpoint_tensors(
         config.output / "off.pt", config.output / "on.pt"
     )
+    if config.frozen_policy:
+        from dcss_rl.training_rollout_compare import compare_training_rollouts
+
+        parity = compare_training_rollouts(
+            config.run_root / CacheArm.OFF,
+            config.run_root / CacheArm.ON,
+            workers=config.workers,
+            steps=StepLimit(config.rollout_length),
+        )
+        parity_path = config.output / "policy-parity.json"
+        parity_path.write_text(json.dumps(asdict(parity), indent=2) + "\n")
+        report.policy_parity_report = str(parity_path)
+        report.policy_rollout_matched = parity.policy_rollout_matched
+        _record(report)
+        if not parity.policy_rollout_matched:
+            raise RuntimeError(
+                "frozen-policy rollout parity failed; see policy-parity.json"
+            )
     report.completed = True
     _record(report)
     print(f"Tensor comparison: {report.tensor_comparison}", flush=True)
@@ -419,11 +489,10 @@ def main() -> None:
     parser.add_argument("--static-data-cache", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--run-root", type=Path, required=True)
-    parser.add_argument(
-        "--imitation-trajectory-root", type=Path, action="append", required=True
-    )
+    parser.add_argument("--imitation-trajectory-root", type=Path, action="append")
     parser.add_argument("--binary", type=Path, default=_DEFAULT_BINARY)
     parser.add_argument("--collect-static-cache-timing", action="store_true")
+    parser.add_argument("--frozen-policy", action="store_true")
     arguments = parser.parse_args()
     run_benchmark(
         BenchmarkConfig(
@@ -432,9 +501,10 @@ def main() -> None:
             static_data_cache=arguments.static_data_cache,
             output=arguments.output,
             run_root=arguments.run_root,
-            anchor_roots=tuple(arguments.imitation_trajectory_root),
+            anchor_roots=tuple(arguments.imitation_trajectory_root or ()),
             binary=arguments.binary,
             collect_static_cache_timing=arguments.collect_static_cache_timing,
+            frozen_policy=arguments.frozen_policy,
         )
     )
 

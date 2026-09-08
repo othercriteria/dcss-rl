@@ -844,3 +844,36 @@ this journal exists to keep research velocity and direction visible.
   loss of the power, consistent with ordinary piety-cost threshold crossing, not
   renunciation or missing parsing. Retain these as a separate missing-choice
   Cancel-target stratum; do not collapse them into parser-unknown observations.
+- **2026-09-08 — predeclared ability residual v71.** Start from unchanged
+  `checkpoints/terrain-v66.pt`, the current diagnostic leader, not the failed
+  opening-capable ui67 source. Enable residual architecture version 1 with zero
+  weights: 18 parameters map five existing visible ability flags to a/X/cancel
+  logit corrections, gated only by ability-menu presence. This does not change
+  syntactic legality or hardcode the desired action. Freeze every existing tensor,
+  including the opening row, encoder, value and ECHO heads. Save and restore the
+  zero-enabled source and require identical outputs before training.
+  Fit only ac2 seeds 3049–3084, reserving 3085–3096 for development validation, with
+  equal mean masked cross-entropy weight for applicable, present-inapplicable, and
+  missing-Berserk contexts. Unknown applicability is explicitly excluded. One CPU
+  Adam run, learning rate 0.1, at most 256 steps, snapshots 1/16/64/256; no search
+  or automatic budget extension. Require exact base tensors at every step and
+  exact nonability logits/probabilities at each snapshot, including shop/more states.
+  Each of the three contexts in both splits must have 100% target argmax accuracy,
+  mean target probability >=0.995, minimum >=0.99, and maximum Renounce probability
+  <=1e-5; present-inapplicable Berserk probability must be <=0.001. Preserve target
+  and legal-exposure counts in every checkpoint. Failure stops live continuation;
+  success still needs the ac1 regression audit and a bounded nonpromoting diagnostic
+  before broader development evaluation. No held-out access or promotion.
+- **2026-09-08 — predeclared corrected frozen cache pair c72.** After residual
+  training/auditing and concurrent agent tests finish, run one uncontended
+  `poe benchmark-startup-cache --frozen-policy --collect-static-cache-timing` pair
+  from terrain-v66, online-train-v3, seed 1, 48 workers ×128 decisions per arm
+  (12,288 total). Cold then verified static-cache startup, no anchors, all objective
+  weights and cycle cost zero, no allowed warmup parameters, recording both arms.
+  Require unchanged final tensors and complete policy-input/sampling/action/reward/
+  terminal/bootstrap parity before interpreting throughput; retain strict raw and
+  semantic differences. Report individual per-reset validation/copy timings and
+  full wall time without summing overlapping worker wall spans. Do not enable cache
+  by default or extend the budget if parity fails or wall time regresses. The earlier
+  nonfrozen benchmark did not establish matched work; the explicit frozen mode now
+  enforces these requirements. No policy selection or held-out access.
