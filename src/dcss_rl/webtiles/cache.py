@@ -6,14 +6,97 @@ import hashlib
 import json
 import shutil
 import tempfile
-from dataclasses import asdict, dataclass
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import NewType, cast
 
+from dcss_rl.units import Seconds
+
 CacheDigest = NewType("CacheDigest", str)
 CacheMemberName = NewType("CacheMemberName", str)
+CacheMemberCount = NewType("CacheMemberCount", int)
 _SCHEMA = 1
 _SUFFIXES = {"db": frozenset({".db"}), "des": frozenset({".idx", ".dsc", ".lux"})}
+
+
+class StaticCachePreparationStage(StrEnum):
+    IDENTITY_VALIDATION = "identity_validation"
+    MEMBER_VERIFICATION = "member_verification"
+    PRIVATE_COPY = "private_copy"
+    DESTINATION_VERIFICATION = "destination_verification"
+
+
+@dataclass(frozen=True, slots=True)
+class StaticCacheTiming:
+    wall_seconds: Seconds
+    thread_cpu_seconds: Seconds
+
+
+@dataclass(frozen=True, slots=True)
+class StaticCacheStageTiming:
+    stage: StaticCachePreparationStage
+    elapsed: StaticCacheTiming
+
+
+@dataclass(frozen=True, slots=True)
+class StaticCachePreparationTiming:
+    """One successful populate call; stage spans exclude setup/rename overhead.
+
+    Wall spans from concurrent workers overlap and must not be summed as runtime.
+    Thread CPU excludes DCSS child CPU. Timing clock overhead is included in total.
+    Destination is a string so dataclasses.asdict is directly JSON serializable.
+    """
+
+    destination: str
+    members: CacheMemberCount
+    total: StaticCacheTiming
+    stages: tuple[StaticCacheStageTiming, ...]
+
+
+@dataclass(slots=True)
+class _PreparationTimer:
+    started_wall: float = field(default_factory=time.perf_counter)
+    started_cpu: float = field(default_factory=time.thread_time)
+    stages: dict[StaticCachePreparationStage, StaticCacheTiming] = field(
+        default_factory=dict
+    )
+
+    def finish(self, destination: Path, members: int) -> StaticCachePreparationTiming:
+        return StaticCachePreparationTiming(
+            str(destination),
+            CacheMemberCount(members),
+            StaticCacheTiming(
+                Seconds(time.perf_counter() - self.started_wall),
+                Seconds(time.thread_time() - self.started_cpu),
+            ),
+            tuple(
+                StaticCacheStageTiming(stage, self.stages[stage])
+                for stage in StaticCachePreparationStage
+            ),
+        )
+
+
+@contextmanager
+def _measure(
+    timer: _PreparationTimer | None, stage: StaticCachePreparationStage
+) -> Iterator[None]:
+    if timer is None:
+        yield
+        return
+    wall = time.perf_counter()
+    cpu = time.thread_time()
+    try:
+        yield
+    finally:
+        previous = timer.stages.get(stage, StaticCacheTiming(Seconds(0), Seconds(0)))
+        timer.stages[stage] = StaticCacheTiming(
+            Seconds(previous.wall_seconds + time.perf_counter() - wall),
+            Seconds(previous.thread_cpu_seconds + time.thread_time() - cpu),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,22 +216,30 @@ class StaticDataCache:
         return cache
 
     def validate(self, *, binary: Path) -> None:
-        _validate_members(self.members)
-        if static_data_identity(binary) != self.identity:
-            raise ValueError("static cache does not match DCSS binary/data")
-        for member in self.members:
-            source = self.directory / member.name
-            if (
-                source.parent.is_symlink()
-                or source.is_symlink()
-                or not source.is_file()
-                or _digest(source) != member.digest
-            ):
-                raise ValueError(f"corrupt static cache member: {member.name}")
+        self._validate(binary=binary, timer=None)
 
-    def populate(self, save_directory: Path, *, binary: Path) -> None:
+    def _validate(self, *, binary: Path, timer: _PreparationTimer | None) -> None:
+        _validate_members(self.members)
+        with _measure(timer, StaticCachePreparationStage.IDENTITY_VALIDATION):
+            if static_data_identity(binary) != self.identity:
+                raise ValueError("static cache does not match DCSS binary/data")
+        with _measure(timer, StaticCachePreparationStage.MEMBER_VERIFICATION):
+            for member in self.members:
+                source = self.directory / member.name
+                if (
+                    source.parent.is_symlink()
+                    or source.is_symlink()
+                    or not source.is_file()
+                    or _digest(source) != member.digest
+                ):
+                    raise ValueError(f"corrupt static cache member: {member.name}")
+
+    def populate(
+        self, save_directory: Path, *, binary: Path, collect_timing: bool = False
+    ) -> StaticCachePreparationTiming | None:
         """Copy into new private db/des directories; never overwrite or link files."""
-        self.validate(binary=binary)
+        timer = _PreparationTimer() if collect_timing else None
+        self._validate(binary=binary, timer=timer)
         for folder in _SUFFIXES:
             if (save_directory / folder).exists() or (
                 save_directory / folder
@@ -163,13 +254,18 @@ class StaticDataCache:
                 (staged / folder).mkdir()
             for member in self.members:
                 destination = staged / member.name
-                shutil.copy2(self.directory / member.name, destination)
-                if _digest(destination) != member.digest:
-                    raise ValueError(
-                        f"static cache changed while copying: {member.name}"
-                    )
+                with _measure(timer, StaticCachePreparationStage.PRIVATE_COPY):
+                    shutil.copy2(self.directory / member.name, destination)
+                with _measure(
+                    timer, StaticCachePreparationStage.DESTINATION_VERIFICATION
+                ):
+                    if _digest(destination) != member.digest:
+                        raise ValueError(
+                            f"static cache changed while copying: {member.name}"
+                        )
             for folder in _SUFFIXES:
                 (staged / folder).rename(save_directory / folder)
+        return timer.finish(save_directory, len(self.members)) if timer else None
 
 
 def static_data_identity(binary: Path) -> StaticDataIdentity:

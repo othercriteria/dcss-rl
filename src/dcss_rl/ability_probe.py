@@ -18,10 +18,11 @@ from dcss_rl.actions import Action, ActionKind
 from dcss_rl.coverage import ReplayCoverage, replay_coverage
 from dcss_rl.env import ACTION_COUNT, action_to_index
 from dcss_rl.evaluation import load_suite
-from dcss_rl.features import FEATURE_SPEC_VERSION, feature_count
+from dcss_rl.features import FEATURE_COUNT, FEATURE_SPEC_VERSION, feature_count
 from dcss_rl.learned import (
     CheckpointTrainingMetadata,
     LearnedPolicy,
+    ModelConfig,
     SemanticActorCritic,
     align_action_count,
     align_feature_spec,
@@ -44,6 +45,13 @@ _GATE_DEFINITION = (
     "must improve at step 1, and all unowned parameters remain exact. "
     "Corrects initial pairwise cancel-a gate: X dominates both choices. "
     "Balanced masked cross-entropy objective is unchanged."
+)
+_CALIBRATION_GATE_DEFINITION = (
+    "Fixed 1/16/64/256-step row-only calibration; all encoder columns and "
+    "unowned parameters must remain exact at every step. Already learned "
+    "classes may trade margins at step 1, so no both-margins-improve gate applies. "
+    "A separate probability and other-menu preservation audit is required; "
+    "completion grants no automatic live-rollout approval."
 )
 
 
@@ -107,6 +115,7 @@ class ProbeMetadata(CheckpointTrainingMetadata):
     snapshot: ProbeSnapshot
     code_evidence: tuple[CodeEvidence, ...]
     gate_definition: str
+    row_only_calibration: bool = False
 
 
 def validate_training_paths(paths: tuple[Path, ...]) -> None:
@@ -268,7 +277,40 @@ def selective_step(
     )
 
 
-def run_probe(checkpoint: Path, trajectories: Path, output: Path) -> Path:
+def _probe_columns(
+    config: ModelConfig, *, row_only_calibration: bool
+) -> tuple[int, ...]:
+    if config.action_history_length:
+        raise ValueError(
+            "this conditional-choice probe requires a stateless checkpoint"
+        )
+    if row_only_calibration:
+        if config.feature_spec_version != FEATURE_SPEC_VERSION:
+            raise ValueError("row-only calibration requires the current feature spec")
+        if config.action_count != ACTION_COUNT:
+            raise ValueError("row-only calibration requires the current action count")
+        return ()
+    return tuple(range(feature_count(config.feature_spec_version), FEATURE_COUNT))
+
+
+def _first_step_gate_passes(
+    initial: ProbeSnapshot, current: ProbeSnapshot, *, row_only_calibration: bool
+) -> bool:
+    return row_only_calibration or (
+        current.train.applicable_decision_margin
+        > initial.train.applicable_decision_margin
+        and current.train.inapplicable_decision_margin
+        > initial.train.inapplicable_decision_margin
+    )
+
+
+def run_probe(
+    checkpoint: Path,
+    trajectories: Path,
+    output: Path,
+    *,
+    row_only_calibration: bool = False,
+) -> Path:
     started = time.monotonic()
     output.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(1)
@@ -292,15 +334,21 @@ def run_probe(checkpoint: Path, trajectories: Path, output: Path) -> Path:
     )
     train, validation = load_probe_data(paths[:-2]), load_probe_data(paths[-2:])
     source = LearnedPolicy(checkpoint)
-    if source.model.config.action_history_length:
+    # LearnedPolicy expands legacy catalogs on load; inspect the recorded count
+    # before allowing a mode that promises no model-contract migration.
+    if row_only_calibration and source.checkpoint_action_count != ACTION_COUNT:
         raise ValueError(
-            "this conditional-choice probe requires a stateless checkpoint"
+            "row-only calibration requires the recorded current action count"
         )
-    old_width = feature_count(source.model.config.feature_spec_version)
+    columns = _probe_columns(
+        source.model.config, row_only_calibration=row_only_calibration
+    )
+    gate_definition = (
+        _CALIBRATION_GATE_DEFINITION if row_only_calibration else _GATE_DEFINITION
+    )
     model = align_feature_spec(
         align_action_count(source.model, ACTION_COUNT), FEATURE_SPEC_VERSION
     )
-    columns = tuple(range(old_width, feature_count(FEATURE_SPEC_VERSION)))
     baseline = {name: value.clone() for name, value in model.state_dict().items()}
     with torch.no_grad():
         train_logits, validation_logits = (
@@ -320,18 +368,25 @@ def run_probe(checkpoint: Path, trajectories: Path, output: Path) -> Path:
     decision = "stop: one-minibatch margin or preservation requirement failed"
     for step in range(1, max(_STEPS) + 1):
         selective_step(model, train, optimizer, baseline, columns)
-        if step not in _STEPS:
+        exact = (
+            unowned_parameters_exact(model, baseline, columns)
+            if row_only_calibration or step in _STEPS
+            else True
+        )
+        if step not in _STEPS and exact:
             continue
         snapshot = ProbeSnapshot(
             ProbeStep(step),
             measure(model, train, train_logits),
             measure(model, validation, validation_logits),
-            unowned_parameters_exact(model, baseline, columns),
+            exact,
             time.monotonic() - started,
         )
         snapshots.append(snapshot)
         metadata = ProbeMetadata(
-            "ability-menu-selective-probe",
+            "ability-menu-row-only-calibration"
+            if row_only_calibration
+            else "ability-menu-selective-probe",
             0,
             step,
             int(train.coverage.samples),
@@ -353,7 +408,8 @@ def run_probe(checkpoint: Path, trajectories: Path, output: Path) -> Path:
             validation.coverage,
             snapshot,
             code_evidence,
-            _GATE_DEFINITION,
+            gate_definition,
+            row_only_calibration=row_only_calibration,
         )
         save_checkpoint(
             output / f"step-{step:04d}.pt",
@@ -362,16 +418,17 @@ def run_probe(checkpoint: Path, trajectories: Path, output: Path) -> Path:
             training_metadata=metadata,
         )
         if not snapshot.unowned_parameters_exact:
+            decision = "stop: unowned parameter preservation requirement failed"
             break
-        if step == 1 and not (
-            snapshot.train.applicable_decision_margin
-            > snapshots[0].train.applicable_decision_margin
-            and snapshot.train.inapplicable_decision_margin
-            > snapshots[0].train.inapplicable_decision_margin
+        if step == 1 and not _first_step_gate_passes(
+            snapshots[0], snapshot, row_only_calibration=row_only_calibration
         ):
             break
         decision = (
-            "conditional-choice learning only; inspect validation and "
+            "offline row-only calibration only; probability and other-menu "
+            "preservation audits required; no automatic live-rollout approval"
+            if row_only_calibration
+            else "conditional-choice learning only; inspect validation and "
             "non-menu drift before rollout"
         )
     report = output / "report.json"
@@ -386,7 +443,8 @@ def run_probe(checkpoint: Path, trajectories: Path, output: Path) -> Path:
                 "validation_coverage": asdict(validation.coverage),
                 "predeclared_steps": _STEPS,
                 "learning_rate": 0.001,
-                "gate_definition": _GATE_DEFINITION,
+                "gate_definition": gate_definition,
+                "row_only_calibration": row_only_calibration,
                 "code_evidence": [asdict(item) for item in code_evidence],
                 "owned_action_indices": _ROWS,
                 "owned_feature_columns": columns,
@@ -405,8 +463,16 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--trajectories", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--row-only-calibration", action="store_true")
     args = parser.parse_args()
-    print(run_probe(args.checkpoint, args.trajectories, args.output))
+    print(
+        run_probe(
+            args.checkpoint,
+            args.trajectories,
+            args.output,
+            row_only_calibration=args.row_only_calibration,
+        )
+    )
 
 
 if __name__ == "__main__":

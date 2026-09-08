@@ -1,10 +1,16 @@
 import json
 import os
+import shutil
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
 
-from dcss_rl.webtiles.cache import StaticDataCache, static_data_identity
+from dcss_rl.webtiles.cache import (
+    StaticCachePreparationStage,
+    StaticDataCache,
+    static_data_identity,
+)
 from dcss_rl.webtiles.process import ManagedGame
 
 
@@ -62,8 +68,9 @@ def test_static_cache_copies_only_static_files_with_private_inodes(
 
 
 @pytest.mark.parametrize("changed", ["binary", "data-content", "data-mtime", "cache"])
+@pytest.mark.parametrize("collect_timing", [False, True])
 def test_static_cache_rejects_stale_or_corrupt_snapshot(
-    tmp_path: Path, changed: str
+    tmp_path: Path, changed: str, collect_timing: bool
 ) -> None:
     binary, saves = cache_source(tmp_path)
     cache = StaticDataCache.capture(
@@ -83,7 +90,9 @@ def test_static_cache_rejects_stale_or_corrupt_snapshot(
     else:
         (cache.directory / "des/test.idx").write_bytes(b"corrupt")
     with pytest.raises(ValueError, match=r"does not match|corrupt"):
-        cache.populate(tmp_path / "destination", binary=binary)
+        cache.populate(
+            tmp_path / "destination", binary=binary, collect_timing=collect_timing
+        )
     assert not (tmp_path / "destination").exists()
 
 
@@ -168,3 +177,103 @@ def test_static_cache_export_requires_recorded_unchanged_source_identity(
     (tmp_path / "dat/maps.des").write_text("source changed after initialization")
     with pytest.raises(ValueError, match="changed since the source game started"):
         capture.export_static_cache(tmp_path / "stale-provenance")
+
+
+def test_static_cache_default_timing_reads_no_clocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binary, saves = cache_source(tmp_path)
+    cache = StaticDataCache.capture(
+        tmp_path / "snapshot",
+        binary=binary,
+        closed_save_directory=saves,
+        source_identity=static_data_identity(binary),
+    )
+
+    def unexpected_clock() -> float:
+        raise AssertionError("default cache preparation must not read timing clocks")
+
+    monkeypatch.setattr("dcss_rl.webtiles.cache.time.perf_counter", unexpected_clock)
+    monkeypatch.setattr("dcss_rl.webtiles.cache.time.thread_time", unexpected_clock)
+    cache.validate(binary=binary)
+    assert cache.populate(tmp_path / "destination", binary=binary) is None
+
+
+def test_static_cache_timing_preserves_copy_and_verification_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dcss_rl.webtiles import cache as cache_module
+
+    binary, saves = cache_source(tmp_path)
+    cache = StaticDataCache.capture(
+        tmp_path / "snapshot",
+        binary=binary,
+        closed_save_directory=saves,
+        source_identity=static_data_identity(binary),
+    )
+    operations: list[tuple[str, str]] = []
+    original_digest = cache_module._digest
+    original_copy = shutil.copy2
+
+    def digest(path: Path) -> cache_module.CacheDigest:
+        operations.append(("hash", path.name))
+        return original_digest(path)
+
+    def copy(source: Path, destination: Path) -> Path:
+        operations.append(("copy", source.name))
+        return Path(original_copy(source, destination))
+
+    monkeypatch.setattr(cache_module, "_digest", digest)
+    monkeypatch.setattr(cache_module.shutil, "copy2", copy)
+    first, second = tmp_path / "untimed", tmp_path / "timed"
+    assert cache.populate(first, binary=binary) is None
+    untimed_operations = operations.copy()
+    operations.clear()
+    report = cache.populate(second, binary=binary, collect_timing=True)
+    assert operations == untimed_operations
+    assert report is not None
+    assert report.destination == str(second)
+    assert report.members == len(cache.members)
+    assert [span.stage for span in report.stages] == list(StaticCachePreparationStage)
+    assert (
+        0
+        < sum(s.elapsed.wall_seconds for s in report.stages)
+        <= report.total.wall_seconds
+    )
+    assert (
+        0
+        <= sum(s.elapsed.thread_cpu_seconds for s in report.stages)
+        <= report.total.thread_cpu_seconds
+    )
+    serialized = json.loads(json.dumps(asdict(report)))
+    assert serialized["stages"][0]["stage"] == "identity_validation"
+    for member in cache.members:
+        left, right = first / member.name, second / member.name
+        assert left.read_bytes() == right.read_bytes()
+        assert left.stat().st_mtime_ns == right.stat().st_mtime_ns
+        assert left.stat().st_ino != right.stat().st_ino
+
+
+@pytest.mark.parametrize("collect_timing", [False, True])
+def test_static_cache_timing_preserves_destination_corruption_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, collect_timing: bool
+) -> None:
+    binary, saves = cache_source(tmp_path)
+    cache = StaticDataCache.capture(
+        tmp_path / "snapshot",
+        binary=binary,
+        closed_save_directory=saves,
+        source_identity=static_data_identity(binary),
+    )
+    original_copy = shutil.copy2
+
+    def corrupt_copy(source: Path, destination: Path) -> Path:
+        copied = Path(original_copy(source, destination))
+        copied.write_bytes(b"corrupt destination")
+        return copied
+
+    monkeypatch.setattr("dcss_rl.webtiles.cache.shutil.copy2", corrupt_copy)
+    destination = tmp_path / "destination"
+    with pytest.raises(ValueError, match="static cache changed while copying"):
+        cache.populate(destination, binary=binary, collect_timing=collect_timing)
+    assert list(destination.iterdir()) == []

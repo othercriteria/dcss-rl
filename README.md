@@ -121,6 +121,16 @@ opt-in. Verify the resulting ownership with `poe checkpoint-audit --checkpoint .
 --reference ... --allow-action-kind abilities --allow-value-head`; the audit rejects
 unrelated tensor changes and incompatible model configurations.
 
+Audit sampled ability-choice confidence on training-only replay with
+`poe ability-calibration --checkpoint CHECKPOINT --trajectories artifacts/c/ac1
+--output REPORT.json`. Repeat `--checkpoint` to compare candidates against the first
+checkpoint. The audit uses each checkpoint's feature version and reports probability
+tails as well as greedy accuracy; a correct argmax alone does not establish reliable
+sampling. Its seed-disjoint split is development evidence, not held-out promotion.
+`poe ability-probe --row-only-calibration ...` explicitly selects a fixed, bounded
+offline calibration protocol with the encoder frozen. Finishing that protocol does
+not authorize live scaling or certify its probability gates.
+
 The terminal viewer identifies the resolved suite, policy, checkpoint, manifest, case,
 and recorded outcome before reconstructing either legacy full-snapshot trajectories or
 compact schema-v2 deltas. Pass `--case CASE_ID` to the track-specific Poe task to inspect

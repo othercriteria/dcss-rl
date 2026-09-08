@@ -727,3 +727,68 @@ this journal exists to keep research velocity and direction visible.
   resume bounded current-policy research; no more UI67 training, broader selection,
   or held-out access. Conditional stochastic calibration and new combat/retreat
   coverage are more justified than scaling the failed timing arm.
+- **2026-09-08 — predeclared row-only conditional calibration v69.** Run the existing
+  `poe ability-probe` once from `checkpoints/ui-cost-v67-start.pt` on ac1, capped at
+  its fixed 256 CPU optimizer steps with snapshots 1/16/64/256. Source and current
+  feature specifications are both 6, so no encoder columns are trainable: only
+  menu-a, menu-X, and cancel policy rows may change. No games, opening-row training,
+  held-out access, or automatic budget extension. Require exact unowned tensors and
+  ordinary masked distributions; audit other-menu behavior separately. A qualifying
+  snapshot must have, in both the six-episode training and two-episode development
+  split, 100% target argmax accuracy, mean target probability >=0.995, minimum >=0.99,
+  maximum Renounce probability <=1e-5, and maximum inapplicable Berserk probability
+  <=1e-3. Stop without live continuation if none qualifies. These repeatedly inspected
+  ac1 episodes are calibration evidence, not fresh generalization; any passing model
+  still needs a predeclared independent training-seed failure-context check before
+  live scaling. The starting model's failed opening behavior is not rehabilitated
+  by a successful conditional-choice audit.
+- **2026-09-08 — v69 stopped at the legacy one-step gate.** The existing probe
+  stopped after one optimizer step (1.44 seconds cumulative), before its later
+  scheduled snapshots: applicable training decision margin improved 0.621→0.973,
+  but inapplicable margin fell 0.837→0.540 and validation cancel accuracy fell
+  38/38→34/38. All unowned tensors and nonmenu predictions remained exact. This is
+  a failed v69 probe, not a successful calibration run. Its inherited requirement
+  that both class margins improve on the first balanced-gradient step was designed
+  for initial representation learning; it can veto ordinary class tradeoffs in an
+  already learned representation. Any fixed-budget calibration experiment must name
+  that different protocol explicitly, preserve the old default, and retain the
+  probability/preservation gates before live continuation. Evidence:
+  `artifacts/c/ability-calibration-v69/report.json`.
+- **2026-09-08 — predeclared fixed-budget row-only calibration v70.** Separate from
+  the stopped v69 run, use an explicit `--row-only-calibration` protocol from the
+  same immutable ui67 start and ac1 split. Complete at most 256 balanced-CE CPU
+  steps, retaining snapshots 1/16/64/256 and stopping immediately on ownership
+  failure. The first-step class-margin tradeoff is measured, not a stop condition.
+  All v69 final probability, other-menu, and preservation requirements remain
+  unchanged. No learning-rate search, encoder unfreezing, data expansion, games, or
+  automatic continuation in this experiment. A failed probability gate directs the
+  next decision toward representation/exposure analysis, not more steps by default.
+- **2026-09-08 — v70 fixed-budget outcome: stop.** All 256 steps complete in 5.173
+  seconds cumulative, and every scheduled snapshot fails the 0.995 mean target
+  probability requirement. Step 256 has training accuracy 24/24 applicable and
+  116/116 cancel, means 0.95586/0.95558; validation has 9/9 applicable and 36/38
+  cancel, means 0.94659/0.89647. The starting validation was 47/47 correct, so this
+  is not even a monotonic greedy improvement on the calibration split. All four
+  saved snapshots independently preserve every unowned tensor; final SHA256 is
+  `2f5caa1835a1d14e153b1c903d808df4abe6cdbdcde14d1457bb9654b54dc02d`.
+  `artifacts/c/ability-calibration-v70/ownership-0256.json` explicitly allows only
+  rows 13/102/111 (cancel/X/a), with no other tensor changes or incompatibilities.
+  Do not extend the step budget or run live evaluation: examine representation and
+  exposure before another calibration experiment. These results establish neither
+  stronger survival nor an ability-opening improvement. Heldout-v5 and both champion
+  manifests remain unchanged.
+- **2026-09-08 — v70 probability tails and preservation audit.**
+  `artifacts/c/ability-calibration-v70/audit-final.json` compares the source and all
+  four snapshots using each checkpoint's feature version. At step 256, minimum
+  validation target probability is 0.62746 applicable and 0.14853 cancel; maximum
+  inapplicable Berserk probability is 0.85141 versus the required 0.001. Maximum
+  validation Renounce probability is 9.8247e-5, also above the 1e-5 gate. Every
+  snapshot preserves all 1,399 nonmenu masked distributions exactly. Ac1 contains
+  zero other-menu examples, so that preservation result is explicitly unknown,
+  not a vacuous pass. The observed tail failures reinforce the stop decision;
+  training accuracy and average confidence conceal the problematic states.
+  Root reran the audit after integration as `audit-integrated.json`, reproducing
+  these values. The worst inapplicable Berserk probability rises from 0.43175 in
+  the starting checkpoint to 0.85141 at step 256 despite better average confidence.
+  The full integrated Poe gate passes 293 unit tests (3.63 seconds), three parallel
+  live tests (8.75 seconds), lint, formatting, and typing.

@@ -427,8 +427,9 @@ not the current bottleneck.
 Next:
 
 1. Use the verified stair-boundary correction for the next bounded research step:
-   strengthen conditional menu probability calibration and collect deliberate
-   combat/escape exposure before another opening-timing continuation. The v67
+   investigate conditional-menu representation/exposure after the bounded row-only
+   calibration failed, and collect deliberate combat/escape exposure before another
+   opening-timing continuation. The v67
    UI-return pair failed safety/quality gates and is stopped. Terrain-v66 remains
    the diagnostic leader; actual D:11 progress and stronger survival remain open.
 2. Address the independently measured blocked-action, prompt, and navigation loops
@@ -541,6 +542,23 @@ Next:
   Diagnostic rechecks retain terrain-v66's 42,853 and v51's 39,956 full ranks exactly.
   Neither champion manifest nor heldout-v5 was changed. Do not interpret this bounded
   proof as universal byte-identical DCSS output or as a new policy-quality milestone.
+- A bounded offline row-only calibration v70 finishes 256 steps in 5.17 seconds but
+  fails its predeclared probability/accuracy gates. Training targets become 140/140
+  correct, while validation is 9/9 applicable and 36/38 cancel; mean validation target
+  probabilities are 0.9466/0.8965, below 0.995. Only menu-a, menu-X, and cancel rows
+  change; encoder, opening row, value/ECHO heads, and all unowned parameters remain
+  exact. No games or further optimizer steps follow this failed pilot. V69 remains
+  separately recorded as stopped after the older first-step margin gate. The new
+  `poe ability-calibration` audit measures probability tails and preservation rather
+  than treating greedy accuracy as sampled reliability.
+- Static-cache preparation now offers opt-in wall/thread-CPU stage timing, without
+  relaxing validation or enabling caching by default. Process/benchmark wiring and
+  a corrected cache-off/on comparison remain pending; no speedup is claimed. The
+  bounded next measurement is specified in `docs/research-throughput-next.md`.
+- The integrated calibration/timing changes pass the full Poe gate: 293 unit tests
+  in 3.63 seconds, three parallel live tests in 8.75 seconds, lint, formatting, and
+  type checking. The audit and row-only protocol reject recorded incompatible
+  action catalogs even though the general policy loader can expand them.
 
 ## Verified commands
 
