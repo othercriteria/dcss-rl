@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from dcss_rl.actions import Action
+from dcss_rl.actions import Action, ActionKind
 from dcss_rl.env import ACTION_COUNT, action_to_index
 from dcss_rl.features import feature_count
 from dcss_rl.learned import ModelConfig, SemanticActorCritic, align_feature_spec
@@ -262,6 +262,20 @@ def test_action_warmup_can_select_companion_row_without_action_expansion() -> No
     )
 
     assert indices == (menu_a,)
+
+
+def test_action_warmup_can_select_existing_structured_rows() -> None:
+    indices = _warmup_action_indices(
+        int(ACTION_COUNT),
+        int(ACTION_COUNT),
+        (),
+        (ActionKind.ABILITIES, ActionKind.CANCEL),
+    )
+
+    assert set(indices) == {
+        action_to_index(Action(ActionKind.ABILITIES)),
+        action_to_index(Action(ActionKind.CANCEL)),
+    }
 
 
 def test_action_warmup_zeros_every_unrelated_gradient() -> None:

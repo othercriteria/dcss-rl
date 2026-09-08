@@ -114,6 +114,14 @@ Champion promotion is gated by the checked-in heldout-v5 regression floor. The
 canonical champion is a fallback-free learned policy; Native WebTiles spectating can
 later complement the deterministic completed replay.
 
+Routine tooling names durable singleton roles rather than their current versions:
+`configs/promotion-suite.json`, `promotion-threshold.json`,
+`diagnostic-suite.json`, and `training-suite.json` are checked-in redirects to immutable
+versioned artifacts. A track retirement changes the redirect while summaries and
+trajectories continue recording the resolved suite ID. `artifacts/champion.json` and
+`artifacts/dev-champion.json` remain the promotion- and diagnostic-track policy
+manifests.
+
 Heldout-v1 was retired after its failure traces directly informed contextual stair
 masking. Its manifest remains archived locally for audit, but it is never reused for
 promotion. A validated track-activation command atomically archives the old canonical

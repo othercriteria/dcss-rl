@@ -162,7 +162,7 @@ class ChampionTrackActivation:
 
 def load_suite(path: Path) -> EvaluationSuite:
     """Load and validate a checked-in held-out suite at the JSON boundary."""
-    decoded: object = json.loads(Path(path).read_text())
+    decoded = _load_redirected_json(Path(path))
     if not isinstance(decoded, dict):
         raise ValueError("evaluation suite must be a JSON object")
     suite_id = decoded.get("suite_id")
@@ -186,7 +186,7 @@ def load_suite(path: Path) -> EvaluationSuite:
 
 def load_regression_threshold(path: Path) -> RegressionThreshold:
     """Load a checked-in aggregate regression floor."""
-    decoded: object = json.loads(Path(path).read_text())
+    decoded = _load_redirected_json(Path(path))
     if not isinstance(decoded, dict):
         raise ValueError("regression threshold must be a JSON object")
     suite_id = decoded.get("suite_id")
@@ -213,6 +213,25 @@ def load_regression_threshold(path: Path) -> RegressionThreshold:
             float(raw_rank[6]),
         ),
     )
+
+
+def _load_redirected_json(
+    path: Path, seen: frozenset[Path] = frozenset()
+) -> JsonObject:
+    """Resolve a stable checked-in singleton alias to an immutable JSON artifact."""
+    resolved = path.resolve()
+    if resolved in seen:
+        raise ValueError(f"configuration redirect cycle at {path}")
+    decoded_object: object = json.loads(path.read_text())
+    if not isinstance(decoded_object, dict):
+        raise ValueError("configuration must be a JSON object")
+    decoded = cast(JsonObject, decoded_object)
+    if "redirect" not in decoded:
+        return decoded
+    if set(decoded) != {"redirect"} or not isinstance(decoded["redirect"], str):
+        raise ValueError("configuration redirect must contain only a string redirect")
+    target = path.parent / decoded["redirect"]
+    return _load_redirected_json(target, seen | {resolved})
 
 
 def assert_meets_regression_threshold(

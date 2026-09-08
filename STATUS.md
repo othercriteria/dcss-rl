@@ -375,6 +375,16 @@ not the current bottleneck.
   raw trajectories plus retained Crawl logs/morgues; it confirmed 4,719 zero-turn
   state rejections in v56/v57 diagnostics and six of six completed training
   renunciations ending in deaths to Trog-wrath monsters.
+- Stable promotion-suite/threshold, diagnostic-suite, and training-suite aliases now
+  resolve to immutable versioned JSON artifacts. Routine CLI/Poe defaults no longer
+  hard-code v5/v2/v3, while summaries retain the exact resolved suite identity.
+- Two quarter-budget feature-v5 probes did not qualify. Ordinary PPO v58 retained 619
+  zero-turn rejections in its better-trained snapshot. Selective imitation v59 reduced
+  rejection to one but replaced it with 689 ability-menu cancels, mostly collapsing
+  across applicable/inapplicable choices; its best diagnostic rank was 4,732 versus
+  v51's 39,956. Selective warmup can now explicitly own existing structured-action rows
+  as well as appended actions/menu keys, enabling a matched balance probe without
+  unfreezing the incumbent network.
 
 Next:
 

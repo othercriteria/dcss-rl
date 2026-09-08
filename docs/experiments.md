@@ -446,3 +446,14 @@ this journal exists to keep research velocity and direction visible.
   a typed `poe audit-affordances` utility for future cheap probes. A root-cause state fix
   resets the compute prior: start below the prior 49,152-decision budget and scale only
   if the failure mode changes and the diagnostic curve earns it.
+- **2026-09-08 12:45–13:00 EDT — reduced-budget outcome probes.** Two feature-v5 arms
+  each used 12,288 decisions from invocation-capable v39 update 8, one quarter of the
+  previous budget. Ordinary continuing PPO v58 ranked only 9,532/6,459 at updates 1/2;
+  update 2 still made 619 zero-turn rejected Berserk selections out of 624. Selective
+  imitation-only v59 trained only appended semantic columns plus abilities/menu-`a`/
+  cancel rows. Its ranks were 4,270/4,732. Update 1 still made 459 rejected selections;
+  update 2 cut rejection to one but shifted into 697 ability-menu opens and 689 cancels,
+  including 241 of 246 applicable Berserk menus. Neither approached v51's 39,956 and
+  heldout remained untouched. Decision: do not scale either arm. Applicability is
+  learnable, but square-root teacher balancing collapses the coupled choice to cancel;
+  use a matched full-inverse selective probe before changing representation again.

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
 
+from dcss_rl.actions import ActionKind
 from dcss_rl.compatibility import run_compatibility_smoke
 from dcss_rl.evaluation import (
     EvaluationProgress,
@@ -66,7 +67,9 @@ def main() -> None:
         type=Path,
         default=Path("vendor/crawl/crawl-ref/source/crawl"),
     )
-    evaluate.add_argument("--suite", type=Path, default=Path("configs/heldout-v2.json"))
+    evaluate.add_argument(
+        "--suite", type=Path, default=Path("configs/promotion-suite.json")
+    )
     evaluate.add_argument("--output", type=Path)
     evaluate.add_argument("--workers", type=int, default=5)
     evaluate.add_argument("--threshold", type=Path)
@@ -79,7 +82,7 @@ def main() -> None:
         default=Path("vendor/crawl/crawl-ref/source/crawl"),
     )
     learned.add_argument(
-        "--suite", type=Path, default=Path("configs/diagnostic-v1.json")
+        "--suite", type=Path, default=Path("configs/diagnostic-suite.json")
     )
     learned.add_argument("--output", type=Path)
     learned.add_argument("--workers", type=int, default=5)
@@ -111,7 +114,7 @@ def main() -> None:
         type=Path,
         default=Path("vendor/crawl/crawl-ref/source/crawl"),
     )
-    ppo.add_argument("--suite", type=Path, default=Path("configs/diagnostic-v1.json"))
+    ppo.add_argument("--suite", type=Path, default=Path("configs/training-suite.json"))
     ppo.add_argument("--run-root", type=Path, default=Path("artifacts/ppo-runs"))
     ppo.add_argument("--updates", type=int, default=4)
     ppo.add_argument("--rollout-length", type=int, default=128)
@@ -130,6 +133,14 @@ def main() -> None:
         type=_menu_keycode,
         default=None,
         help="menu key whose policy row joins appended-action warmup",
+    )
+    ppo.add_argument(
+        "--warmup-action-kind",
+        action="append",
+        choices=tuple(ActionKind),
+        type=ActionKind,
+        default=None,
+        help="existing structured-action row to train during selective warmup",
     )
     ppo.add_argument("--workers", type=int, default=5)
     ppo.add_argument("--inference-batch-size", type=int, default=64)
@@ -301,6 +312,7 @@ def main() -> None:
                 new_action_warmup_menu_keycodes=tuple(
                     arguments.new_action_warmup_menu_key or ()
                 ),
+                warmup_action_kinds=tuple(arguments.warmup_action_kind or ()),
                 imitation_trajectories=tuple(
                     trajectory
                     for root in (arguments.imitation_trajectory_root or ())

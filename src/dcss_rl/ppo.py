@@ -18,7 +18,7 @@ from torch import Tensor
 from torch.distributions import Categorical
 from torch.nn import functional as F
 
-from dcss_rl.actions import Action
+from dcss_rl.actions import Action, ActionKind
 from dcss_rl.checkpointing import update_checkpoint_path
 from dcss_rl.costs import SemanticCycleTracker, training_reward
 from dcss_rl.env import ACTION_COUNT, DcssEnv, RewardShaping, action_to_index
@@ -135,6 +135,7 @@ class PpoConfig:
     action_history_length: ActionHistoryLength | None = None
     new_action_warmup_updates: UpdateCount = _ZERO_UPDATES
     new_action_warmup_menu_keycodes: tuple[Keycode, ...] = ()
+    warmup_action_kinds: tuple[ActionKind, ...] = ()
     imitation_trajectories: tuple[Path, ...] = ()
     device: str = "cuda"
 
@@ -637,6 +638,7 @@ def train_ppo(
                         established_action_count,
                         model.config.action_count,
                         config.new_action_warmup_menu_keycodes,
+                        config.warmup_action_kinds,
                     )
                     if update_index < config.new_action_warmup_updates
                     else None,
@@ -756,6 +758,7 @@ def _checkpoint_metadata(
         action_history_length=action_history_length,
         new_action_warmup_updates=config.new_action_warmup_updates,
         new_action_warmup_menu_keycodes=tuple(config.new_action_warmup_menu_keycodes),
+        warmup_action_kinds=tuple(kind.value for kind in config.warmup_action_kinds),
         imitation_trajectories=tuple(map(str, config.imitation_trajectories)),
         return_boundary=config.return_boundary.value,
         decision_cost=config.decision_cost,
@@ -1138,6 +1141,7 @@ def _warmup_action_indices(
     established_action_count: int,
     action_count: int,
     menu_keycodes: tuple[Keycode, ...],
+    action_kinds: tuple[ActionKind, ...] = (),
 ) -> tuple[ActionIndex, ...]:
     """Return appended actions and declared rows in their dependent UI flows."""
     return tuple(
@@ -1150,6 +1154,7 @@ def _warmup_action_indices(
                 action_to_index(Action.menu_select(keycode))
                 for keycode in menu_keycodes
             ),
+            *(action_to_index(Action(kind)) for kind in action_kinds),
         }
     )
 

@@ -247,6 +247,25 @@ uses only the known diagnostic suite; heldout access remains a single final prom
 gate. Naturally sorted update names make the training curve reproducible without
 inferring state from modification times.
 
+Routine commands resolve distinguished roles through checked-in JSON redirects. The
+promotion suite and threshold, diagnostic suite, and training curriculum each have one
+stable name pointing to an immutable versioned artifact. Redirects are relative,
+single-field, and cycle-checked. Results retain the resolved suite ID, so aliases reduce
+orchestration drift without erasing experimental identity. Promotion and diagnostic
+champion manifests already serve the equivalent singleton role for policies.
+
+Experiment execution uses a hybrid authority boundary. The intervention owner runs the
+smallest causal probe while its representation is unstable; the primary spine owns the
+hypothesis, comparison contract, interpretation, all promotion decisions, and every
+promotion-suite invocation. A dedicated orchestrator becomes appropriate when a typed,
+checked-in experiment spec can fully name checkpoint and suite digests, code/DCSS
+revisions, all formerly defaulted training knobs, allowed matched-arm overrides, and
+derived collision-free outputs. Such a runner may train and evaluate diagnostic curves
+but must expose no promotion-suite, threshold, or champion-manifest operation. Until
+optimizer/RNG/replay/worker state is checkpointed, orchestration may resume completed
+evaluations but must label interrupted training as a fresh attempt rather than a true
+resume.
+
 The first promoted agent uses a confidence gate calibrated only on diagnostic expert
 states. At threshold 0.98, neural decisions covered 23.7% of diagnostic actions with
 100% agreement on the calibration set; the transparent expert handles lower-confidence

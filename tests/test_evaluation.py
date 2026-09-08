@@ -63,6 +63,28 @@ def test_loads_checked_in_heldout_suite() -> None:
     assert len({case.seed for case in suite.cases}) == len(suite.cases)
 
 
+def test_stable_track_aliases_resolve_to_versioned_artifacts() -> None:
+    promotion = load_suite(Path("configs/promotion-suite.json"))
+    diagnostic = load_suite(Path("configs/diagnostic-suite.json"))
+    training = load_suite(Path("configs/training-suite.json"))
+    threshold = load_regression_threshold(Path("configs/promotion-threshold.json"))
+
+    assert promotion.suite_id == "mibe-heldout-v5"
+    assert diagnostic.suite_id == "mibe-diagnostic-v2"
+    assert training.suite_id == "online-train-v3"
+    assert threshold.suite_id == promotion.suite_id
+
+
+def test_config_redirect_rejects_cycles(tmp_path: Path) -> None:
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+    first.write_text(json.dumps({"redirect": second.name}))
+    second.write_text(json.dumps({"redirect": first.name}))
+
+    with pytest.raises(ValueError, match="redirect cycle"):
+        load_suite(first)
+
+
 def test_evaluation_retries_startup_in_isolated_attempt_directories(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
