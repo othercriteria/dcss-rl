@@ -470,14 +470,30 @@ this journal exists to keep research velocity and direction visible.
   338 applicable menus and selected Renounce 336 times, ranking 31,507. v62 added the
   menu-`X` row to the trainable set. Its first snapshot again retained rank 39,956; its
   second reduced Renounce to 225 selections and ranked 36,530, but selected Berserk
-  zero times. A two-update v63 continuation did not justify more budget: retained
-  training logs rendered 637 Renounce prompts, and four completed cases plus failed
-  startup attempts in a load-contaminated partial diagnostic contained 581 direct
-  Renounce selections and no Berserk. The host was simultaneously applying a CPU-heavy
-  system configuration, so its wall time and startup timeout carry no performance
-  meaning. Decision: no heldout-v5 access and no brute-force continuation. Audit
-  representative logits, label balance, and selective gradient ownership before the
-  next minimal probe.
+  zero times. A two-update v63 continuation crossed the inherited action margin but
+  transferred rather than solved the loop. Its completed update-2 diagnostic ranked
+  13,465: 864 menu opens led to 861 Berserk selections, six starts, two stochastic
+  failures, and 853 zero-turn active-state rejections. An earlier partial update-1
+  diagnostic ran while the host applied a CPU-heavy system configuration; its wall
+  time and startup timeout carry no performance meaning. Decision: no heldout-v5
+  access and no brute-force continuation.
+- **2026-09-08 13:31–13:45 EDT — menu-logit and anchor-coverage audit.** Across the
+  25,733 frozen v19/v20 anchor transitions, scripted-v8 relabeling supplies 4,308
+  `abilities` targets but zero menu-`a` targets, zero menu-`X` targets, and zero
+  ability-menu observations. Menu-`a` is legal as a non-target in 16 unrelated menus,
+  so cross-entropy can suppress it; full-inverse balancing assigns weight only to
+  present target classes and cannot create the missing positive class. On the same
+  five applicable menu states, v51's mean `a-X` logit margin was -15.795, moving through
+  -13.969 at v61 update 2, -10.866 at v62 update 2, -5.304 at v63 update 1, and +1.131
+  at v63 update 2. Direct v5-feature contributions were only about +0.28–0.42 for `a`
+  and -0.02–+0.17 for `X`, so shared-feature drift was secondary to the inherited
+  margin and missing data. The audit also caught AdamW decay leaking into nominally
+  frozen parameters because boolean-indexed `.copy_()` mutated a temporary. Decision:
+  restore frozen rows/columns with indexed assignment and a bit-exact optimizer-step
+  test. Before more training, seed non-heldout replay with both visible
+  applicable→menu-`a` and inapplicable→cancel states, record per-class target and
+  legal-exposure histograms in checkpoints, and assert that a one-minibatch update
+  improves the `a-X` margin without moving unowned parameters.
 - **2026-09-08 13:11–13:31 EDT — burst-aware UI interaction objective.** An isolated
   component agent implemented a per-worker token bucket that gives two free UI
   interactions and refills 0.25 token per actual game turn, then optionally charges

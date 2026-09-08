@@ -1171,18 +1171,14 @@ def _ppo_update(
                 and frozen_bias is not None
                 and frozen_rows is not None
             ):
-                with torch.no_grad():
-                    model.policy_head.weight[frozen_rows].copy_(
-                        frozen_weight[frozen_rows]
-                    )
-                    model.policy_head.bias[frozen_rows].copy_(frozen_bias[frozen_rows])
-                    if (
-                        frozen_encoder_weight is not None
-                        and frozen_feature_columns is not None
-                    ):
-                        model.input_layer.weight[:, frozen_feature_columns].copy_(
-                            frozen_encoder_weight[:, frozen_feature_columns]
-                        )
+                _restore_warmup_parameters(
+                    model,
+                    frozen_rows=frozen_rows,
+                    frozen_policy_weight=frozen_weight,
+                    frozen_policy_bias=frozen_bias,
+                    frozen_feature_columns=frozen_feature_columns,
+                    frozen_encoder_weight=frozen_encoder_weight,
+                )
             last_losses = PpoLosses(
                 float(policy_loss.item()),
                 float(value_loss.item()),
@@ -1252,6 +1248,27 @@ def _restrict_warmup_gradients(
         if model.input_layer.weight.grad is not None:
             model.input_layer.weight.grad[:, frozen_feature_columns] = 0
     return frozen_rows, frozen_feature_columns
+
+
+def _restore_warmup_parameters(
+    model: SemanticActorCritic,
+    *,
+    frozen_rows: Tensor,
+    frozen_policy_weight: Tensor,
+    frozen_policy_bias: Tensor,
+    frozen_feature_columns: Tensor | None,
+    frozen_encoder_weight: Tensor | None,
+) -> None:
+    """Undo optimizer decay on parameters outside selective warmup ownership."""
+    with torch.no_grad():
+        # Boolean ``tensor[index].copy_(...)`` mutates an advanced-indexing temporary.
+        # Assignment targets the base parameter and therefore restores it bit-exactly.
+        model.policy_head.weight[frozen_rows] = frozen_policy_weight[frozen_rows]
+        model.policy_head.bias[frozen_rows] = frozen_policy_bias[frozen_rows]
+        if frozen_encoder_weight is not None and frozen_feature_columns is not None:
+            model.input_layer.weight[:, frozen_feature_columns] = frozen_encoder_weight[
+                :, frozen_feature_columns
+            ]
 
 
 def _seed_everything(seed: int) -> None:

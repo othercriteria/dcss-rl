@@ -393,10 +393,22 @@ not the current bottleneck.
   while update 2 opened 338 applicable menus and chose Renounce Religion 336 times.
   Explicitly training the menu-`X` row in v62 reduced that to 225 selections and raised
   update 2 from 31,507 to 36,530, but learned no Berserk selections. A two-update v63
-  continuation regressed: retained training logs rendered 637 renunciation prompts,
-  and its partial, host-load-contaminated diagnostic trace selected Renounce 581 times.
-  No arm qualified for heldout-v5. The next step is a logit/gradient audit, not more
-  budget.
+  continuation finally reversed the inherited menu margin but transferred the loop:
+  update 2 ranked 13,465 with 864 menu opens, 861 Berserk selections, six starts, two
+  stochastic failures, and 853 zero-turn active-state rejections. No arm qualified for
+  heldout-v5.
+- A logit/label audit identified missing curriculum coverage as the primary cause.
+  The 25,733 frozen v19/v20 anchor transitions contain 4,308 `abilities` targets but
+  zero menu-`a` targets and zero ability-menu observations; full-inverse weighting
+  cannot balance an absent class. On five applicable menu states, v51 already preferred
+  Renounce by a mean 15.795-logit margin. Selective training moved the `a-X` margin to
+  +1.131 at v63 update 2 without learning applicability, explaining the transferred
+  loop. The next replay must include player-visible applicable→`a` and
+  inapplicable→cancel examples and record teacher-label/legal-exposure histograms.
+- The same audit found that boolean-indexed `.copy_()` restored a temporary after
+  AdamW, leaking weight decay into supposedly frozen action rows and feature columns.
+  Selective warmup now restores through indexed assignment, with a test requiring
+  unowned parameters to remain bit-exact after an optimizer step.
 - A training-only token bucket can now cost bursty zero-turn UI interactions without
   changing evaluation, action masks, or environment reward. Capacity, token balance,
   refill per game-turn, overflow cost, and overflow count have semantic types; state is
@@ -408,10 +420,11 @@ Next:
 
 1. Build from v51 update 2 toward the retired true D:11 event, using heldout-v4 only as
    historical evidence and preserving untouched heldout-v5 for promotion.
-2. Diagnose the v51 ability-menu logits and selective-loss ownership before another
-   cheap probe. Compare the disabled-by-default UI burst cost only after the direct
-   Renounce competitor is understood; scale only if misuse falls before diagnostic
-   quality regresses.
+2. Build a small non-heldout replay curriculum covering both applicable and
+   inapplicable ability-menu states, checkpoint its label/legal-exposure histograms,
+   and require a one-minibatch margin/preservation test before another cheap probe.
+   Compare the zero-cost-observable UI burst cost only after this direct coverage fix;
+   scale only if misuse falls before diagnostic quality regresses.
 3. Extend the curriculum toward branch and rune acquisition while keeping heldout-v5
    locked and treating every earlier knob result as contextual.
 

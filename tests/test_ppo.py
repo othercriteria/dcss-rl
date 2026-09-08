@@ -20,6 +20,7 @@ from dcss_rl.ppo import (
     _InferenceBatcher,
     _InferenceRequest,
     _InferenceResult,
+    _restore_warmup_parameters,
     _restrict_warmup_gradients,
     _uses_reset_bootstrap,
     _warmup_action_indices,
@@ -344,6 +345,46 @@ def test_action_warmup_can_train_only_new_semantic_columns() -> None:
     assert model.input_layer.weight.grad is not None
     assert model.input_layer.weight.grad[0, -2:].tolist() == [0.0, 1.0]
     assert model.input_layer.bias.grad is None
+
+
+def test_action_warmup_restores_unowned_parameters_after_adamw_decay() -> None:
+    model = SemanticActorCritic(ModelConfig(action_count=4, hidden_size=2))
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01, weight_decay=0.1)
+    for parameter in model.parameters():
+        parameter.grad = torch.ones_like(parameter)
+    frozen_rows, frozen_features = _restrict_warmup_gradients(
+        model,
+        (ActionIndex(1),),
+        trainable_feature_indices=(model.input_layer.weight.shape[1] - 1,),
+    )
+    policy_weight = model.policy_head.weight.detach().clone()
+    policy_bias = model.policy_head.bias.detach().clone()
+    encoder_weight = model.input_layer.weight.detach().clone()
+
+    optimizer.step()
+    _restore_warmup_parameters(
+        model,
+        frozen_rows=frozen_rows,
+        frozen_policy_weight=policy_weight,
+        frozen_policy_bias=policy_bias,
+        frozen_feature_columns=frozen_features,
+        frozen_encoder_weight=encoder_weight,
+    )
+
+    assert torch.equal(
+        model.policy_head.weight[frozen_rows], policy_weight[frozen_rows]
+    )
+    assert torch.equal(model.policy_head.bias[frozen_rows], policy_bias[frozen_rows])
+    assert frozen_features is not None
+    assert torch.equal(
+        model.input_layer.weight[:, frozen_features],
+        encoder_weight[:, frozen_features],
+    )
+    assert not torch.equal(model.policy_head.weight[1], policy_weight[1])
+    assert not torch.equal(
+        model.input_layer.weight[:, ~frozen_features],
+        encoder_weight[:, ~frozen_features],
+    )
 
 
 def test_feature_migration_preserves_outputs_before_new_inputs_are_trained() -> None:
