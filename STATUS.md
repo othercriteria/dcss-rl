@@ -427,9 +427,10 @@ not the current bottleneck.
 Next:
 
 1. Use the verified stair-boundary correction for the next bounded research step:
-   investigate conditional-menu representation/exposure after the bounded row-only
-   calibration failed, and collect deliberate combat/escape exposure before another
-   opening-timing continuation. The v67
+   test a small learned correction confined to ability menus after row-only
+   calibration failed both ac1 and independent ac2 checks. Preserve ordinary and
+   other-menu behavior; retain missing-ability cancellation examples. Collect
+   deliberate combat/escape exposure before another opening-timing continuation. The v67
    UI-return pair failed safety/quality gates and is stopped. Terrain-v66 remains
    the diagnostic leader; actual D:11 progress and stronger survival remain open.
 2. Address the independently measured blocked-action, prompt, and navigation loops
@@ -552,13 +553,26 @@ Next:
   `poe ability-calibration` audit measures probability tails and preservation rather
   than treating greedy accuracy as sampled reliability.
 - Static-cache preparation now offers opt-in wall/thread-CPU stage timing, without
-  relaxing validation or enabling caching by default. Process/benchmark wiring and
-  a corrected cache-off/on comparison remain pending; no speedup is claimed. The
+  relaxing validation or enabling caching by default. Process/PPO/trajectory and
+  benchmark wiring is complete at `34457b0`; a corrected cache-off/on comparison
+  remains pending, and no speedup is claimed. The
   bounded next measurement is specified in `docs/research-throughput-next.md`.
 - The integrated calibration/timing changes pass the full Poe gate: 293 unit tests
   in 3.63 seconds, three parallel live tests in 8.75 seconds, lint, formatting, and
   type checking. The audit and row-only protocol reject recorded incompatible
   action catalogs even though the general policy loader can expand them.
+- Failure tracing identifies ac1 seed 3007 frames 121/129: explicit cooldown and
+  inapplicability inputs are correct, but frozen hidden representations poorly
+  separate these examples from applicable training states. This motivates a bounded
+  ability-menu-specific learned correction, not a tactical mask or unrestricted
+  encoder continuation. The new audit retains worst-example paths/hashes/frame IDs.
+- Broader training-only ac2 exposure at `34457b0` collects all 48×200 decisions in
+  24.36 seconds, disjoint from ac1 seeds, with raw replay retained. The fixed 36/12
+  split supplies 142/733 and 49/244 applicable/inapplicable examples. No Renounce or
+  active/cooldown rejections occur. V70's independent validation cancellation accuracy
+  worsens 230/244→224/244; one of four other-menu decisions changes despite exact
+  8,388 nonmenu distributions. No model was fitted to ac2 or promoted. These scripted
+  exposure horizons do not demonstrate learned survival or actual D:11 progress.
 
 ## Verified commands
 

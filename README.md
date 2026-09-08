@@ -127,6 +127,12 @@ Audit sampled ability-choice confidence on training-only replay with
 checkpoint. The audit uses each checkpoint's feature version and reports probability
 tails as well as greedy accuracy; a correct argmax alone does not establish reliable
 sampling. Its seed-disjoint split is development evidence, not held-out promotion.
+Reports include worst-example trajectory hashes and zero-based pre-action frame
+indices. For broader deliberate exposure, `poe collect-ability-curriculum --suite
+configs/ability-curriculum-v2.json --workers 48 --output NEW_RUN` records 48 fixed
+training-only seeds with a 200-decision cap; custom suites are checked against the
+current training seed set and must have unique cases/seeds. This collector is not
+a candidate policy or a survival evaluation.
 `poe ability-probe --row-only-calibration ...` explicitly selects a fixed, bounded
 offline calibration protocol with the encoder frozen. Finishing that protocol does
 not authorize live scaling or certify its probability gates.
@@ -229,6 +235,12 @@ Missing sampling evidence is unknown, not a successful equality check.
 For stateless checkpoints, `--require-policy-identical` requires matching versioned
 policy inputs, masks, complete sampling evidence, actions, rewards, and bootstrap
 states; cosmetic semantic/raw differences are still reported independently.
+For a cache-preparation timing experiment, `--collect-static-cache-timing` on
+`poe train-ppo` requires `--record-rollout-trajectories` and records per-reset stage
+wall/thread-CPU times in episode metadata. The same timing flag on
+`poe benchmark-startup-cache` records both arms and retains individual reset timing
+records. Overlapping worker wall times must not be summed into an elapsed runtime;
+timing remains opt-in and does not relax cache validation.
 PPO prepares anchor replay through a transient reducer and a disposable tensor cache
 (`--imitation-cache-directory`, default `.cache/imitation-replay`). Content and
 preprocessing-source hashes invalidate the cache; only environment features, legality

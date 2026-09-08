@@ -811,3 +811,36 @@ this journal exists to keep research velocity and direction visible.
   in each split. Missing coverage, setup failures, or unsafe collector actions must
   be reported; do not silently replace seeds or extend the horizon. Independently
   audit starts, Renounce, and state-rejected choices before using the corpus.
+- **2026-09-08 — ac2 collection and independent confidence audit, source `34457b0`.**
+  All 48 cases completed their 200-decision horizons: 9,600 decisions in 24.358
+  seconds. Maximum D:2/XL2 and all-horizon outcomes describe the scripted exposure
+  collector, not a survival result. The raw audit counts 1,209 menu opens, 191
+  applicable menus/selections, 977 inapplicable menus, 41 missing-Berserk menus,
+  1,017 cancels, 171 Berserk starts, and 20 stochastic ability failures. No Renounce
+  selection, active/cooldown rejection, zero-turn block, or successful renunciation
+  occurred; ten ability-lost messages require interpretation before training.
+  The fixed 36/12 episode split supplies 142/733 applicable/inapplicable examples
+  for training and 49/244 for validation, passing the predeclared coverage gate.
+  No model was fitted to this corpus. `artifacts/c/ac2/calibration.json` compares
+  ui67-start and v70-step256: validation applicable accuracy remains 45/49, while
+  cancellation accuracy worsens 230/244→224/244. Final mean target probabilities
+  are 0.84229/0.90112, minima 0.07352/0.13591; maximum inapplicable Berserk probability
+  is 0.86382. All 8,388 nonmenu distributions remain exact, but one of four other-menu
+  argmax decisions changes (maximum probability drift 0.28605). V70 therefore fails
+  independent context calibration and other-menu preservation. No candidate games,
+  training continuation, or promotion follow this result. A zero-initialized learned
+  correction confined to ability menus is the next bounded representation hypothesis;
+  it must preserve all other UI modes and still pass independent probability gates.
+- **2026-09-08 — ac2 missing-choice and other-menu evidence.** The other-menu
+  argmax regression is seed 3066, frame 4, Lopsit's Weapon Shoppe: start chooses
+  Cancel (0.67359), while v70 chooses menu-a, a +0 club (0.61094); cancel falls to
+  0.38768. The other three menus are more prompts whose chosen space remains stable,
+  though their cancel probabilities also change slightly. This is direct evidence
+  that shared menu rows affect unrelated UI, not just a hypothetical risk.
+  Forty pre-action missing-Berserk menus (33/7 across splits) all show Trog,
+  piety rank 0, no penance, and only Renounce X; every recorded choice cancels.
+  The 41st raw rendering is seed 3082's final, unacted frame 200. Each of ten
+  ability-lost messages accompanies a successful Berserk selection and explicit
+  loss of the power, consistent with ordinary piety-cost threshold crossing, not
+  renunciation or missing parsing. Retain these as a separate missing-choice
+  Cancel-target stratum; do not collapse them into parser-unknown observations.
