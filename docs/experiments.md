@@ -421,3 +421,14 @@ this journal exists to keep research velocity and direction visible.
   times. All are below v51's 39,956 and received no heldout-v5 access. Decision: retain
   the checkpoints as evidence that short requested-action history is insufficient;
   encode player-visible action outcome/availability before further joint training.
+- **2026-09-08 11:10–12:10 EDT — parallel-agent seam trial.** Two isolated worktree
+  agents ran while the primary agent completed the v57 train/evaluate curve. The broad
+  performance agent found a byte-identical semantic-cell cache that reduced median
+  replay preprocessing from 2.514 to 1.953 seconds (22.3%). The watch agent verified
+  diagnostic-v2 resolves to v51, added manifest/suite/policy/checkpoint identity plus
+  pause/step/quit controls, and removed two deprecated ambiguous Poe aliases. Main
+  reviewed and integrated both commits; one documentation conflict was trivial, and
+  the combined host gate passed. Neither agent needed heldout-v5 or an added flake
+  dependency. Decision: the isolated-analysis/owned-component seam paid for itself;
+  retain primary merge authority and expand parallelism where files and evidence can
+  remain similarly independent.
