@@ -80,7 +80,7 @@ class UiInteractionBudget:
                 self._tokens + turn_advance * self.config.refill_per_turn,
             )
         )
-        if not self.config.enabled or action.kind not in UI_INTERACTION_ACTION_KINDS:
+        if action.kind not in UI_INTERACTION_ACTION_KINDS:
             return False
 
         has_free_token = self._tokens >= 1.0

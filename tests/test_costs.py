@@ -163,7 +163,7 @@ def test_ui_budget_reset_restores_episode_capacity() -> None:
     assert not budget.observe(Action(ActionKind.CANCEL), unchanged)
 
 
-def test_ui_budget_is_disabled_by_default_and_validates_knobs() -> None:
+def test_default_zero_cost_preserves_overflow_telemetry() -> None:
     config = UiInteractionBudgetConfig()
     budget = UiInteractionBudget(config)
     unchanged = state(turn=1)
@@ -172,5 +172,9 @@ def test_ui_budget_is_disabled_by_default_and_validates_knobs() -> None:
     assert not config.enabled
     assert not budget.observe(Action(ActionKind.ABILITIES), unchanged)
     assert not budget.observe(Action(ActionKind.ABILITIES), unchanged)
+    assert budget.observe(Action(ActionKind.ABILITIES), unchanged)
+
+
+def test_ui_budget_validates_knobs() -> None:
     with pytest.raises(ValueError, match="capacity"):
         UiInteractionBudgetConfig(capacity=UiInteractionTokenCapacity(-1.0))

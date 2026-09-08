@@ -401,8 +401,8 @@ not the current bottleneck.
   changing evaluation, action masks, or environment reward. Capacity, token balance,
   refill per game-turn, overflow cost, and overflow count have semantic types; state is
   independent per worker episode and telemetry/checkpoints record the configuration.
-  Its cost defaults to zero, so it remains an explicit matched experiment knob rather
-  than silently changing the current objective.
+  Its cost defaults to zero while overflow detection remains active, so baseline runs
+  expose counterfactual incidence without silently changing the current objective.
 
 Next:
 

@@ -487,4 +487,5 @@ this journal exists to keep research velocity and direction visible.
   incidence. The overflow cost defaults to zero, and evaluation, masks, and raw
   environment returns are unchanged. Decision: integrate the mechanism now, but delay
   its matched cost comparison until the direct Renounce-logit failure and current host
-  load are resolved.
+  load are resolved. Keep overflow detection active at zero cost so an unperturbed run
+  provides counterfactual incidence for sizing the later experiment.
