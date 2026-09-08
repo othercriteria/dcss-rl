@@ -359,3 +359,12 @@ this journal exists to keep research velocity and direction visible.
   explicit. The host gate passed 92 fast tests in 1.95 seconds and three live tests in
   8.72 seconds. Decision: pilot matched no-cost, decision-cost, and cycle-cost arms from
   frozen v29 before committing the full training budget or consulting heldout-v4.
+- **2026-09-08 09:18 EDT — matched-rollout reproducibility.** The initial three
+  6,144-decision arms differed before their first update despite identical checkpoint,
+  seed, and per-worker RNG: asynchronous GPU batches changed shape and produced 890–910
+  detected cycles. Batch size one made matched 1,536-decision collection exact but
+  serialized inference. Fixed-size padding reduced the discrepancy to one transition;
+  additionally assigning each worker a stable matrix row made two matched 768-decision
+  collections identical at 104 cycles and 68.0% teacher agreement. Decision: retain
+  stable rows and re-establish representative throughput while running the full arms;
+  treat the earlier v41–v43 ranks as safety pilots, not a clean causal comparison.

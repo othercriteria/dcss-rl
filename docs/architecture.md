@@ -243,7 +243,11 @@ retaining depth is the next learning objective.
 Online PPO collection assigns each worker an independent episode chunk so slow games
 do not impose a per-action barrier. Workers submit encoded states to one inference
 service, which waits a typed, bounded interval to coalesce GPU requests while game
-processes continue independently. The model is immutable during each rollout and is
+processes continue independently. Every worker occupies a stable row in a matrix padded
+to the configured worker count. This spends cheap GPU capacity to hold both matrix
+shape and row position constant: asynchronous scheduling therefore cannot perturb
+sampled actions through batch-shape-dependent floating-point rounding. The model is
+immutable during each rollout and is
 updated only after all chunks complete. Worker-local random generators preserve action
 sampling independence; fixed-suite repeats must remain tensor-identical despite
 request scheduling. Checkpoint metadata records the inference batch bound and wait,

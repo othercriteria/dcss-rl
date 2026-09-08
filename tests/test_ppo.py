@@ -1,3 +1,5 @@
+from concurrent.futures import Future
+
 import numpy as np
 import pytest
 import torch
@@ -7,6 +9,8 @@ from dcss_rl.env import ACTION_COUNT, action_to_index
 from dcss_rl.features import feature_count
 from dcss_rl.learned import ModelConfig, SemanticActorCritic, align_feature_spec
 from dcss_rl.ppo import (
+    _fixed_inference_inputs,
+    _InferenceRequest,
     _restrict_warmup_gradients,
     _uses_reset_bootstrap,
     _warmup_action_indices,
@@ -23,6 +27,26 @@ from dcss_rl.units import (
     WorkerCount,
     WorkerIndex,
 )
+
+
+def test_inference_requests_are_padded_to_reproducible_fixed_shape() -> None:
+    request = _InferenceRequest(
+        WorkerIndex(1),
+        np.asarray([1.0, 2.0], dtype=np.float32),
+        np.asarray([3.0], dtype=np.float32),
+        np.asarray([False, True, False], dtype=np.bool_),
+        Future(),
+    )
+
+    batch = _fixed_inference_inputs([request], WorkerCount(4))
+
+    assert batch.features.shape == (4, 2)
+    assert batch.action_histories.shape == (4, 1)
+    assert batch.masks.shape == (4, 3)
+    np.testing.assert_array_equal(batch.features[1], request.feature)
+    np.testing.assert_array_equal(batch.masks[1], request.mask)
+    np.testing.assert_array_equal(batch.masks[0], [True, False, False])
+    np.testing.assert_array_equal(batch.masks[2:], [[True, False, False]] * 2)
 
 
 def test_training_seed_schedule_allocates_disjoint_worker_blocks() -> None:

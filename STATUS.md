@@ -311,6 +311,11 @@ not the current bottleneck.
   and exact semantic short-cycle costs affect training returns only. Checkpoints record
   the boundary/cost contract and update logs report detected cycle incidence. The host
   gate passes 92 fast tests in 1.95 seconds and three live tests in 8.72 seconds.
+- Matched cost pilots exposed rollout nondeterminism from variable GPU inference matrix
+  shapes: tiny batch-dependent rounding differences could cross stochastic sampling
+  thresholds. Padding alone left one divergent transition; assigning each worker a
+  stable row made matched 768-decision collections identical (104 cycles and 68.0%
+  teacher agreement) while retaining asynchronous coalescing.
 
 Next:
 

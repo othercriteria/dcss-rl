@@ -402,10 +402,18 @@ class _InferenceResult:
 
 @dataclass(frozen=True, slots=True)
 class _InferenceRequest:
+    slot: WorkerIndex
     feature: FloatArray
     action_history: FloatArray
     mask: BoolArray
     future: Future[_InferenceResult]
+
+
+@dataclass(frozen=True, slots=True)
+class _InferenceInputBatch:
+    features: FloatArray
+    action_histories: FloatArray
+    masks: BoolArray
 
 
 class _InferenceBatcher:
@@ -418,11 +426,13 @@ class _InferenceBatcher:
         device: str,
         batch_size: InferenceBatchSize,
         batch_wait: Seconds,
+        slot_count: WorkerCount,
     ) -> None:
         self._model = model
         self._device = torch.device(device)
         self._batch_size = batch_size
         self._batch_wait = batch_wait
+        self._slot_count = slot_count
         self._requests: Queue[_InferenceRequest | None] = Queue()
         self._state_lock = Lock()
         self._closed = Event()
@@ -440,13 +450,19 @@ class _InferenceBatcher:
         return self._model.config
 
     def infer(
-        self, feature: FloatArray, action_history: FloatArray, mask: BoolArray
+        self,
+        slot: WorkerIndex,
+        feature: FloatArray,
+        action_history: FloatArray,
+        mask: BoolArray,
     ) -> _InferenceResult:
         future: Future[_InferenceResult] = Future()
         with self._state_lock:
             if self._closed.is_set():
                 raise RuntimeError("inference batcher is closed")
-            self._requests.put(_InferenceRequest(feature, action_history, mask, future))
+            self._requests.put(
+                _InferenceRequest(slot, feature, action_history, mask, future)
+            )
         return future.result()
 
     def close(self) -> None:
@@ -480,15 +496,10 @@ class _InferenceBatcher:
     def _resolve(self, requests: list[_InferenceRequest]) -> None:
         self.request_count += len(requests)
         self.batch_count += 1
-        features = torch.from_numpy(
-            np.stack([request.feature for request in requests])
-        ).to(self._device)
-        masks = torch.from_numpy(np.stack([request.mask for request in requests])).to(
-            self._device
-        )
-        histories = torch.from_numpy(
-            np.stack([request.action_history for request in requests])
-        ).to(self._device)
+        inputs = _fixed_inference_inputs(requests, self._slot_count)
+        features = torch.from_numpy(inputs.features).to(self._device)
+        masks = torch.from_numpy(inputs.masks).to(self._device)
+        histories = torch.from_numpy(inputs.action_histories).to(self._device)
         with torch.inference_mode():
             logits, values, _ = self._model(features, histories)
             probabilities = (
@@ -497,10 +508,36 @@ class _InferenceBatcher:
                 .numpy()
             )
             host_values = values.cpu().numpy()
-        for index, request in enumerate(requests):
+        for request in requests:
             request.future.set_result(
-                _InferenceResult(probabilities[index], float(host_values[index]))
+                _InferenceResult(
+                    probabilities[request.slot], float(host_values[request.slot])
+                )
             )
+
+
+def _fixed_inference_inputs(
+    requests: list[_InferenceRequest], slot_count: WorkerCount
+) -> _InferenceInputBatch:
+    """Place workers in stable rows of one reproducible GPU matrix shape."""
+    slots = [request.slot for request in requests]
+    if (
+        not requests
+        or len(set(slots)) != len(slots)
+        or any(not 0 <= slot < slot_count for slot in slots)
+    ):
+        raise ValueError("inference requests require unique configured worker slots")
+    features = np.zeros((slot_count, len(requests[0].feature)), dtype=np.float32)
+    histories = np.zeros(
+        (slot_count, len(requests[0].action_history)), dtype=np.float32
+    )
+    masks = np.zeros((slot_count, len(requests[0].mask)), dtype=np.bool_)
+    masks[:, 0] = True
+    for request in requests:
+        features[request.slot] = request.feature
+        histories[request.slot] = request.action_history
+        masks[request.slot] = request.mask
+    return _InferenceInputBatch(features, histories, masks)
 
 
 def train_ppo(
@@ -765,6 +802,7 @@ def _collect_rollout(
         device=config.device,
         batch_size=config.inference_batch_size,
         batch_wait=config.inference_batch_wait,
+        slot_count=config.workers,
     )
     try:
         worker_rollouts = tuple(
@@ -834,7 +872,7 @@ def _collect_worker_rollout(
             action_count=batcher.model_config.action_count,
             length=batcher.model_config.action_history_length,
         )
-        inference = batcher.infer(feature, action_history, mask)
+        inference = batcher.infer(worker.worker_index, feature, action_history, mask)
         probabilities = inference.probabilities
         value = inference.value
         action = int(worker.rng.choice(len(probabilities), p=probabilities))
@@ -851,7 +889,7 @@ def _collect_worker_rollout(
                 length=batcher.model_config.action_history_length,
             )
             boundary_bootstrap = batcher.infer(
-                next_feature, next_history, step.action_mask
+                worker.worker_index, next_feature, next_history, step.action_mask
             ).value
         elif _uses_reset_bootstrap(step, config.return_boundary):
             reset_observation, reset_mask = worker.ready()
@@ -864,7 +902,7 @@ def _collect_worker_rollout(
                 length=batcher.model_config.action_history_length,
             )
             boundary_bootstrap = batcher.infer(
-                reset_feature, reset_history, reset_mask
+                worker.worker_index, reset_feature, reset_history, reset_mask
             ).value
         features.append(feature)
         action_histories.append(action_history)
@@ -899,7 +937,9 @@ def _collect_worker_rollout(
             action_count=batcher.model_config.action_count,
             length=batcher.model_config.action_history_length,
         )
-        final_value = batcher.infer(final_feature, final_history, final_mask).value
+        final_value = batcher.infer(
+            worker.worker_index, final_feature, final_history, final_mask
+        ).value
     reward_array = np.asarray(rewards, dtype=np.float32)[:, None]
     value_array = np.asarray(values, dtype=np.float32)[:, None]
     done_array = np.asarray(dones, dtype=np.bool_)[:, None]
