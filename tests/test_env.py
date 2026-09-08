@@ -21,6 +21,26 @@ from dcss_rl.webtiles import GameConfig, ManagedGame, Message, ObservationBatch
 _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
 
 
+@pytest.mark.parametrize("collect_timing", [False, True])
+def test_reset_passes_cache_timing_option_to_private_game(
+    monkeypatch: pytest.MonkeyPatch, collect_timing: bool
+) -> None:
+    game = MagicMock(spec=ManagedGame)
+    game.start.return_value = ObservationBatch(
+        (
+            Message({"msg": "player", "hp": 20, "hp_max": 20, "depth": 1, "xl": 1}),
+            Message({"msg": "input_mode", "mode": 1}),
+        ),
+        (),
+    )
+    constructor = MagicMock(return_value=game)
+    monkeypatch.setattr("dcss_rl.env.ManagedGame", constructor)
+    env = DcssEnv(_DCSS_BINARY, collect_static_cache_timing=collect_timing)
+    env.reset_typed()
+    assert constructor.call_args.kwargs["collect_static_cache_timing"] is collect_timing
+    env.close()
+
+
 @pytest.mark.parametrize(
     "kind,key,level_transition",
     [

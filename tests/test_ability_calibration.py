@@ -1,3 +1,4 @@
+import hashlib
 import json
 from dataclasses import asdict
 from pathlib import Path
@@ -15,6 +16,7 @@ from dcss_rl.env import ACTION_COUNT, action_to_index
 from dcss_rl.features import FeatureVector, encode_observation
 from dcss_rl.learned import ModelConfig, SemanticActorCritic
 from dcss_rl.observation import MenuChoiceApplicability
+from dcss_rl.replay import replay_frames
 from dcss_rl.schema import ObservationData
 from dcss_rl.units import (
     ActionHistoryLength,
@@ -182,6 +184,33 @@ def test_contexts_seed_split_and_checkpoint_feature_version(
     assert result.preservation.non_menu.masked_probabilities_exact
     assert result.preservation.other_menu.masked_probabilities_exact
     assert checkpoint.read_bytes() == before
+    for context in result.validation.contexts:
+        (example,) = context.worst_target_examples
+        assert example.episode.seed == 3004
+        source = Path(example.episode.source.path)
+        assert (
+            example.episode.source.sha256
+            == hashlib.sha256(source.read_bytes()).hexdigest()
+        )
+        assert example.preaction_frame_index == (
+            0 if context.context is MenuChoiceApplicability.APPLICABLE else 1
+        )
+        frame = tuple(replay_frames(source))[example.preaction_frame_index]
+        assert example.player == frame.observation["player"]
+        assert example.menu == frame.observation["menu"]
+        assert example.messages == tuple(frame.observation["messages"])
+        assert sum(
+            item.probability for item in example.legal_probabilities
+        ) == pytest.approx(1)
+        assert context.target_probability is not None
+        assert example.target_probability == context.target_probability.minimum
+    for context in result.training.contexts:
+        assert len(context.worst_target_examples) == 3
+        assert [example.episode.seed for example in context.worst_target_examples] == [
+            3001,
+            3002,
+            3003,
+        ]
 
 
 def test_split_rejects_duplicate_or_nontraining_seeds(tmp_path: Path) -> None:

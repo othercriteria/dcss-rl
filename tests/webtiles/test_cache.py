@@ -138,7 +138,10 @@ def test_static_cache_rejects_symlinked_members_and_existing_targets(
         cache.populate(tmp_path / "other", binary=binary)
 
 
-def test_managed_game_static_cache_is_explicitly_opt_in(tmp_path: Path) -> None:
+@pytest.mark.parametrize("collect_timing", [False, True])
+def test_managed_game_static_cache_is_explicitly_opt_in(
+    tmp_path: Path, collect_timing: bool
+) -> None:
     binary, saves = cache_source(tmp_path)
     cache = StaticDataCache.capture(
         tmp_path / "snapshot",
@@ -149,9 +152,16 @@ def test_managed_game_static_cache_is_explicitly_opt_in(tmp_path: Path) -> None:
     default = ManagedGame(binary, run_root=tmp_path / "default")
     default._prepare()
     assert list(default.save_path.iterdir()) == []
-    warmed = ManagedGame(binary, run_root=tmp_path / "warm", static_cache=cache)
+    assert default.static_cache_preparation_timing is None
+    warmed = ManagedGame(
+        binary,
+        run_root=tmp_path / "warm",
+        static_cache=cache,
+        collect_static_cache_timing=collect_timing,
+    )
     warmed._prepare()
     assert (warmed.save_path / "des/test.dsc").read_bytes() == b"map"
+    assert (warmed.static_cache_preparation_timing is not None) is collect_timing
     exported = warmed.export_static_cache(tmp_path / "exported")
     assert exported.identity == cache.identity
 

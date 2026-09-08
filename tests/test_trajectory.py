@@ -33,6 +33,7 @@ def test_optional_collection_provenance_preserves_raw_replay_across_updates(
     mock.game.run_root = tmp_path
     mock.game.config = GameConfig(seed=GameSeed(3001))
     mock.game.static_cache = None
+    mock.game.static_cache_preparation_timing = None
     mock.binary = _DCSS_BINARY
     mock.starting_weapon_key = "c"
     mock.last_keycodes = (ord("c"),)

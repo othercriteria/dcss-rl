@@ -1,0 +1,198 @@
+{
+  "suite_id": "ability-curriculum-v2",
+  "step_limit": 200,
+  "cases": [
+    {
+      "case_id": "ability-3049",
+      "seed": 3049
+    },
+    {
+      "case_id": "ability-3050",
+      "seed": 3050
+    },
+    {
+      "case_id": "ability-3051",
+      "seed": 3051
+    },
+    {
+      "case_id": "ability-3052",
+      "seed": 3052
+    },
+    {
+      "case_id": "ability-3053",
+      "seed": 3053
+    },
+    {
+      "case_id": "ability-3054",
+      "seed": 3054
+    },
+    {
+      "case_id": "ability-3055",
+      "seed": 3055
+    },
+    {
+      "case_id": "ability-3056",
+      "seed": 3056
+    },
+    {
+      "case_id": "ability-3057",
+      "seed": 3057
+    },
+    {
+      "case_id": "ability-3058",
+      "seed": 3058
+    },
+    {
+      "case_id": "ability-3059",
+      "seed": 3059
+    },
+    {
+      "case_id": "ability-3060",
+      "seed": 3060
+    },
+    {
+      "case_id": "ability-3061",
+      "seed": 3061
+    },
+    {
+      "case_id": "ability-3062",
+      "seed": 3062
+    },
+    {
+      "case_id": "ability-3063",
+      "seed": 3063
+    },
+    {
+      "case_id": "ability-3064",
+      "seed": 3064
+    },
+    {
+      "case_id": "ability-3065",
+      "seed": 3065
+    },
+    {
+      "case_id": "ability-3066",
+      "seed": 3066
+    },
+    {
+      "case_id": "ability-3067",
+      "seed": 3067
+    },
+    {
+      "case_id": "ability-3068",
+      "seed": 3068
+    },
+    {
+      "case_id": "ability-3069",
+      "seed": 3069
+    },
+    {
+      "case_id": "ability-3070",
+      "seed": 3070
+    },
+    {
+      "case_id": "ability-3071",
+      "seed": 3071
+    },
+    {
+      "case_id": "ability-3072",
+      "seed": 3072
+    },
+    {
+      "case_id": "ability-3073",
+      "seed": 3073
+    },
+    {
+      "case_id": "ability-3074",
+      "seed": 3074
+    },
+    {
+      "case_id": "ability-3075",
+      "seed": 3075
+    },
+    {
+      "case_id": "ability-3076",
+      "seed": 3076
+    },
+    {
+      "case_id": "ability-3077",
+      "seed": 3077
+    },
+    {
+      "case_id": "ability-3078",
+      "seed": 3078
+    },
+    {
+      "case_id": "ability-3079",
+      "seed": 3079
+    },
+    {
+      "case_id": "ability-3080",
+      "seed": 3080
+    },
+    {
+      "case_id": "ability-3081",
+      "seed": 3081
+    },
+    {
+      "case_id": "ability-3082",
+      "seed": 3082
+    },
+    {
+      "case_id": "ability-3083",
+      "seed": 3083
+    },
+    {
+      "case_id": "ability-3084",
+      "seed": 3084
+    },
+    {
+      "case_id": "ability-3085",
+      "seed": 3085
+    },
+    {
+      "case_id": "ability-3086",
+      "seed": 3086
+    },
+    {
+      "case_id": "ability-3087",
+      "seed": 3087
+    },
+    {
+      "case_id": "ability-3088",
+      "seed": 3088
+    },
+    {
+      "case_id": "ability-3089",
+      "seed": 3089
+    },
+    {
+      "case_id": "ability-3090",
+      "seed": 3090
+    },
+    {
+      "case_id": "ability-3091",
+      "seed": 3091
+    },
+    {
+      "case_id": "ability-3092",
+      "seed": 3092
+    },
+    {
+      "case_id": "ability-3093",
+      "seed": 3093
+    },
+    {
+      "case_id": "ability-3094",
+      "seed": 3094
+    },
+    {
+      "case_id": "ability-3095",
+      "seed": 3095
+    },
+    {
+      "case_id": "ability-3096",
+      "seed": 3096
+    }
+  ]
+}

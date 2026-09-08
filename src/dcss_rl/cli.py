@@ -63,6 +63,10 @@ def main() -> None:
         "--binary", type=Path, default=Path("vendor/crawl/crawl-ref/source/crawl")
     )
     curriculum.add_argument("--output", type=Path, required=True)
+    curriculum.add_argument(
+        "--suite", type=Path, default=Path("configs/ability-curriculum-v1.json")
+    )
+    curriculum.add_argument("--workers", type=int, default=8)
     compatibility = commands.add_parser("compatibility-smoke")
     compatibility.add_argument(
         "--binary",
@@ -167,6 +171,11 @@ def main() -> None:
     ppo.add_argument("--workers", type=int, default=5)
     ppo.add_argument("--static-data-cache", type=Path)
     ppo.add_argument(
+        "--collect-static-cache-timing",
+        action="store_true",
+        help="time cache stages; requires --record-rollout-trajectories",
+    )
+    ppo.add_argument(
         "--record-rollout-trajectories",
         action="store_true",
         help="retain raw rollout replays with collector checkpoint provenance",
@@ -236,7 +245,12 @@ def main() -> None:
     if arguments.command == "collect-ability-curriculum":
         from dcss_rl.curriculum import collect_ability_curriculum
 
-        collect_ability_curriculum(arguments.binary, arguments.output)
+        collect_ability_curriculum(
+            arguments.binary,
+            arguments.output,
+            suite_path=arguments.suite,
+            workers=WorkerCount(arguments.workers),
+        )
         return
     if arguments.command == "compatibility-smoke":
         from dcss_rl.webtiles.cache import StaticDataCache
@@ -386,6 +400,7 @@ def main() -> None:
                 imitation_cache_directory=arguments.imitation_cache_directory,
                 static_data_cache=arguments.static_data_cache,
                 record_rollout_trajectories=arguments.record_rollout_trajectories,
+                collect_static_cache_timing=arguments.collect_static_cache_timing,
                 workers=WorkerCount(arguments.workers),
                 inference_batch_size=InferenceBatchSize(arguments.inference_batch_size),
                 inference_batch_wait=Seconds(arguments.inference_batch_wait_seconds),

@@ -1,3 +1,5 @@
+import json
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import pytest
@@ -9,7 +11,16 @@ from dcss_rl.benchmark_startup_cache import (
     benchmark_command,
     compare_checkpoint_tensors,
     parse_ppo_metrics,
+    read_reset_cache_timings,
     run_benchmark,
+)
+from dcss_rl.units import Seconds
+from dcss_rl.webtiles.cache import (
+    CacheMemberCount,
+    StaticCachePreparationStage,
+    StaticCachePreparationTiming,
+    StaticCacheStageTiming,
+    StaticCacheTiming,
 )
 
 
@@ -39,6 +50,68 @@ def test_benchmark_commands_keep_all_training_knobs_matched(tmp_path: Path) -> N
     for key in ("--checkpoint", "--policy-id", "--run-root"):
         assert off_options.pop(key) != on_options.pop(key)
     assert off_options == on_options
+
+
+def test_timing_benchmark_records_both_arms_only_when_requested(tmp_path: Path) -> None:
+    config = configuration(tmp_path)
+    for arm in CacheArm:
+        assert "--collect-static-cache-timing" not in benchmark_command(config, arm)
+        enabled = benchmark_command(
+            replace(config, collect_static_cache_timing=True), arm
+        )
+        assert enabled[-2:] == (
+            "--collect-static-cache-timing",
+            "--record-rollout-trajectories",
+        )
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_benchmark_reads_typed_per_reset_timings_without_transition_scan(
+    tmp_path: Path, cached: bool
+) -> None:
+    root = tmp_path / "worker-0" / "episode-0-attempt-0"
+    root.mkdir(parents=True)
+    timing = (
+        StaticCachePreparationTiming(
+            str(root / "saves"),
+            CacheMemberCount(4),
+            StaticCacheTiming(Seconds(5), Seconds(2)),
+            tuple(
+                StaticCacheStageTiming(
+                    stage, StaticCacheTiming(Seconds(1), Seconds(0.4))
+                )
+                for stage in StaticCachePreparationStage
+            ),
+        )
+        if cached
+        else None
+    )
+    path = root / "trajectory.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "type": "episode",
+                "schema_version": 2,
+                "metadata": {
+                    "static_cache_preparation_timing": asdict(timing)
+                    if timing
+                    else None
+                },
+            }
+        )
+        + "\nthis transition is deliberately not decoded\n"
+    )
+    records = read_reset_cache_timings(tmp_path, expect_cache=cached)
+    assert len(records) == 1
+    assert records[0].trajectory == str(path)
+    assert records[0].preparation == timing
+    with pytest.raises(ValueError, match="unexpected or missing"):
+        read_reset_cache_timings(tmp_path, expect_cache=not cached)
+
+
+def test_benchmark_missing_recordings_fail_closed(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="no recorded episode"):
+        read_reset_cache_timings(tmp_path, expect_cache=True)
 
 
 def test_benchmark_extracts_telemetry_and_keeps_full_context() -> None:

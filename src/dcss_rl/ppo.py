@@ -165,10 +165,15 @@ class PpoConfig:
     warmup_action_kinds: tuple[ActionKind, ...] = ()
     warmup_train_value: bool = False
     record_rollout_trajectories: bool = False
+    collect_static_cache_timing: bool = False
     imitation_trajectories: tuple[Path, ...] = ()
     device: str = "cuda"
 
     def __post_init__(self) -> None:
+        if self.collect_static_cache_timing and not self.record_rollout_trajectories:
+            raise ValueError(
+                "static cache timing requires recorded rollout trajectories"
+            )
         positive_integers = (
             self.updates,
             self.rollout_length,
@@ -308,6 +313,7 @@ class _Worker:
     ui_interaction_budget: UiInteractionBudget | None = None
     static_cache: StaticDataCache | None = None
     record_rollout_trajectories: bool = False
+    collect_static_cache_timing: bool = False
     recording_agent_id: str = "masked-ppo"
     writer: TrajectoryWriter | None = None
     collection_provenance: CollectionProvenance | None = None
@@ -425,6 +431,7 @@ class _Worker:
                 run_root=run_root,
                 reward_shaping=self.reward_shaping,
                 static_cache=self.static_cache,
+                collect_static_cache_timing=self.collect_static_cache_timing,
             )
             try:
                 observation, info = self.env.reset_typed()
@@ -714,6 +721,7 @@ def train_ppo(
             ui_interaction_budget=UiInteractionBudget(config.ui_interaction_budget),
             static_cache=static_cache,
             record_rollout_trajectories=config.record_rollout_trajectories,
+            collect_static_cache_timing=config.collect_static_cache_timing,
             recording_agent_id=policy_id,
         )
         for index in range(config.workers)

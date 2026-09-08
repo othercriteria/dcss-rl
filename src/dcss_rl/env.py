@@ -146,6 +146,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         run_root: Path | None = None,
         reward_shaping: RewardShaping | None = None,
         static_cache: StaticDataCache | None = None,
+        collect_static_cache_timing: bool = False,
     ) -> None:
         super().__init__()
         if len(starting_weapon_key) != 1:
@@ -157,6 +158,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.run_root = run_root
         self.reward_shaping = reward_shaping or RewardShaping()
         self.static_cache = static_cache
+        self.collect_static_cache_timing = collect_static_cache_timing
         self.action_space = spaces.Discrete(ACTION_COUNT)
         self.observation_space = SemanticObservationSpace()
         self.game: ManagedGame | None = None
@@ -204,6 +206,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
             config=config,
             run_root=self.run_root,
             static_cache=self.static_cache,
+            collect_static_cache_timing=self.collect_static_cache_timing,
         )
         self.reducer = ObservationReducer()
         setup_keycode = Keycode(ord(self.starting_weapon_key))

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 import resource
 import subprocess
@@ -14,8 +15,15 @@ from pathlib import Path
 from time import perf_counter
 from typing import NewType, cast
 
+import msgspec
+
 from dcss_rl.units import ActionCount, RolloutLength, Seconds, WorkerCount
-from dcss_rl.webtiles.cache import StaticDataCache, StaticDataIdentity
+from dcss_rl.webtiles.cache import (
+    StaticCachePreparationStage,
+    StaticCachePreparationTiming,
+    StaticDataCache,
+    StaticDataIdentity,
+)
 
 BenchmarkSeed = NewType("BenchmarkSeed", int)
 ExitStatus = NewType("ExitStatus", int)
@@ -44,6 +52,25 @@ class BenchmarkConfig:
     seed: BenchmarkSeed = BenchmarkSeed(1)
     workers: WorkerCount = _DEFAULT_WORKERS
     rollout_length: RolloutLength = _DEFAULT_ROLLOUT
+    collect_static_cache_timing: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ResetCacheTiming:
+    trajectory: str
+    preparation: StaticCachePreparationTiming | None
+
+
+@dataclass(frozen=True, slots=True)
+class _TimingMetadata:
+    static_cache_preparation_timing: StaticCachePreparationTiming | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _TimingHeader:
+    type: str
+    schema_version: int
+    metadata: _TimingMetadata
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +94,7 @@ class ArmReport:
     child_cpu_seconds: Seconds
     metrics: PpoMetrics | None
     source_unchanged: bool
+    reset_cache_timings: tuple[ResetCacheTiming, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +120,8 @@ class BenchmarkReport:
         "Child CPU includes awaited trainer and DCSS descendants, not only startup.",
         "Anchor-cache priming is separate; source digests must remain unchanged.",
         "Tensor equality checks model state, not a claim of raw protocol equality.",
+        "Per-reset stage wall spans overlap across workers; do not sum as runtime.",
+        "Timing totals include setup/rename and timing overhead; stages do not.",
     )
 
 
@@ -152,7 +182,47 @@ def benchmark_command(config: BenchmarkConfig, arm: CacheArm) -> tuple[str, ...]
         command.extend(("--imitation-trajectory-root", str(root)))
     if arm is CacheArm.ON:
         command.extend(("--static-data-cache", str(config.static_data_cache)))
+    if config.collect_static_cache_timing:
+        command.extend(
+            ("--collect-static-cache-timing", "--record-rollout-trajectories")
+        )
     return tuple(command)
+
+
+def read_reset_cache_timings(
+    run_root: Path, *, expect_cache: bool
+) -> tuple[ResetCacheTiming, ...]:
+    """Read episode headers; retain each reset instead of summing overlapping spans."""
+    paths = sorted(run_root.glob("worker-*/episode-*-attempt-*/trajectory.jsonl"))
+    if not paths:
+        raise ValueError("cache timing benchmark has no recorded episode headers")
+    records: list[ResetCacheTiming] = []
+    for path in paths:
+        with path.open("rb") as source:
+            header = msgspec.json.decode(source.readline(), type=_TimingHeader)
+        if header.type != "episode" or header.schema_version != 2:
+            raise ValueError(f"invalid timing episode header: {path}")
+        timing = header.metadata.static_cache_preparation_timing
+        if (timing is not None) != expect_cache:
+            raise ValueError(f"unexpected or missing cache preparation timing: {path}")
+        if timing is not None:
+            if (
+                timing.members <= 0
+                or [span.stage for span in timing.stages]
+                != list(StaticCachePreparationStage)
+                or Path(timing.destination).resolve()
+                != (path.parent / "saves").resolve()
+            ):
+                raise ValueError(f"invalid cache preparation timing contract: {path}")
+            spans = (timing.total, *(span.elapsed for span in timing.stages))
+            if any(
+                not math.isfinite(value) or value < 0
+                for span in spans
+                for value in (span.wall_seconds, span.thread_cpu_seconds)
+            ):
+                raise ValueError(f"invalid cache preparation duration: {path}")
+        records.append(ResetCacheTiming(str(path), timing))
+    return tuple(records)
 
 
 def parse_ppo_metrics(output: str) -> PpoMetrics:
@@ -286,6 +356,11 @@ def run_benchmark(config: BenchmarkConfig) -> BenchmarkReport:
             ),
             metrics,
             _source_digests() == source_digests,
+            read_reset_cache_timings(
+                config.run_root / arm, expect_cache=arm is CacheArm.ON
+            )
+            if config.collect_static_cache_timing and completed.returncode == 0
+            else (),
         )
         report.arms.append(result)
         _record(report)
@@ -348,6 +423,7 @@ def main() -> None:
         "--imitation-trajectory-root", type=Path, action="append", required=True
     )
     parser.add_argument("--binary", type=Path, default=_DEFAULT_BINARY)
+    parser.add_argument("--collect-static-cache-timing", action="store_true")
     arguments = parser.parse_args()
     run_benchmark(
         BenchmarkConfig(
@@ -358,6 +434,7 @@ def main() -> None:
             run_root=arguments.run_root,
             anchor_roots=tuple(arguments.imitation_trajectory_root),
             binary=arguments.binary,
+            collect_static_cache_timing=arguments.collect_static_cache_timing,
         )
     )
 

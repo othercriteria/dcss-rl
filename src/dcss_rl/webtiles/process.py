@@ -12,6 +12,7 @@ from typing import BinaryIO
 
 from dcss_rl.units import GameSeed, Keycode, Seconds, UnixSocketPathBytes
 from dcss_rl.webtiles.cache import (
+    StaticCachePreparationTiming,
     StaticDataCache,
     StaticDataIdentity,
     static_data_identity,
@@ -54,12 +55,15 @@ class ManagedGame:
         run_root: Path | None = None,
         static_cache: StaticDataCache | None = None,
         capture_static_cache: bool = False,
+        collect_static_cache_timing: bool = False,
     ) -> None:
         self.binary = Path(binary).resolve()
         self.config = config or GameConfig()
         self.timeout = timeout
         self.static_cache = static_cache
         self._capture_static_cache = capture_static_cache
+        self.collect_static_cache_timing = collect_static_cache_timing
+        self.static_cache_preparation_timing: StaticCachePreparationTiming | None = None
         self._static_cache_identity: StaticDataIdentity | None = None
         self._owned_root: tempfile.TemporaryDirectory[str] | None = None
         if run_root is None:
@@ -98,7 +102,11 @@ class ManagedGame:
         if self._capture_static_cache:
             self._static_cache_identity = static_data_identity(self.binary)
         if self.static_cache is not None:
-            self.static_cache.populate(self.save_path, binary=self.binary)
+            self.static_cache_preparation_timing = self.static_cache.populate(
+                self.save_path,
+                binary=self.binary,
+                collect_timing=self.collect_static_cache_timing,
+            )
             self._static_cache_identity = self.static_cache.identity
         (self.run_root / "macros").mkdir(exist_ok=True)
         rc_path = self.run_root / "crawl.rc"

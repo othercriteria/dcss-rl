@@ -5,10 +5,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from itertools import pairwise
 from pathlib import Path
-from typing import cast
+from typing import NewType, cast
 
 import numpy as np
 import torch
@@ -21,7 +21,7 @@ from dcss_rl.features import encode_observation
 from dcss_rl.learned import LearnedPolicy, ModelConfig, SemanticActorCritic
 from dcss_rl.observation import MenuChoiceApplicability
 from dcss_rl.replay import replay_frames
-from dcss_rl.schema import JsonObject, ObservationData
+from dcss_rl.schema import JsonObject, MenuView, ObservationData, PlayerView
 from dcss_rl.training import _training_action_mask
 from dcss_rl.units import (
     ActionCount,
@@ -36,6 +36,7 @@ _VALIDATION_EPISODES = TrajectoryCount(2)
 _RENOUNCE = action_to_index(Action.menu_select(Keycode(ord("X"))))
 _CANCEL = action_to_index(Action(ActionKind.CANCEL))
 _BERSERK = action_to_index(Action.menu_select(Keycode(ord("a"))))
+PreactionFrameIndex = NewType("PreactionFrameIndex", int)
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,26 @@ class ProbabilitySummary:
 
 
 @dataclass(frozen=True)
+class LegalActionProbability:
+    action_index: ActionIndex
+    probability: Probability
+
+
+@dataclass(frozen=True)
+class WorstTargetExample:
+    episode: EpisodeEvidence
+    preaction_frame_index: PreactionFrameIndex
+    player: PlayerView
+    menu: MenuView | None
+    messages: tuple[str, ...]
+    input_mode: int | None
+    target: ActionIndex
+    argmax: ActionIndex
+    target_probability: Probability
+    legal_probabilities: tuple[LegalActionProbability, ...]
+
+
+@dataclass(frozen=True)
 class ContextCalibration:
     context: MenuChoiceApplicability
     samples: ActionCount
@@ -71,6 +92,7 @@ class ContextCalibration:
     other_wrong_legal_mass: ProbabilitySummary | None
     argmax_accuracy: Probability | None
     berserk_a_probability: ProbabilitySummary | None
+    worst_target_examples: tuple[WorstTargetExample, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -120,6 +142,8 @@ class _MenuSample:
     observation: ObservationData
     context: MenuChoiceApplicability
     target: ActionIndex
+    episode: EpisodeEvidence
+    preaction_frame_index: PreactionFrameIndex
 
 
 @dataclass(frozen=True)
@@ -165,7 +189,7 @@ def _load(paths: tuple[Path, ...]) -> _SplitData:
         ):
             raise ValueError("trajectory must have a seeded metadata header")
         episodes.append(EpisodeEvidence(_source(path), GameSeed(seed)))
-        for before, _after in pairwise(replay_frames(path)):
+        for frame_index, (before, _after) in enumerate(pairwise(replay_frames(path))):
             observations += 1
             observation = before.observation
             menu = observation["menu"]
@@ -195,7 +219,15 @@ def _load(paths: tuple[Path, ...]) -> _SplitData:
             )
             if target == _RENOUNCE:
                 raise ValueError("Berserk target unexpectedly aliases Renounce X")
-            samples.append(_MenuSample(observation, context, target))
+            samples.append(
+                _MenuSample(
+                    observation,
+                    context,
+                    target,
+                    episodes[-1],
+                    PreactionFrameIndex(frame_index),
+                )
+            )
     return _SplitData(
         tuple(episodes),
         ActionCount(observations),
@@ -347,7 +379,38 @@ def _measure(model: SemanticActorCritic, data: _SplitData) -> CalibrationSplit:
             logits = torch.empty((0, ACTION_COUNT))
             masks = torch.empty((0, ACTION_COUNT), dtype=torch.bool)
             targets = torch.empty(0, dtype=torch.int64)
-        contexts.append(context_calibration(logits, masks, targets, context))
+        calibration = context_calibration(logits, masks, targets, context)
+        probabilities = torch.softmax(logits.masked_fill(~masks, -torch.inf), dim=-1)
+        ranked = sorted(
+            range(len(selected)),
+            key=lambda index: float(probabilities[index, selected[index].target]),
+        )[:3]
+        examples: list[WorstTargetExample] = []
+        for index in ranked:
+            sample = selected[index]
+            state = sample.observation
+            examples.append(
+                WorstTargetExample(
+                    sample.episode,
+                    sample.preaction_frame_index,
+                    state["player"],
+                    state["menu"],
+                    tuple(state["messages"]),
+                    state["input_mode"],
+                    sample.target,
+                    ActionIndex(int(probabilities[index].argmax())),
+                    Probability(float(probabilities[index, sample.target])),
+                    tuple(
+                        LegalActionProbability(
+                            ActionIndex(action),
+                            Probability(float(probabilities[index, action])),
+                        )
+                        for action in range(ACTION_COUNT)
+                        if masks[index, action]
+                    ),
+                )
+            )
+        contexts.append(replace(calibration, worst_target_examples=tuple(examples)))
     return CalibrationSplit(
         data.episodes,
         data.observations,
@@ -438,6 +501,9 @@ def audit_ability_calibration(
         "Berserk-a is explicit and overlaps target or other-wrong mass. "
         "Preservation covers training AND validation non-ability states. "
         "Quantiles use linear interpolation; absent contexts have null statistics. "
+        "Up to three worst target examples per context are ordered by ascending "
+        "target probability, with stable replay-order ties; frame indices are "
+        "zero-based replay_frames positions (initial state is zero). "
         "This audits confidence on training replay, not rollout survival or promotion.",
     )
 

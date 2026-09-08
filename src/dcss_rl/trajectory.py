@@ -27,7 +27,7 @@ from dcss_rl.schema import (
 )
 from dcss_rl.units import ActionIndex, CheckpointId, Probability, UpdateCount
 from dcss_rl.webtiles import ObservationBatch
-from dcss_rl.webtiles.cache import StaticDataIdentity
+from dcss_rl.webtiles.cache import StaticCachePreparationTiming, StaticDataIdentity
 
 SCHEMA_VERSION = 2
 SamplingStateHash = NewType("SamplingStateHash", str)
@@ -72,6 +72,7 @@ class EpisodeMetadata:
     reward_spec: str
     rc_sha256: str
     static_data_identity: StaticDataIdentity | None = None
+    static_cache_preparation_timing: StaticCachePreparationTiming | None = None
 
 
 def _revision(directory: Path) -> str | None:
@@ -214,6 +215,7 @@ class TrajectoryWriter:
             static_data_identity=env.game.static_cache.identity
             if env.game.static_cache is not None
             else None,
+            static_cache_preparation_timing=env.game.static_cache_preparation_timing,
         )
         self._write(
             {

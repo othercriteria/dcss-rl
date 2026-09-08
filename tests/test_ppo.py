@@ -170,6 +170,15 @@ def test_sampling_evidence_preserves_exact_probabilities_and_rng_sequence() -> N
     assert _sampling_evidence(probabilities, rng).rng_state_sha256 != expected_hash
 
 
+def test_static_cache_timing_requires_recording_and_defaults_off() -> None:
+    assert not PpoConfig().collect_static_cache_timing
+    with pytest.raises(ValueError, match="timing requires recorded"):
+        PpoConfig(collect_static_cache_timing=True)
+    assert PpoConfig(
+        collect_static_cache_timing=True, record_rollout_trajectories=True
+    ).collect_static_cache_timing
+
+
 def test_recorded_worker_writes_terminal_transition_before_cleanup(
     tmp_path: Path,
 ) -> None:
@@ -247,7 +256,8 @@ def test_recording_reset_failure_closes_writer_and_environment(
     )
     writer = MagicMock(spec=TrajectoryWriter)
     writer.start.side_effect = failure("recording failed")
-    monkeypatch.setattr("dcss_rl.ppo.DcssEnv", lambda *args, **kwargs: env)
+    constructor = MagicMock(return_value=env)
+    monkeypatch.setattr("dcss_rl.ppo.DcssEnv", constructor)
     monkeypatch.setattr("dcss_rl.ppo.TrajectoryWriter", lambda *args, **kwargs: writer)
     suite = EvaluationSuite(
         "training", StepLimit(8), (EvaluationCase("case", GameSeed(3001)),)
@@ -261,12 +271,14 @@ def test_recording_reset_failure_closes_writer_and_environment(
         RewardShaping(),
         np.random.default_rng(1),
         record_rollout_trajectories=True,
+        collect_static_cache_timing=True,
     )
     with pytest.raises(RuntimeError if failure is TimeoutError else failure):
         worker.ready()
     assert writer.close.call_count == writer.start.call_count
     assert env.close.call_count == writer.start.call_count
     assert worker.writer is None
+    assert constructor.call_args.kwargs["collect_static_cache_timing"] is True
 
 
 @pytest.mark.parametrize("train_value", [False, True])

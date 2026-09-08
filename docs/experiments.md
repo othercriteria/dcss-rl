@@ -792,3 +792,22 @@ this journal exists to keep research velocity and direction visible.
   the starting checkpoint to 0.85141 at step 256 despite better average confidence.
   The full integrated Poe gate passes 293 unit tests (3.63 seconds), three parallel
   live tests (8.75 seconds), lint, formatting, and typing.
+- **2026-09-08 — v70 failure localization and predeclared ac2 exposure.** The
+  versioned audit now records worst-example trajectory hashes and zero-based
+  pre-action frame indices. Failed validation cancellation cases are seed 3007,
+  frames 121/129: visible cooldown and explicit inapplicability are correctly
+  encoded, but final Berserk probabilities are 0.78595/0.85141. Encoder parameters
+  and hidden activations are unchanged. Their nearest training hidden vectors are
+  applicable examples; this is descriptive evidence of imperfect separation, not
+  a causal proof. Report: `artifacts/c/ability-calibration-v70/audit-failures.json`.
+  Collect `ability-curriculum-v2` once: seeds 3049–3096, 48 workers, at most 200
+  decisions each (9,600 total), cold startup, unchanged periodic-menu collector,
+  raw trajectories retained. These seeds are disjoint from ac1, not globally unseen
+  training seeds. No optimizer updates, candidate games, promotion, or held-out
+  access. Audit immutable ui67-start and v70-step256 without selecting a checkpoint
+  for deployment. Reserve the final 12 lexically ordered episodes (3085–3096) as
+  an episode-disjoint development split for future training; current audit is not
+  fitting. Coverage requires at least 24 applicable and 24 inapplicable examples
+  in each split. Missing coverage, setup failures, or unsafe collector actions must
+  be reported; do not silently replace seeds or extend the horizon. Independently
+  audit starts, Renounce, and state-rejected choices before using the corpus.
