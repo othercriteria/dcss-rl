@@ -877,3 +877,44 @@ this journal exists to keep research velocity and direction visible.
   by default or extend the budget if parity fails or wall time regresses. The earlier
   nonfrozen benchmark did not establish matched work; the explicit frozen mode now
   enforces these requirements. No policy selection or held-out access.
+- **2026-09-08 — v71 outcome, source `6a21711`: isolation passes, calibration stops.**
+  The fixed CPU run finishes 256 steps in 21.258 seconds, including replay encoding
+  and zero-checkpoint restoration (step-zero snapshot at 13.750 seconds). All three
+  contexts reach perfect train/validation greedy accuracy by step 64; base tensors
+  remain exact at every step. All 8,388 nonmenu and four observed other-menu logits,
+  probabilities, and argmax choices remain exact, fixing the v70 shop regression.
+  Final applicable target minima are 0.96444/0.98011 train/validation, below 0.99.
+  Missing-choice training mean/minimum are 0.99004/0.92076, with maximum Renounce
+  probability 0.07924; validation missing-choice Renounce maximum is 0.001096.
+  Present-inapplicable Berserk maxima are 3.679e-6/1.058e-5, satisfying that particular
+  gate, but maximum Renounce probabilities still exceed 1e-5 in every context.
+  This is a failed final probability gate, not permission for live continuation.
+  No more steps or candidate games. The next hypothesis should address worst-case
+  confidence rather than change shared encoder/menu rows or relax legality.
+  Report: `artifacts/c/ability-residual-v71/report.json`; final checkpoint SHA256
+  `2b5817bf3aee25777364b3d68b7b5460bafd720ca0803b033ea7be085c80bd26`.
+  `ownership-0256.json` permits only the two residual tensors against `start.pt`;
+  policy rows and all other tensors are exact, with matching configurations.
+  Checkpoints retain 908 training and 300 validation selected samples with complete
+  target/legal-exposure vectors. No ac1 candidate audit, broader candidate evaluation,
+  held-out access, or promotion was triggered by this failed pilot.
+- **2026-09-08 — c72 stops on parity failure, source `6a21711`.** Both frozen
+  arms finish 6,144 decisions with all ten model tensors unchanged. Cold/cached
+  collection is 46.30/58.41 seconds; complete process wall 51.686/63.474; awaited
+  child CPU 650.364/155.102. No anchors were loaded; decision cost is 0.01 in both
+  arms and cycle cost zero. Recorded resets differ 69/70. The benchmark correctly
+  reports `completed=false`, `policy_rollout_matched=false`, and exits unsuccessfully;
+  do not interpret the operational wall/CPU comparison as matched performance.
+  Worker 14 alone has actor-affecting divergence: seed 3015, acknowledgment 108
+  releases shaft floor generation, but cached execution returns at mode 0 after
+  progress/menu closure, before D:4's input boundary. At 109, identical RNG state
+  produces forced Cancel instead of Explore on stale D:2 state. The other 47 workers
+  retain policy equality; ten differ strictly only in cell color. See
+  `docs/research-cache72-parity.md` and `artifacts/p/cache72/policy-parity.json`.
+  Initial cached preparation median is 19.318 seconds; the slowest later reset
+  spends 22.928 of 27.401 seconds validating executable/data identity. Stage timings
+  identify a substantial preparation cost, not its cause or a proven critical-path
+  speedup opportunity. See `docs/research-cache72-timing.md`. No rerun, cache default
+  activation, or shortened readiness wait follows this failed pair. Fix and test
+  post-acknowledgment readiness before another live comparison; optimize validation
+  only with its content-integrity contract preserved.

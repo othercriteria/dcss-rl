@@ -137,6 +137,15 @@ a candidate policy or a survival evaluation.
 offline calibration protocol with the encoder frozen. Finishing that protocol does
 not authorize live scaling or certify its probability gates.
 
+The separate `poe ability-residual-probe --checkpoint checkpoints/terrain-v66.pt
+--trajectories artifacts/c/ac2 --output NEW_RUN` fits only 18 explicitly versioned
+ability-menu residual parameters on the fixed ac2 split. It saves a zero-enabled
+`start.pt`, verifies restoration, and preserves base weights and nonability outputs.
+Audit snapshots against that same-configuration start with `poe checkpoint-audit
+--checkpoint SNAPSHOT --reference NEW_RUN/start.pt --allow-ability-residual`.
+The source policy's ordinary decisions and ability-opening timing are not trained
+by this protocol; confidence and later policy-quality gates still apply.
+
 The terminal viewer identifies the resolved suite, policy, checkpoint, manifest, case,
 and recorded outcome before reconstructing either legacy full-snapshot trajectories or
 compact schema-v2 deltas. Pass `--case CASE_ID` to the track-specific Poe task to inspect
@@ -241,6 +250,10 @@ wall/thread-CPU times in episode metadata. The same timing flag on
 `poe benchmark-startup-cache` records both arms and retains individual reset timing
 records. Overlapping worker wall times must not be summed into an elapsed runtime;
 timing remains opt-in and does not relax cache validation.
+`poe benchmark-startup-cache --frozen-policy ...` is the matched-workload control:
+it rejects imitation anchors, prevents optimizer weight changes, records both arms,
+and requires unchanged tensors plus policy-rollout parity. Without that flag the
+benchmark retains its learning-workload behavior and is not a frozen control.
 PPO prepares anchor replay through a transient reducer and a disposable tensor cache
 (`--imitation-cache-directory`, default `.cache/imitation-replay`). Content and
 preprocessing-source hashes invalidate the cache; only environment features, legality

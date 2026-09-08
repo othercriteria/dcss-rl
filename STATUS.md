@@ -427,15 +427,19 @@ not the current bottleneck.
 Next:
 
 1. Use the verified stair-boundary correction for the next bounded research step:
-   test a small learned correction confined to ability menus after row-only
-   calibration failed both ac1 and independent ac2 checks. Preserve ordinary and
-   other-menu behavior; retain missing-ability cancellation examples. Collect
+   test probability-derived worst-example margins for the isolated ability-menu
+   residual; keep its existing parameter budget and frozen base. V71 fixes
+   the observed shop regression and achieves perfect greedy context accuracy, but
+   fails the predeclared probability gates; do not scale it yet. Preserve ordinary
+   and other-menu behavior; retain missing-ability cancellation examples. Collect
    deliberate combat/escape exposure before another opening-timing continuation. The v67
    UI-return pair failed safety/quality gates and is stopped. Terrain-v66 remains
    the diagnostic leader; actual D:11 progress and stronger survival remain open.
 2. Address the independently measured blocked-action, prompt, and navigation loops
    that dominate the broader development baseline. Prioritize useful discovery and XL
    alongside fewer loops; do not count merely converting stalls into deaths as success.
+   Before another live comparison, fix the captured post-more shaft-generation
+   boundary: a menu acknowledgment currently bypasses explicit-input waiting.
 3. Broaden validation before scaling successful pilots toward actual D:11 progress,
    then branch/rune acquisition. Heldout-v5 remains the promotion gate, separate from
    development design and eventual normal unseeded headline evidence.
@@ -573,6 +577,44 @@ Next:
   worsens 230/244→224/244; one of four other-menu decisions changes despite exact
   8,388 nonmenu distributions. No model was fitted to ac2 or promoted. These scripted
   exposure horizons do not demonstrate learned survival or actual D:11 progress.
+- Residual architecture version 1 and its bounded offline probe are committed at
+  `6a21711`. Eighteen zero-initialized learned parameters correct only ability-menu
+  a/X/cancel logits; legacy checkpoints default to no residual. Zero-enabled
+  restoration reproduces all source outputs; expansions preserve or reject the
+  explicit architecture contract. Full gate: 336 unit tests, three live tests,
+  lint, formatting, and typing pass.
+- V71 trains only that residual from terrain-v66 on ac2's fixed 36/12 split, with
+  all base tensors exact. At 256 steps (21.26 seconds including data preparation),
+  every context has perfect greedy accuracy, and all 8,388 nonmenu plus four
+  other-menu outputs are exact. Nevertheless applicable minima remain below 0.99
+  and Renounce probabilities exceed 1e-5, worst 7.924% on a missing-choice training
+  example. Stop without live continuation or promotion; see
+  `artifacts/c/ability-residual-v71/report.json` and its independent ownership audit.
+  This is evidence for isolation, not yet reliable sampled behavior or D:11 progress.
+- The startup-cache benchmark now has an explicit frozen-policy mode: no anchors,
+  no parameter updates (including optimizer decay), recorded sampling in both arms,
+  exact final-tensor checks, and mandatory policy-rollout parity. The earlier default
+  learning benchmark did not provide this control. The single c72 48×128 pair
+  completed collection but failed policy parity; caching remains opt-in.
+- C72 keeps every model tensor frozen, but cached collection takes 58.41 versus
+  46.30 seconds cold, with 70 versus 69 resets. Worker 14 alone diverges after a
+  shaft's more acknowledgment at transition 108: it returns before D:4's input
+  boundary and samples from stale D:2/mode 0. The other 47 workers preserve policy
+  equality; ten have color-only semantic differences. This extends the known
+  readiness problem beyond explicit stairs actions, not evidence of changed cache
+  contents. No rerun or default cache activation; raw evidence and proposed negative
+  controls live in `docs/research-cache72-parity.md`.
+- Cache timing is now actionable despite the failed matched-workload gate: initial
+  preparation median 19.318 seconds, slowest later reset 27.401 seconds with 22.928
+  in executable/data identity validation. Timing alone cannot distinguish GIL,
+  filesystem, or scheduling contention, and overlapping wall spans are not additive.
+  See `docs/research-cache72-timing.md`. Preserve content validation when optimizing.
+- The residual's 18 parameters can represent the finite training confidence
+  constraints; the next proposal is a fixed-budget worst-example margin objective,
+  not more capacity or hand-set deployed coefficients. Nine inactive missing-choice
+  training states expose its hardest tail; all seven validation missing states are
+  cooldown examples. `docs/research-residual71-confidence.md` records the feasibility
+  argument, probability-derived margins, and remaining generalization limits.
 
 ## Verified commands
 
