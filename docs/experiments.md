@@ -457,3 +457,34 @@ this journal exists to keep research velocity and direction visible.
   heldout remained untouched. Decision: do not scale either arm. Applicability is
   learnable, but square-root teacher balancing collapses the coupled choice to cancel;
   use a matched full-inverse selective probe before changing representation again.
+- **2026-09-08 13:00–13:31 EDT — full-inverse affordance repair and the latent
+  Renounce competitor.** The matched v60 probe changed only teacher balancing from
+  square-root to full inverse while selectively training feature-v5 columns and the
+  abilities/menu-`a`/cancel rows from v39 update 8. Its diagnostic snapshots ranked
+  20,739 and 20,869. They opened seven ability menus and selected Berserk seven times:
+  five starts plus two zero-turn active-state rejections. This is evidence that the
+  representation and balanced target can express the flow, but not that misuse or
+  survival is solved. Two 12,288-decision probes then applied the selective repair
+  directly to canonical v51. v61 left the frozen menu-`X` row outside the update: its
+  first snapshot exactly retained v51's 39,956 diagnostic rank, but its second opened
+  338 applicable menus and selected Renounce 336 times, ranking 31,507. v62 added the
+  menu-`X` row to the trainable set. Its first snapshot again retained rank 39,956; its
+  second reduced Renounce to 225 selections and ranked 36,530, but selected Berserk
+  zero times. A two-update v63 continuation did not justify more budget: retained
+  training logs rendered 637 Renounce prompts, and four completed cases plus failed
+  startup attempts in a load-contaminated partial diagnostic contained 581 direct
+  Renounce selections and no Berserk. The host was simultaneously applying a CPU-heavy
+  system configuration, so its wall time and startup timeout carry no performance
+  meaning. Decision: no heldout-v5 access and no brute-force continuation. Audit
+  representative logits, label balance, and selective gradient ownership before the
+  next minimal probe.
+- **2026-09-08 13:11–13:31 EDT — burst-aware UI interaction objective.** An isolated
+  component agent implemented a per-worker token bucket that gives two free UI
+  interactions and refills 0.25 token per actual game turn, then optionally charges
+  zero-turn interactions after exhaustion. Abilities, menu selection, and cancel are
+  explicit members of an extensible interaction set. All units and mutable balances
+  are semantic types; checkpoint and update telemetry record the knob and overflow
+  incidence. The overflow cost defaults to zero, and evaluation, masks, and raw
+  environment returns are unchanged. Decision: integrate the mechanism now, but delay
+  its matched cost comparison until the direct Renounce-logit failure and current host
+  load are resolved.

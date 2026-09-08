@@ -385,14 +385,33 @@ not the current bottleneck.
   v51's 39,956. Selective warmup can now explicitly own existing structured-action rows
   as well as appended actions/menu keys, enabling a matched balance probe without
   unfreezing the incumbent network.
+- Full-inverse teacher balancing made the feature-v5 affordance learnable from the weak
+  v39 frontier: v60 selected Berserk on every opened menu, starting it five times across
+  both diagnostic snapshots, but still made two visibly inapplicable selections and
+  peaked at only 20,869. Applying the same selective repair directly to v51 exposed a
+  different frozen-policy competitor. v61 update 1 exactly retained v51's 39,956 rank,
+  while update 2 opened 338 applicable menus and chose Renounce Religion 336 times.
+  Explicitly training the menu-`X` row in v62 reduced that to 225 selections and raised
+  update 2 from 31,507 to 36,530, but learned no Berserk selections. A two-update v63
+  continuation regressed: retained training logs rendered 637 renunciation prompts,
+  and its partial, host-load-contaminated diagnostic trace selected Renounce 581 times.
+  No arm qualified for heldout-v5. The next step is a logit/gradient audit, not more
+  budget.
+- A training-only token bucket can now cost bursty zero-turn UI interactions without
+  changing evaluation, action masks, or environment reward. Capacity, token balance,
+  refill per game-turn, overflow cost, and overflow count have semantic types; state is
+  independent per worker episode and telemetry/checkpoints record the configuration.
+  Its cost defaults to zero, so it remains an explicit matched experiment knob rather
+  than silently changing the current objective.
 
 Next:
 
 1. Build from v51 update 2 toward the retired true D:11 event, using heldout-v4 only as
    historical evidence and preserving untouched heldout-v5 for promotion.
-2. Cheap-probe the appended feature-v5 outcome/applicability state from the stable
-   anchored pretraining frontier; scale only if ability retries and renunciation fall
-   before diagnostic quality regresses.
+2. Diagnose the v51 ability-menu logits and selective-loss ownership before another
+   cheap probe. Compare the disabled-by-default UI burst cost only after the direct
+   Renounce competitor is understood; scale only if misuse falls before diagnostic
+   quality regresses.
 3. Extend the curriculum toward branch and rune acquisition while keeping heldout-v5
    locked and treating every earlier knob result as contextual.
 
