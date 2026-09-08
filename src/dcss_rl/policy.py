@@ -61,13 +61,21 @@ _IGNORED_STATIONARY_MONSTERS = frozenset(
 class ScriptedMibePolicy:
     """Deterministic MiBe baseline using only the semantic player view."""
 
-    policy_id = "scripted-mibe-v6"
+    policy_id = "scripted-mibe-v7"
     checkpoint_id = None
 
     def decide(self, observation: ObservationData) -> PolicyDecision:
         menu = observation["menu"]
         if menu is not None:
             choices = menu["choices"]
+            berserk = next(
+                (item for item in choices if "berserk" in item["text"].casefold()),
+                None,
+            )
+            if menu["type"] == "ability" and berserk is not None:
+                return PolicyDecision(
+                    Action.menu_select(Keycode(berserk["keycode"])), "invoke Berserk"
+                )
             strength = next(
                 (item for item in choices if "strength" in item["text"].casefold()),
                 None,
@@ -106,13 +114,40 @@ class ScriptedMibePolicy:
         monsters = {
             point for point, cell in cells.items() if _is_tactical_monster(cell)
         }
+        hp = observation["player"].get("hp")
+        hp_max = observation["player"].get("hp_max")
+        statuses = " ".join(
+            str(value).casefold()
+            for status in observation["player"].get("status", [])
+            for value in status.values()
+        )
 
         if position is not None:
             adjacent = sorted(monsters & set(_adjacent(position)))
             if adjacent:
+                should_berserk = (
+                    len(monsters) >= 2
+                    or observation["player"].get("depth", 1) >= 3
+                    or (
+                        isinstance(hp, int)
+                        and isinstance(hp_max, int)
+                        and hp * 4 <= hp_max * 3
+                    )
+                )
+                if (
+                    should_berserk
+                    and "berserk" not in statuses
+                    and "exhaust" not in statuses
+                ):
+                    return PolicyDecision(
+                        Action(ActionKind.ABILITIES), "open abilities before melee"
+                    )
                 return PolicyDecision(
                     _move_toward(position, adjacent[0]), "attack adjacent monster"
                 )
+
+        if "berserk" in statuses and not monsters:
+            return PolicyDecision(Action(ActionKind.WAIT), "wait out idle Berserk")
 
         messages = " ".join(observation["messages"]).casefold()
         if "lethal amount of poison" in messages or "you are on fire" in messages:
@@ -120,8 +155,6 @@ class ScriptedMibePolicy:
                 Action(ActionKind.WAIT), "advance blocking damage-over-time state"
             )
 
-        hp = observation["player"].get("hp")
-        hp_max = observation["player"].get("hp_max")
         if (
             not monsters
             and isinstance(hp, int)

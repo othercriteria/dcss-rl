@@ -62,7 +62,7 @@ def test_rejects_rest_confirmation() -> None:
     )
 
 
-def test_attacks_adjacent_monster_before_resting() -> None:
+def test_opens_berserk_ability_before_adjacent_melee() -> None:
     policy = ScriptedMibePolicy()
     state = observation(
         hp=10,
@@ -72,7 +72,28 @@ def test_attacks_adjacent_monster_before_resting() -> None:
         ],
     )
 
+    assert policy.decide(state).action == Action(ActionKind.ABILITIES)
+
+    state["player"]["status"] = [{"light": "Berserk"}]
     assert policy.decide(state).action == Action(ActionKind.MOVE_E)
+
+
+def test_selects_berserk_from_ability_menu() -> None:
+    state = menu_observation(
+        "ability",
+        [(ord("X"), "Renounce Religion"), (ord("a"), "Berserk")],
+    )
+
+    assert ScriptedMibePolicy().decide(state).action == Action.menu_select(
+        Keycode(ord("a"))
+    )
+
+
+def test_waits_out_berserk_when_no_target_remains() -> None:
+    state = observation()
+    state["player"]["status"] = [{"light": "Berserk"}]
+
+    assert ScriptedMibePolicy().decide(state).action == Action(ActionKind.WAIT)
 
 
 def test_ignores_stationary_flora() -> None:

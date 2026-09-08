@@ -18,7 +18,7 @@ from torch.distributions import Categorical
 from torch.nn import functional as F
 
 from dcss_rl.checkpointing import update_checkpoint_path
-from dcss_rl.env import DcssEnv, RewardShaping
+from dcss_rl.env import ACTION_COUNT, DcssEnv, RewardShaping
 from dcss_rl.evaluation import EvaluationSuite
 from dcss_rl.features import encode_observation
 from dcss_rl.history import encode_action_history
@@ -28,6 +28,7 @@ from dcss_rl.learned import (
     PpoCheckpointMetadata,
     SemanticActorCritic,
     add_action_history,
+    align_action_count,
     save_checkpoint,
 )
 from dcss_rl.policy import ActionHistory, ScriptedMibePolicy
@@ -462,6 +463,7 @@ def train_ppo(
     _seed_everything(config.seed)
     restored = LearnedPolicy(initial_checkpoint, device=config.device)
     model = restored.model
+    model = align_action_count(model, int(ACTION_COUNT))
     if config.action_history_length is not None:
         model = add_action_history(model, config.action_history_length)
     model.train()

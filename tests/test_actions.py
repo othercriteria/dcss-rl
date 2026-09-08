@@ -7,6 +7,7 @@ from dcss_rl.actions import (
     encode_action,
     legal_actions,
 )
+from dcss_rl.env import ACTION_COUNT, action_to_index, index_to_action
 from dcss_rl.observation import MenuChoice, SemanticObservation
 from dcss_rl.units import Keycode
 
@@ -26,9 +27,20 @@ def test_command_mode_exposes_stable_structured_actions() -> None:
 
     assert Action(ActionKind.MOVE_N) in available
     assert Action(ActionKind.EXPLORE) in available
+    assert Action(ActionKind.ABILITIES) in available
     assert Action(ActionKind.CANCEL) not in available
     assert Action(ActionKind.STAIRS_DOWN) not in available
     assert encode_action(Action(ActionKind.MOVE_NW), observation()) == "y"
+
+
+def test_ability_extension_preserves_every_legacy_menu_index() -> None:
+    assert action_to_index(Action.menu_select(Keycode(0))) == 14
+    assert action_to_index(Action.menu_select(Keycode(255))) == 269
+    assert action_to_index(Action(ActionKind.ABILITIES)) == 270
+    assert index_to_action(action_to_index(Action(ActionKind.ABILITIES))) == Action(
+        ActionKind.ABILITIES
+    )
+    assert ACTION_COUNT == 271
 
 
 def test_stairs_require_visible_under_player_affordance() -> None:

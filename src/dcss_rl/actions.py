@@ -27,6 +27,7 @@ class ActionKind(StrEnum):
     STAIRS_UP = "stairs_up"
     MENU_SELECT = "menu_select"
     CANCEL = "cancel"
+    ABILITIES = "abilities"
 
 
 _COMMAND_KEYS = {
@@ -44,6 +45,7 @@ _COMMAND_KEYS = {
     ActionKind.STAIRS_DOWN: ">",
     ActionKind.STAIRS_UP: "<",
     ActionKind.CANCEL: 27,
+    ActionKind.ABILITIES: "a",
 }
 
 

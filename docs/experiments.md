@@ -312,3 +312,17 @@ this journal exists to keep research velocity and direction visible.
   frozen v26 and v29 candidates scored 12,910 and 16,853. Decision: promote stateless
   v29 on v4; additional aggregate DAgger is the strongest supported cause, while
   history infrastructure remains available for more targeted outcome-aware context.
+- **2026-09-07 23:28–23:48 EDT — doubled broad DAgger curve.** Sixteen updates over a
+  disjoint 128-seed/2,000-step curriculum consumed 98,304 decisions and retained every
+  checkpoint. Snapshotting cost about .01 seconds/update. Diagnostic rank varied
+  non-monotonically from 15,974 to 45,783; update 16 led, reached D:7 twice, and summed
+  XL 24. Its one heldout-v4 attempt scored 8,704, narrowly below the locked 8,822 floor.
+  Decision: reject; retain intermediate checkpoints permanently for generated runs,
+  because agreement and final-update selection do not identify policy quality.
+- **2026-09-07 23:50–23:57 EDT — Berserk action frontier.** The fixed vocabulary made
+  the MiBe fight without Trog abilities. An append-only tail action now opens the
+  player-visible ability menu while preserving all 270 legacy indices; Berserk remains
+  a normal masked menu choice. The first teacher revision exposed targetless Berserk
+  autoexplore as a no-time loop. Waiting until the status expires fixed it, raising the
+  scripted diagnostic from 7,970 to 23,509 and reaching D:7. Decision: train the new
+  action online from the current learned champion; do not use a hidden two-key macro.

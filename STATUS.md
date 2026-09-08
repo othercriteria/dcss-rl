@@ -269,6 +269,16 @@ not the current bottleneck.
 - Online training can retain immutable `update-NNNN.pt` snapshots alongside its rolling
   checkpoint, enabling diagnostic learning curves and recovery from non-monotonic PPO.
   The disjoint `online-train-v3` curriculum expands to 128 seeds and 2,000-step games.
+- A doubled 98,304-decision DAgger run on that curriculum demonstrated strongly
+  non-monotonic policy quality: its 16 diagnostic snapshots ranged from 15,974 to
+  45,783 depth-weighted cells. Update 16 reached D:7 twice and aggregate XL 24, but
+  failed heldout-v4 narrowly at 8,704 versus the 8,822 floor. Snapshot writes cost only
+  about 0.01 seconds/update; late collection remained the dominant cost at 127–135/s.
+- The append-only action catalog now exposes the ordinary ability-menu command at tail
+  index 270 without shifting any legacy command or menu-key index. Old policy heads
+  and action-history slots migrate automatically. Scripted-v7 selects visible Berserk
+  and waits out targetless Berserk instead of no-op autoexploring; its corrected
+  diagnostic rank is 23,509 and it reaches D:7.
 - Heldout-v3 was retired after its v24 traces motivated action history; v26's apparent
   promotion there is not treated as headline evidence. Untouched heldout-v4 was first
   calibrated with pre-intervention v23 at 8,822. The already-frozen history v26 and

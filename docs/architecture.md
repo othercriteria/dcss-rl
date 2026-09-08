@@ -180,6 +180,14 @@ so concurrent cases cannot contaminate each other. A stateless checkpoint can be
 expanded with zero history columns, preserving its initial function before online
 DAgger/PPO learns history-dependent behavior.
 
+The action catalog is append-only at the checkpoint boundary. The original command
+and 256 menu-key indices remain fixed; later structured commands occupy new tail
+indices. Loading an older checkpoint expands its policy head with zero weights and a
+low initial bias for new actions, and remaps any per-slot history columns without
+changing established indices. This permits adding player-visible multi-step UI flows,
+such as opening Trog's ability menu and selecting Berserk, without invalidating prior
+policies or encoding a privileged macro.
+
 Diagnostic and held-out champion manifests are separate monotonic tracks. A candidate
 can replace a track only when its metric vector strictly outranks the existing
 same-suite manifest; cross-suite promotion is rejected.

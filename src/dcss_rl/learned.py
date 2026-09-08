@@ -11,6 +11,7 @@ import numpy as np
 import torch
 from torch import Tensor, nn
 
+from dcss_rl.env import ACTION_COUNT
 from dcss_rl.features import FEATURE_SPEC_VERSION, encode_observation, feature_count
 from dcss_rl.history import encode_action_history
 from dcss_rl.policy import ActionHistory, Policy
@@ -138,6 +139,7 @@ class LearnedPolicy:
         )
         self.model = SemanticActorCritic(config).to(device)
         self.model.load_state_dict(payload["model_state"])
+        self.model = align_action_count(self.model, int(ACTION_COUNT))
         self.model.eval()
         self.device = torch.device(device)
         identifier = payload.get("policy_id")
@@ -249,6 +251,52 @@ def add_action_history(
         else:
             new_state[name] = value
     expanded.load_state_dict(new_state)
+    return expanded
+
+
+def align_action_count(
+    model: SemanticActorCritic, action_count: int
+) -> SemanticActorCritic:
+    """Append action outputs while preserving every established catalog index."""
+    if model.config.action_count == action_count:
+        return model
+    if model.config.action_count > action_count:
+        raise ValueError("cannot shrink a checkpoint action catalog")
+    expanded = SemanticActorCritic(
+        ModelConfig(
+            action_count=action_count,
+            hidden_size=model.config.hidden_size,
+            feature_spec_version=model.config.feature_spec_version,
+            action_history_length=model.config.action_history_length,
+        )
+    ).to(next(model.parameters()).device)
+    old = model.state_dict()
+    new = expanded.state_dict()
+    semantic_width = feature_count(model.config.feature_spec_version)
+    new["encoder.0.weight"].zero_()
+    new["encoder.0.weight"][:, :semantic_width] = old["encoder.0.weight"][
+        :, :semantic_width
+    ]
+    for slot in range(model.config.action_history_length):
+        old_start = semantic_width + slot * model.config.action_count
+        new_start = semantic_width + slot * action_count
+        old_end = old_start + model.config.action_count
+        new_end = new_start + model.config.action_count
+        new["encoder.0.weight"][:, new_start:new_end] = old["encoder.0.weight"][
+            :, old_start:old_end
+        ]
+    for name, value in old.items():
+        if name == "encoder.0.weight":
+            continue
+        if name == "policy_head.weight":
+            new[name][: model.config.action_count] = value
+            new[name][model.config.action_count :].zero_()
+        elif name == "policy_head.bias":
+            new[name][: model.config.action_count] = value
+            new[name][model.config.action_count :] = -10.0
+        else:
+            new[name] = value
+    expanded.load_state_dict(new)
     return expanded
 
 

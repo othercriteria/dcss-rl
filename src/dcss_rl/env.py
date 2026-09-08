@@ -17,12 +17,15 @@ from dcss_rl.schema import GymMetadata, ObservationData
 from dcss_rl.units import ActionCount, ActionIndex, Keycode, RewardWeight, StepLimit
 from dcss_rl.webtiles import GameConfig, ManagedGame, ObservationBatch
 
-_COMMAND_ACTIONS = tuple(
-    Action(kind) for kind in ActionKind if kind is not ActionKind.MENU_SELECT
+_LEGACY_COMMAND_ACTIONS = tuple(
+    Action(kind)
+    for kind in ActionKind
+    if kind not in {ActionKind.MENU_SELECT, ActionKind.ABILITIES}
 )
-_MENU_OFFSET = len(_COMMAND_ACTIONS)
+_MENU_OFFSET = len(_LEGACY_COMMAND_ACTIONS)
 _KEYCODE_COUNT = 256
-ACTION_COUNT = ActionCount(_MENU_OFFSET + _KEYCODE_COUNT)
+_ABILITY_INDEX = ActionIndex(_MENU_OFFSET + _KEYCODE_COUNT)
+ACTION_COUNT = ActionCount(_ABILITY_INDEX + 1)
 _ZERO_REWARD_WEIGHT = RewardWeight(0.0)
 
 
@@ -80,24 +83,28 @@ def action_to_index(action: Action) -> ActionIndex:
         if action.keycode is None or not 0 <= action.keycode < _KEYCODE_COUNT:
             raise ValueError("menu keycode must be in [0, 255]")
         return ActionIndex(_MENU_OFFSET + action.keycode)
+    if action.kind is ActionKind.ABILITIES:
+        return _ABILITY_INDEX
     try:
-        return ActionIndex(_COMMAND_ACTIONS.index(action))
+        return ActionIndex(_LEGACY_COMMAND_ACTIONS.index(action))
     except ValueError as error:
         raise ValueError(f"action is not in the fixed catalog: {action}") from error
 
 
 def index_to_action(index: ActionIndex) -> Action:
     """Decode a fixed Gym action index into its structured representation."""
-    if not 0 <= index < _MENU_OFFSET + _KEYCODE_COUNT:
+    if not 0 <= index < ACTION_COUNT:
         raise ValueError(f"action index out of range: {index}")
+    if index == _ABILITY_INDEX:
+        return Action(ActionKind.ABILITIES)
     if index < _MENU_OFFSET:
-        return _COMMAND_ACTIONS[index]
+        return _LEGACY_COMMAND_ACTIONS[index]
     return Action.menu_select(Keycode(index - _MENU_OFFSET))
 
 
 def action_mask(observation: SemanticObservation) -> np.ndarray:
     """Return a boolean mask aligned with :class:`DcssEnv.action_space`."""
-    result = np.zeros(_MENU_OFFSET + _KEYCODE_COUNT, dtype=np.bool_)
+    result = np.zeros(ACTION_COUNT, dtype=np.bool_)
     for action in legal_actions(observation):
         result[action_to_index(action)] = True
     return result
