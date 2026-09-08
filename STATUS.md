@@ -269,7 +269,8 @@ Next:
    expand toward longer horizons and rune curricula. Explicit action/history memory is
    a subsequent ablation for oscillation and repeated-prompt failures.
 2. Improve survival and XL while retaining v23's non-stalling exploration frontier.
-3. Revalidate integration trajectories on trunk and the two pinned stable releases.
+3. Add explicit one-step action/history state, then repeat the matched PPO/ECHO test
+   against the movement-oscillation failure mode.
 
 ## Verified commands
 
@@ -282,6 +283,8 @@ poe check
 ```
 
 The installed hooks and both hook stages pass, including the live DCSS integration.
+The compatibility trajectory smoke also passes on trunk `96832895d0`, 0.34.1
+`1eebc1a2892e`, and 0.33.1 `9cb173b281c1` after the rank-v5 and return changes.
 
 ## Environment notes
 

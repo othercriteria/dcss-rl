@@ -290,3 +290,8 @@ this journal exists to keep research velocity and direction visible.
   moves. ECHO-on instead selected wait 443 times diagnostically. Decision: neither
   promotes; ECHO is not helping at this weight/budget, and one-step action/history
   memory is a better-targeted next intervention than another scalar sweep.
+- **2026-09-07 22:41 EDT — post-change compatibility smoke.** The same semantic MiBe
+  reset/action/schema-v2 exact-replay path passed on trunk `96832895d0`, stable 0.34.1
+  `1eebc1a2892e`, and stable 0.33.1 `9cb173b281c1`. Decision: the reward, return, and
+  rank changes preserve the three-version integration contract; proceed to explicit
+  action/history state.
