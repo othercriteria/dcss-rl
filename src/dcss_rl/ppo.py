@@ -276,7 +276,7 @@ class _Worker:
     def step(self, action: ActionIndex) -> _WorkerStep:
         if self.env is None:
             raise RuntimeError("online worker is not ready")
-        observation, reward, terminated, truncated, info = self.env.step(action)
+        observation, reward, terminated, truncated, info = self.env.step_typed(action)
         done = terminated or truncated
         mask = info.get("action_mask")
         if not isinstance(mask, np.ndarray) or mask.dtype != np.bool_:
@@ -341,7 +341,7 @@ class _Worker:
                 reward_shaping=self.reward_shaping,
             )
             try:
-                observation, info = self.env.reset()
+                observation, info = self.env.reset_typed()
                 break
             except TimeoutError as error:
                 last_timeout = error

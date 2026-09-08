@@ -119,6 +119,12 @@ class EnvironmentInfo(TypedDict):
     max_xl: int
 
 
+class ResetOptions(TypedDict, total=False):
+    """Typed options accepted by the DCSS Gym reset boundary."""
+
+    game_seed: int | None
+
+
 class RawMessageData(TypedDict):
     control: bool
     payload: JsonObject

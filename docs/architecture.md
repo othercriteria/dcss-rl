@@ -266,6 +266,12 @@ keeps case labels at the outer artifact layer but gives each transient startup a
 its own trajectory and game directory. Both paths retry startup timeouts three times,
 preserving failed-attempt evidence rather than overwriting it.
 
+Gymnasium requires overridden reset/step methods to expose an invariant
+`dict[str, Any]` info type. That third-party seam delegates immediately to
+`reset_typed` and `step_typed`; project code uses those typed methods and carries
+`EnvironmentInfo`, `ResetOptions`, `ActionIndex`, and `GameSeed` without raw-container
+or primitive leakage.
+
 On a fixed five-case, 50-decision learned-policy workload, throughput scales from
 2.96 decisions/s with one worker to 5.55 with two and 12.13 with five. All worker
 counts produce the identical metric vector and learned-action fraction. This makes

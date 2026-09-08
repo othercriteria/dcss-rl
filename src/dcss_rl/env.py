@@ -13,8 +13,15 @@ from gymnasium import spaces
 
 from dcss_rl.actions import Action, ActionKind, encode_action, legal_actions
 from dcss_rl.observation import ObservationReducer, SemanticObservation
-from dcss_rl.schema import EnvironmentInfo, GymMetadata, ObservationData
-from dcss_rl.units import ActionCount, ActionIndex, Keycode, RewardWeight, StepLimit
+from dcss_rl.schema import EnvironmentInfo, GymMetadata, ObservationData, ResetOptions
+from dcss_rl.units import (
+    ActionCount,
+    ActionIndex,
+    GameSeed,
+    Keycode,
+    RewardWeight,
+    StepLimit,
+)
 from dcss_rl.webtiles import GameConfig, ManagedGame, ObservationBatch
 
 _LEGACY_COMMAND_ACTIONS = tuple(
@@ -165,12 +172,24 @@ class DcssEnv(gym.Env[ObservationData, int]):
         seed: int | None = None,
         options: dict[str, Any] | None = None,
     ) -> tuple[ObservationData, dict[str, Any]]:
+        """Implement Gym's raw info boundary; project code uses ``reset_typed``."""
+        observation, info = self.reset_typed(
+            seed=seed, options=cast(ResetOptions | None, options)
+        )
+        return observation, cast(dict[str, Any], info)
+
+    def reset_typed(
+        self,
+        *,
+        seed: int | None = None,
+        options: ResetOptions | None = None,
+    ) -> tuple[ObservationData, EnvironmentInfo]:
+        """Reset DCSS while retaining semantic types past the Gym boundary."""
         super().reset(seed=seed)
         self.close()
-        options = options or {}
-        game_seed = options.get("game_seed", self.game_config.seed)
-        if game_seed is not None and not isinstance(game_seed, int):
-            raise ValueError("game_seed must be an integer or None")
+        reset_options = options if options is not None else ResetOptions()
+        raw_game_seed = reset_options.get("game_seed", self.game_config.seed)
+        game_seed = GameSeed(raw_game_seed) if raw_game_seed is not None else None
         config = GameConfig(
             name=self.game_config.name,
             species=self.game_config.species,
@@ -192,14 +211,30 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.last_keycodes = tuple(keycodes)
 
         self._update_maxima(self.current)
-        return self.current.to_dict(), cast(dict[str, Any], self._info(None))
+        return self.current.to_dict(), self._info(None)
 
     def step(
         self, action: int
     ) -> tuple[ObservationData, float, bool, bool, dict[str, Any]]:
+        """Implement Gym's raw info boundary; project code uses ``step_typed``."""
+        observation, reward, terminated, truncated, info = self.step_typed(
+            ActionIndex(action)
+        )
+        return (
+            observation,
+            reward,
+            terminated,
+            truncated,
+            cast(dict[str, Any], info),
+        )
+
+    def step_typed(
+        self, action: ActionIndex
+    ) -> tuple[ObservationData, float, bool, bool, EnvironmentInfo]:
+        """Advance DCSS while retaining semantic types past the Gym boundary."""
         if self.game is None or self.reducer is None or self.current is None:
             raise RuntimeError("reset must be called before step")
-        structured_action = index_to_action(ActionIndex(action))
+        structured_action = index_to_action(action)
         keycode = encode_action(structured_action, self.current)
         previous_observation = (
             self.current.to_dict() if self.reward_shaping.enabled else None
@@ -234,7 +269,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
             reward,
             terminated,
             truncated,
-            cast(dict[str, Any], self._info(structured_action, outcome=outcome)),
+            self._info(structured_action, outcome=outcome),
         )
 
     @staticmethod

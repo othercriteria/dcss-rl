@@ -411,3 +411,13 @@ this journal exists to keep research velocity and direction visible.
   Decision: remove case labels from bounded worker socket paths, type startup counts and
   indices, and retry evaluation starts in isolated attempt directories. The hardened
   evaluator recovered the missing snapshot on its first run.
+- **2026-09-08 10:45–11:10 EDT — anchored Berserk under the stronger objective.**
+  Continuing-reset decision-cost PPO reused two v39 selective-pretraining snapshots.
+  Conservative update 4 never invoked abilities after joint training and peaked at
+  28,398 diagnostic. Invocation-capable update 8 produced 17,997 training-cycle hits
+  and deterministic `abilities → menu-a → wait` repetition (411/410/766 actions in one
+  snapshot), peaking at 11,700. A matched two-action-history arm still recorded 17,338
+  cycle hits and peaked at 29,115; its best snapshot invoked abilities/menu-a 321/319
+  times. All are below v51's 39,956 and received no heldout-v5 access. Decision: retain
+  the checkpoints as evidence that short requested-action history is insufficient;
+  encode player-visible action outcome/availability before further joint training.

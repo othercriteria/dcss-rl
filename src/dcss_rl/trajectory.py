@@ -23,6 +23,7 @@ from dcss_rl.schema import (
     PlayerView,
     Position,
     RawMessageData,
+    ResetOptions,
 )
 from dcss_rl.units import ActionIndex
 from dcss_rl.webtiles import ObservationBatch
@@ -280,8 +281,13 @@ class RecordingEnv:
         self.checkpoint_id = checkpoint_id
         self._observation: ObservationData | None = None
 
-    def reset(self, **kwargs: Any) -> tuple[ObservationData, EnvironmentInfo]:
-        observation, info = self.env.reset(**kwargs)
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: ResetOptions | None = None,
+    ) -> tuple[ObservationData, EnvironmentInfo]:
+        observation, info = self.env.reset_typed(seed=seed, options=options)
         self.writer.start(
             self.env,
             observation,
@@ -289,7 +295,7 @@ class RecordingEnv:
             checkpoint_id=self.checkpoint_id,
         )
         self._observation = observation
-        return observation, cast(EnvironmentInfo, info)
+        return observation, info
 
     def step(
         self, action_index: ActionIndex
@@ -297,10 +303,9 @@ class RecordingEnv:
         if self._observation is None:
             raise RuntimeError("reset must be called before step")
         previous = self._observation
-        observation, reward, terminated, truncated, raw_info = self.env.step(
+        observation, reward, terminated, truncated, info = self.env.step_typed(
             action_index
         )
-        info = cast(EnvironmentInfo, raw_info)
         self.writer.transition(
             self.env,
             previous,

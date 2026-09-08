@@ -350,16 +350,27 @@ not the current bottleneck.
   had no startup retry under transient 20-game contention. Worker paths now exclude
   unbounded labels, startup counts/indices are semantic types, and evaluation preserves
   three isolated attempts. The retry recovered the sole missing ECHO snapshot.
+- The Gym-required `dict[str, Any]` reset/step signatures are isolated wrappers;
+  application code uses typed reset/step methods carrying `EnvironmentInfo`,
+  `ResetOptions`, `ActionIndex`, and `GameSeed`.
+- Two stronger-context Berserk continuations reused immutable selective-pretraining
+  snapshots. Starting from conservative v39 update 4 never selected abilities and
+  peaked at 28,398 diagnostic. Starting from invocation-capable v39 update 8 retained
+  the bad `abilities → a → wait` cycle and peaked at only 11,700, with 17,997 training
+  cycle hits. Adding two action-history slots reduced neither the attractor nor its
+  incidence (17,338 hits) and peaked at 29,115. None received heldout-v5 access. The
+  next representation must expose action outcome/availability, not merely requested
+  action history.
 
 Next:
 
 1. Build from v51 update 2 toward the retired true D:11 event, using heldout-v4 only as
    historical evidence and preserving untouched heldout-v5 for promotion.
-2. Reuse the stable anchored Berserk pretraining checkpoint under continuing-reset
-   decision-cost PPO, then characterize whether explicit recurrent policy state can
-   improve survival without restoring rest/movement cycles.
-3. Revisit anchored Berserk acquisition in the stronger objective context; then extend
-   the curriculum toward branch and rune acquisition while keeping heldout-v5 locked.
+2. Represent visible multi-step action outcome/availability so anchored Berserk
+   acquisition can distinguish success, exhaustion, rejection, and stale menu flow;
+   then train from the stable pretraining frontier without ability retry loops.
+3. Extend the curriculum toward branch and rune acquisition while keeping heldout-v5
+   locked and treating every earlier knob result as contextual.
 
 ## Verified commands
 
