@@ -4,15 +4,19 @@ from pathlib import Path
 import pytest
 
 from dcss_rl.replay import (
+    PlaybackCommand,
+    _PlaybackControls,
     champion_episodes,
     champion_trajectory,
+    load_champion_manifest,
     render_frame,
     replay_frames,
+    replay_identity,
     watch_grid,
 )
 from dcss_rl.schema import ObservationData
 from dcss_rl.trajectory import observation_delta
-from dcss_rl.units import FrameLimit, Seconds, ViewRadius
+from dcss_rl.units import FrameLimit, GridColumnCount, Seconds, ViewRadius
 
 
 def state(*, hp: int, x: int = 0) -> ObservationData:
@@ -57,7 +61,11 @@ def test_champion_defaults_to_first_manifest_case(tmp_path: Path) -> None:
     manifest.write_text(
         json.dumps(
             {
+                "suite_id": "suite-v1",
+                "policy_id": "policy-v1",
                 "summary": {
+                    "suite_id": "suite-v1",
+                    "policy_id": "policy-v1",
                     "episodes": [
                         {
                             "case_id": "first",
@@ -69,8 +77,8 @@ def test_champion_defaults_to_first_manifest_case(tmp_path: Path) -> None:
                             "outcome": "won",
                             "trajectory": "second.jsonl",
                         },
-                    ]
-                }
+                    ],
+                },
             }
         )
     )
@@ -81,6 +89,64 @@ def test_champion_defaults_to_first_manifest_case(tmp_path: Path) -> None:
         "dead",
         "won",
     ]
+
+
+def test_replay_identity_includes_checkpoint_from_trajectory_header(
+    tmp_path: Path,
+) -> None:
+    trajectory = tmp_path / "trajectory.jsonl"
+    trajectory.write_text(
+        json.dumps(
+            {
+                "type": "episode",
+                "metadata": {"checkpoint_id": "abc123"},
+                "initial": {"observation": state(hp=20)},
+            }
+        )
+        + "\n"
+    )
+    manifest_path = tmp_path / "champion.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "suite_id": "diagnostic-v2",
+                "policy_id": "policy-v9",
+                "summary": {
+                    "suite_id": "diagnostic-v2",
+                    "policy_id": "policy-v9",
+                    "episodes": [
+                        {
+                            "case_id": "case-1",
+                            "outcome": "truncated",
+                            "trajectory": str(trajectory),
+                        }
+                    ],
+                },
+            }
+        )
+    )
+
+    manifest = load_champion_manifest(manifest_path)
+    identity = replay_identity(manifest, manifest.episodes[0])
+
+    assert identity.suite_id == "diagnostic-v2"
+    assert identity.policy_id == "policy-v9"
+    assert identity.checkpoint_id == "abc123"
+    assert identity.case_id == "case-1"
+    assert identity.outcome == "truncated"
+
+
+def test_playback_controls_pause_step_resume_and_quit() -> None:
+    controls = _PlaybackControls()
+
+    assert controls.accept(" ") is PlaybackCommand.WAIT
+    assert controls.paused
+    assert controls.accept("x") is PlaybackCommand.WAIT
+    assert controls.accept("n") is PlaybackCommand.ADVANCE
+    assert controls.paused
+    assert controls.accept(" ") is PlaybackCommand.WAIT
+    assert not controls.paused
+    assert controls.accept("q") is PlaybackCommand.QUIT
 
 
 def test_watch_grid_marks_terminal_outcomes(
@@ -98,7 +164,11 @@ def test_watch_grid_marks_terminal_outcomes(
     manifest.write_text(
         json.dumps(
             {
+                "suite_id": "suite-v1",
+                "policy_id": "policy-v1",
                 "summary": {
+                    "suite_id": "suite-v1",
+                    "policy_id": "policy-v1",
                     "episodes": [
                         {
                             "case_id": "dead-seed",
@@ -110,8 +180,8 @@ def test_watch_grid_marks_terminal_outcomes(
                             "outcome": "won",
                             "trajectory": str(trajectories[1]),
                         },
-                    ]
-                }
+                    ],
+                },
             }
         )
     )
@@ -120,11 +190,13 @@ def test_watch_grid_marks_terminal_outcomes(
         manifest,
         frame_delay=Seconds(0),
         view_radius=ViewRadius(5),
-        columns=2,
+        columns=GridColumnCount(2),
         frame_limit=FrameLimit(1),
         animate=False,
     )
 
     output = capsys.readouterr().out
+    assert "suite=suite-v1  policy=policy-v1" in output
+    assert "checkpoint=none (scripted/unrecorded)" in output
     assert "☠ DEAD" in output
     assert "★ ASCENDED" in output

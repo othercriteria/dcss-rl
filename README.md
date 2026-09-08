@@ -100,12 +100,15 @@ poe watch-diagnostic-leader
 poe watch-diagnostic-grid
 ```
 
-The terminal viewer reconstructs both legacy full-snapshot trajectories and compact
-schema-v2 deltas. Pass `--case CASE_ID` to inspect a specifically labeled suite case;
-the default deliberately follows manifest order instead of selecting a flattering
-showcase seed. Grid panels remain on their final frame and visibly distinguish death
-(`☠`), horizon truncation (`◇`), and eventual ascension (`★`). The older `watch-best`
-and `watch-dev-best` Poe names remain temporary aliases.
+The terminal viewer identifies the resolved suite, policy, checkpoint, manifest, case,
+and recorded outcome before reconstructing either legacy full-snapshot trajectories or
+compact schema-v2 deltas. Pass `--case CASE_ID` to the track-specific Poe task to inspect
+a labeled suite case; the default deliberately follows manifest order instead of
+selecting a flattering showcase seed. During an animated replay, press `q` to quit,
+space to pause or resume, and `n` to advance one frame while paused. Grid panels remain
+on their final frame and visibly distinguish death (`☠`), horizon truncation (`◇`), and
+eventual ascension (`★`). The obsolete ambiguous `watch-best` and `watch-dev-best` Poe
+aliases have been removed; use the four track-specific names above.
 
 Champion promotion is gated by the checked-in heldout-v5 regression floor. The
 canonical champion is a fallback-free learned policy; Native WebTiles spectating can

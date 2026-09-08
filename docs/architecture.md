@@ -119,14 +119,16 @@ serve regression comparisons across agents and DCSS versions.
 
 Report a metric vector rather than hiding all behavior in one score: ascensions, runes,
 branch/depth progress, XL, turns survived, and deaths. A documented ordering selects
-one champion manifest from a fixed suite. `watch-best` always runs that manifest (or a
-clearly labeled scripted champion before learned checkpoints exist) and records the
+one champion manifest from a fixed suite. The held-out and diagnostic watch tasks each
+resolve their track's canonical manifest (or a clearly labeled scripted champion before
+learned checkpoints exist), print the suite/policy/checkpoint identity, and preserve the
 selected seed policy so viewing cannot become cherry-picking.
 
-The initial `watch-best` implementation is a player-centered terminal replay. It reads
-the champion manifest, defaults to its first suite-ordered episode, supports explicit
-case IDs, and reconstructs both schema-v1 and schema-v2 trajectories. A native live
-spectator can be added without changing champion selection or replay semantics.
+The player-centered terminal replay reads the champion manifest, defaults to its first
+suite-ordered episode, supports explicit case IDs, and reconstructs both schema-v1 and
+schema-v2 trajectories. Completed replay supports quit, pause/resume, and single-frame
+advance without changing deterministic manifest order. A native live spectator can be
+added without changing champion selection or replay semantics.
 
 The checked-in diagnostic suite is used for policy and adapter development. Once a
 diagnostic seed has informed a code change it cannot be called held out. The held-out

@@ -77,9 +77,6 @@ watch-heldout-champion = ".venv/bin/dcss-rl watch-best --champion artifacts/cham
 watch-diagnostic-leader = ".venv/bin/dcss-rl watch-best --champion artifacts/dev-champion.json"
 watch-heldout-grid = ".venv/bin/dcss-rl watch-grid --champion artifacts/champion.json"
 watch-diagnostic-grid = ".venv/bin/dcss-rl watch-grid --champion artifacts/dev-champion.json"
-# Transitional aliases; prefer the track-specific names above.
-watch-best = ".venv/bin/dcss-rl watch-best"
-watch-dev-best = ".venv/bin/dcss-rl watch-best --champion artifacts/dev-champion.json"
 
 [tool.ty.environment]
 python-version = "3.13"

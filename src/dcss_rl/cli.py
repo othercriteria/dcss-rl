@@ -18,7 +18,13 @@ from dcss_rl.evaluation import (
     promote_champion,
 )
 from dcss_rl.policy import Policy, ScriptedMibePolicy
-from dcss_rl.replay import champion_trajectory, watch_grid, watch_replay
+from dcss_rl.replay import (
+    load_champion_manifest,
+    replay_identity,
+    select_champion_episode,
+    watch_grid,
+    watch_replay,
+)
 from dcss_rl.returns import ReturnBoundaryMode
 from dcss_rl.units import (
     ActionHistoryLength,
@@ -28,6 +34,7 @@ from dcss_rl.units import (
     EpochCount,
     FrameLimit,
     GameSeed,
+    GridColumnCount,
     InferenceBatchSize,
     Keycode,
     LearningRate,
@@ -336,15 +343,17 @@ def main() -> None:
         )
         return
     if arguments.command == "watch-best":
-        trajectory = champion_trajectory(arguments.champion, arguments.case)
+        manifest = load_champion_manifest(arguments.champion)
+        episode = select_champion_episode(manifest, arguments.case)
         watch_replay(
-            trajectory,
+            episode.trajectory,
             frame_delay=Seconds(arguments.frame_delay_seconds),
             view_radius=ViewRadius(arguments.view_radius),
             frame_limit=FrameLimit(arguments.frame_limit)
             if arguments.frame_limit is not None
             else None,
             animate=not arguments.no_animate,
+            identity=replay_identity(manifest, episode),
         )
         return
     if arguments.command == "watch-grid":
@@ -352,7 +361,7 @@ def main() -> None:
             arguments.champion,
             frame_delay=Seconds(arguments.frame_delay_seconds),
             view_radius=ViewRadius(arguments.view_radius),
-            columns=arguments.columns,
+            columns=GridColumnCount(arguments.columns),
             frame_limit=FrameLimit(arguments.frame_limit)
             if arguments.frame_limit is not None
             else None,

@@ -159,7 +159,10 @@ not the current bottleneck.
 - Evaluation reports each case immediately on completion while retaining manifest
   ordering for summaries and ranks. Champion-track activation validates suite/rank
   versions, archives the prior canonical manifest, and atomically cuts all heldout
-  viewers to the selected replacement; `watch-heldout-grid` now resolves heldout-v2.
+  viewers to the selected replacement; `watch-heldout-grid` now resolves heldout-v5.
+- Track-specific completed-replay viewers now print resolved suite, policy, checkpoint,
+  manifest, case, and outcome identity and offer quit, pause/resume, and frame-step
+  controls on interactive terminals. Ambiguous transitional Poe watch aliases are gone.
 - Automatic commands now prefer upstream's flushed `input_mode=1` boundary and retain
   the typed 500 ms quiescence only as a compatibility fallback. Delay-free documented
   DCSS RC options remove presentation sleeps from local agent play. The identical
