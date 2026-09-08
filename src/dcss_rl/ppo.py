@@ -26,6 +26,7 @@ from dcss_rl.costs import (
     UiInteractionBudgetConfig,
     training_reward,
 )
+from dcss_rl.coverage import ReplayCoverage, replay_coverage
 from dcss_rl.env import (
     ACTION_COUNT,
     DcssEnv,
@@ -47,10 +48,10 @@ from dcss_rl.learned import (
     save_checkpoint,
 )
 from dcss_rl.policy import ActionHistory, ScriptedMibePolicy
+from dcss_rl.replay_cache import prepare_imitation_replay
 from dcss_rl.returns import ReturnBoundaryMode, generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.schema import ObservationData
-from dcss_rl.training import load_imitation_episode
 from dcss_rl.units import (
     ActionHistoryLength,
     ActionIndex,
@@ -132,6 +133,7 @@ class PpoConfig:
     entropy_weight: LossWeight = _DEFAULT_ENTROPY_WEIGHT
     imitation_weight: LossWeight = _DEFAULT_IMITATION_WEIGHT
     aggregate_imitation_replay: bool = True
+    imitation_cache_directory: Path | None = None
     teacher_balance_exponent: Probability = _DEFAULT_TEACHER_BALANCE_EXPONENT
     clip_ratio: Probability = _DEFAULT_CLIP_RATIO
     discount: Probability = _DEFAULT_DISCOUNT
@@ -235,6 +237,13 @@ class PpoUpdateReport:
     short_cycles: int
     ui_interaction_budget: UiInteractionBudgetConfig
     ui_interaction_overflows: UiInteractionOverflowCount
+
+
+@dataclass(frozen=True, slots=True)
+class PpoPreparationReport:
+    replay_seconds: Seconds
+    cache_hit: bool
+    coverage: ReplayCoverage | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -598,6 +607,7 @@ def train_ppo(
     policy_id: str,
     update_checkpoint_directory: Path | None = None,
     progress: Callable[[PpoUpdateReport], None] | None = None,
+    preparation_progress: Callable[[PpoPreparationReport], None] | None = None,
 ) -> PpoReport:
     """Fine-tune an imitation checkpoint with concurrent on-policy PPO updates."""
     _seed_everything(config.seed)
@@ -639,14 +649,34 @@ def train_ppo(
     ui_interaction_overflow_count = UiInteractionOverflowCount(0)
     losses = PpoLosses(0.0, 0.0, 0.0, 0.0)
     teacher_agreement = Probability(0.0)
-    imitation_replay = list(
-        _preloaded_imitation_replay(
-            config.imitation_trajectories,
-            model=model,
-            teacher=teacher,
-            discount=config.discount,
-        )
+    preparation_started = perf_counter()
+    prepared = prepare_imitation_replay(
+        config.imitation_trajectories,
+        teacher=teacher,
+        cache_directory=config.imitation_cache_directory,
     )
+    history_width = model.config.action_count * model.config.action_history_length
+    imitation_replay = (
+        [
+            _ImitationReplay(
+                prepared.features,
+                np.zeros((len(prepared.features), history_width), dtype=np.float32),
+                prepared.masks,
+                prepared.teacher_actions,
+            )
+        ]
+        if len(prepared.features)
+        else []
+    )
+    anchor_coverage = _replay_coverage(tuple(imitation_replay))
+    if preparation_progress is not None:
+        preparation_progress(
+            PpoPreparationReport(
+                Seconds(perf_counter() - preparation_started),
+                prepared.cache_hit,
+                anchor_coverage,
+            )
+        )
     try:
         with ThreadPoolExecutor(max_workers=config.workers) as executor:
             for update_index in range(config.updates):
@@ -702,6 +732,12 @@ def train_ppo(
                     mean_episode_return=mean_return,
                     action_history_length=model.config.action_history_length,
                     ui_interaction_overflows=ui_interaction_overflow_count,
+                    anchor_coverage=anchor_coverage,
+                    imitation_coverage=_replay_coverage(
+                        tuple(imitation_replay)
+                        if config.aggregate_imitation_replay
+                        else (_rollout_imitation_replay(rollout),)
+                    ),
                 )
                 save_checkpoint(
                     output_checkpoint,
@@ -774,6 +810,8 @@ def _checkpoint_metadata(
     mean_episode_return: float,
     action_history_length: ActionHistoryLength,
     ui_interaction_overflows: UiInteractionOverflowCount,
+    anchor_coverage: ReplayCoverage | None = None,
+    imitation_coverage: ReplayCoverage | None = None,
 ) -> PpoCheckpointMetadata:
     return PpoCheckpointMetadata(
         training_method="masked-ppo",
@@ -809,37 +847,17 @@ def _checkpoint_metadata(
         ui_interaction_refill_per_turn=(config.ui_interaction_budget.refill_per_turn),
         ui_interaction_cost=config.ui_interaction_budget.overflow_cost,
         ui_interaction_overflows=ui_interaction_overflows,
+        anchor_coverage=anchor_coverage,
+        imitation_coverage=imitation_coverage,
     )
 
 
-def _preloaded_imitation_replay(
-    trajectories: tuple[Path, ...],
-    *,
-    model: SemanticActorCritic,
-    teacher: ScriptedMibePolicy,
-    discount: Probability,
-) -> tuple[_ImitationReplay, ...]:
-    if not trajectories:
-        return ()
-    episodes = tuple(
-        load_imitation_episode(path, discount=discount, teacher=teacher)
-        for path in trajectories
-    )
-    features = np.concatenate(
-        [np.stack(episode.features) for episode in episodes]
-    ).astype(np.float32, copy=False)
-    masks = np.concatenate([np.stack(episode.masks) for episode in episodes])
-    teacher_actions = np.concatenate(
-        [np.asarray(episode.actions, dtype=np.int64) for episode in episodes]
-    )
-    history_width = model.config.action_count * model.config.action_history_length
-    return (
-        _ImitationReplay(
-            features,
-            np.zeros((len(features), history_width), dtype=np.float32),
-            masks,
-            teacher_actions,
-        ),
+def _replay_coverage(replay: tuple[_ImitationReplay, ...]) -> ReplayCoverage | None:
+    if not replay:
+        return None
+    return replay_coverage(
+        np.concatenate([item.teacher_actions for item in replay]),
+        np.concatenate([item.masks for item in replay]),
     )
 
 

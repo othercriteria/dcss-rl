@@ -11,6 +11,7 @@ import numpy as np
 import torch
 from torch import Tensor, nn
 
+from dcss_rl.coverage import ReplayCoverage
 from dcss_rl.env import ACTION_COUNT
 from dcss_rl.features import FEATURE_SPEC_VERSION, encode_observation, feature_count
 from dcss_rl.history import encode_action_history
@@ -85,6 +86,8 @@ class PpoCheckpointMetadata:
     ui_interaction_refill_per_turn: float = 0.25
     ui_interaction_cost: float = 0.0
     ui_interaction_overflows: int = 0
+    anchor_coverage: ReplayCoverage | None = None
+    imitation_coverage: ReplayCoverage | None = None
 
 
 @dataclass(frozen=True, slots=True)

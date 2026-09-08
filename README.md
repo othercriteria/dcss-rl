@@ -161,6 +161,29 @@ promotion to the held-out champion track. Evaluation is non-promoting unless an
 explicit `--champion` manifest is supplied, preventing a diagnostic suite from being
 accidentally compared with the held-out track.
 
+Collect deliberate ability-menu training exposure and run the bounded conditional-choice
+probe with the discoverable Poe targets:
+
+```sh
+poe collect-ability-curriculum --output artifacts/c/ability-data
+poe audit-affordances -- artifacts/c/ability-data
+poe ability-probe \
+  --checkpoint checkpoints/continuing-decision-v51-updates/update-0002.pt \
+  --trajectories artifacts/c/ability-data --output artifacts/c/ability-probe
+```
+
+The collector uses eight existing training seeds and retains raw trajectories. The
+probe splits episodes six/two, verifies target margins and exact parameter ownership,
+and records non-ability-menu action drift separately. Its validation is a conditional
+menu-choice check, not evidence of stronger gameplay. Output attempts are immutable.
+
+`poe train-ppo` and `poe evaluate-learned` expose the corresponding CLI workflows.
+PPO prepares anchor replay through a transient reducer and a disposable tensor cache
+(`--imitation-cache-directory`, default `.cache/imitation-replay`). Content and
+preprocessing-source hashes invalidate the cache; only environment features, legality
+masks, and teacher targets are stored. Checkpoints record separate anchor and actual
+imitation-replay target/legal-exposure counts, including zero target counts.
+
 Inspect full trajectory evidence and the lighter `crawl.log`/morgue records retained by
 online training with one discoverable command:
 

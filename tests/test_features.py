@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from dcss_rl.features import (
     FEATURE_COUNT,
@@ -130,3 +131,19 @@ def test_global_navigation_summary_distinguishes_known_downstairs() -> None:
     without_stairs = encode_observation(state(downstairs=False))
 
     assert not np.array_equal(with_stairs, without_stairs)
+
+
+@pytest.mark.parametrize("version", [2, 3, 4, 5])
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_global_presence_preserves_raw_cell_semantics(
+    version: int, duplicate: bool
+) -> None:
+    observation = state(downstairs=False)
+    # The monster/stair can be outside the encoded local map, and duplicate raw
+    # coordinates must retain presence even if the navigation map overwrites them.
+    observation["cells"].append({"x": 100, "y": 100, "g": ">", "mon": {}})
+    if duplicate:
+        observation["cells"].append({"x": 100, "y": 100, "g": "."})
+    encoded = encode_observation(observation, spec_version=FeatureSpecVersion(version))
+    scalars = encoded[9 * 11 * 11 :]
+    np.testing.assert_array_equal(scalars[21:23], np.asarray([1.0, 1.0]))

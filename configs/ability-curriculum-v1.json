@@ -1,0 +1,14 @@
+{
+  "suite_id": "ability-curriculum-v1",
+  "step_limit": 200,
+  "cases": [
+    {"case_id": "ability-3001", "seed": 3001},
+    {"case_id": "ability-3002", "seed": 3002},
+    {"case_id": "ability-3003", "seed": 3003},
+    {"case_id": "ability-3004", "seed": 3004},
+    {"case_id": "ability-3005", "seed": 3005},
+    {"case_id": "ability-3006", "seed": 3006},
+    {"case_id": "ability-3007", "seed": 3007},
+    {"case_id": "ability-3008", "seed": 3008}
+  ]
+}

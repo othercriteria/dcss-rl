@@ -78,6 +78,10 @@ watch-diagnostic-leader = ".venv/bin/dcss-rl watch-best --champion artifacts/dev
 watch-heldout-grid = ".venv/bin/dcss-rl watch-grid --champion artifacts/champion.json"
 watch-diagnostic-grid = ".venv/bin/dcss-rl watch-grid --champion artifacts/dev-champion.json"
 audit-affordances = ".venv/bin/dcss-rl audit-affordances"
+collect-ability-curriculum = ".venv/bin/dcss-rl collect-ability-curriculum"
+evaluate-learned = ".venv/bin/dcss-rl evaluate-learned"
+train-ppo = ".venv/bin/dcss-rl train-ppo"
+ability-probe = ".venv/bin/python -m dcss_rl.ability_probe"
 
 [tool.ty.environment]
 python-version = "3.13"

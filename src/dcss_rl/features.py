@@ -89,6 +89,7 @@ def encode_observation(
     mp_max = max(_number(player.get("mp_max")), 1.0)
     messages = " ".join(observation["messages"]).casefold()
     cells = {(cell["x"], cell["y"]): cell for cell in observation["cells"]}
+    unique_cells = len(cells) == len(observation["cells"])
     origin = (origin_x, origin_y)
     monster_targets = {point for point, cell in cells.items() if "mon" in cell}
     stair_targets = {point for point, cell in cells.items() if cell.get("g") == ">"}
@@ -126,8 +127,18 @@ def encode_observation(
         float("done exploring" in messages),
         float(" is nearby" in messages),
         float("staircase leading down here" in messages),
-        float(any("mon" in cell for cell in observation["cells"])),
-        float(any(cell.get("g") == ">" for cell in observation["cells"])),
+        # Normal semantic maps have unique coordinates, so these targets already
+        # answer presence. Preserve raw-list behavior for duplicate input cells.
+        float(
+            bool(monster_targets)
+            if unique_cells
+            else any("mon" in cell for cell in observation["cells"])
+        ),
+        float(
+            bool(stair_targets)
+            if unique_cells
+            else any(cell.get("g") == ">" for cell in observation["cells"])
+        ),
         1.0,
         *adjacent_monsters,
         *adjacent_walkable,

@@ -58,6 +58,11 @@ from dcss_rl.units import (
 def main() -> None:
     parser = argparse.ArgumentParser(prog="dcss-rl")
     commands = parser.add_subparsers(dest="command", required=True)
+    curriculum = commands.add_parser("collect-ability-curriculum")
+    curriculum.add_argument(
+        "--binary", type=Path, default=Path("vendor/crawl/crawl-ref/source/crawl")
+    )
+    curriculum.add_argument("--output", type=Path, required=True)
     compatibility = commands.add_parser("compatibility-smoke")
     compatibility.add_argument(
         "--binary",
@@ -124,6 +129,11 @@ def main() -> None:
     ppo.add_argument("--rollout-length", type=int, default=128)
     ppo.add_argument("--action-history-length", type=int)
     ppo.add_argument("--new-action-warmup-updates", type=int, default=0)
+    ppo.add_argument(
+        "--imitation-cache-directory",
+        type=Path,
+        default=Path(".cache/imitation-replay"),
+    )
     ppo.add_argument(
         "--imitation-trajectory-root",
         action="append",
@@ -209,6 +219,11 @@ def main() -> None:
     activate.add_argument("--suite", type=Path, required=True)
     activate.add_argument("--archive", type=Path)
     arguments = parser.parse_args()
+    if arguments.command == "collect-ability-curriculum":
+        from dcss_rl.curriculum import collect_ability_curriculum
+
+        collect_ability_curriculum(arguments.binary, arguments.output)
+        return
     if arguments.command == "compatibility-smoke":
         report = run_compatibility_smoke(
             arguments.binary, seed=GameSeed(arguments.seed)
@@ -279,7 +294,20 @@ def main() -> None:
         )
         return
     if arguments.command == "train-ppo":
-        from dcss_rl.ppo import PpoConfig, PpoUpdateReport, train_ppo
+        from dcss_rl.ppo import (
+            PpoConfig,
+            PpoPreparationReport,
+            PpoUpdateReport,
+            train_ppo,
+        )
+
+        def report_preparation(prepared: PpoPreparationReport) -> None:
+            samples = prepared.coverage.samples if prepared.coverage is not None else 0
+            print(
+                f"prepared {samples} anchor samples in {prepared.replay_seconds:.3f}s "
+                f"(cache_hit={prepared.cache_hit})",
+                flush=True,
+            )
 
         def report_progress(update: PpoUpdateReport) -> None:
             print(
@@ -330,6 +358,7 @@ def main() -> None:
                     for root in (arguments.imitation_trajectory_root or ())
                     for trajectory in sorted(root.rglob("trajectory.jsonl"))
                 ),
+                imitation_cache_directory=arguments.imitation_cache_directory,
                 workers=WorkerCount(arguments.workers),
                 inference_batch_size=InferenceBatchSize(arguments.inference_batch_size),
                 inference_batch_wait=Seconds(arguments.inference_batch_wait_seconds),
@@ -370,6 +399,7 @@ def main() -> None:
             policy_id=arguments.policy_id,
             update_checkpoint_directory=arguments.update_checkpoint_directory,
             progress=report_progress,
+            preparation_progress=report_preparation,
         )
         print(
             f"checkpoint: {report.checkpoint}; decisions={report.decisions}; "

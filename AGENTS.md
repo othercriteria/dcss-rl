@@ -35,6 +35,15 @@ Work autonomously on routine architecture, implementation, dependency, experimen
 commit, and publication decisions. Ask only about material scope changes, credentials,
 costs, or destructive actions.
 
+Keep active goals thin and focused on the immediate research direction. Durable
+constraints belong here, in architecture documentation, or in enforced tooling.
+Prioritize current-policy progress before recurrent/LM comparisons. Start with bounded
+local pilots and scale to hour-scale runs only when their evidence warrants it.
+Use Poe targets wherever possible, adding discoverable targets for recurring workflows.
+Use sub-agents to improve velocity on independently owned work; keep a performance
+agent progressing through measured bottlenecks alongside policy research. The primary
+agent owns integration, experiment interpretation, and all promotion-suite access.
+
 ## Invariants
 
 - Use unmodified local DCSS. Trunk is canonical; recent stable releases are

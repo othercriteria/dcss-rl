@@ -151,6 +151,34 @@ rank excludes both policy decisions and raw DCSS turns as survival proxies.
 
 ## Initial research comparisons
 
+Immediate research goals name the next falsifiable policy question, rather than
+repeating this document's operating constraints. Current-policy progress takes priority
+over model-family comparisons. Bounded local pilots precede longer runs; independent
+agents own isolated implementation or audit seams, with a continuing performance track
+alongside policy research. Integration and promotion remain primary-agent decisions.
+
+The first post-handoff ability experiment isolates menu choice before changing menu
+opening behavior. `ability-curriculum-v1` uses eight existing training seeds, at most
+200 decisions each, and deliberate periodic menu exposure. Every action still passes
+through normal DCSS input and raw trajectory recording. Teacher relabeling teaches
+applicable Berserk selections and inapplicable/missing-choice cancellation. Checkpoints
+record catalog-ordered target and legal-exposure counts separately for anchors and
+the actual imitation replay used at each update. Missing positive classes and illegal
+teacher targets must be visible before scaling.
+
+A one-minibatch probe must move the applicable and inapplicable decision margins in
+their intended directions and preserve unowned parameters exactly. New feature columns
+can change hidden activations despite exact preservation of old weights, so behavioral
+preservation on non-menu states is measured separately. Menu accuracy alone does not
+qualify a candidate for promotion or justify a long online run.
+
+`development-validation-v1` fixes sixteen additional development seeds and 1,000-decision
+horizons before candidate evaluation. It is disjoint from training, existing diagnostics,
+and promotion suites. Calibrate v51 once, then evaluate a candidate selected on existing
+diagnostics to check breadth before scaling; this development evidence does not replace
+the locked promotion gate or normal unseeded headline evaluation. A single actual D:11
+episode, its frequency across the suite, and aggregate maximum depth are distinct claims.
+
 1. Transparent scripted baseline.
 2. Conventional recurrent policy-gradient baseline.
 3. Language-model policy-gradient baseline.

@@ -199,6 +199,21 @@ def test_champion_selection_uses_documented_lexicographic_rank(
     assert json.loads(manifest.read_text())["policy_id"] == "deep"
 
 
+def test_development_validation_seeds_are_new_and_curriculum_is_training_only() -> None:
+    development = load_suite(Path("configs/development-validation-v1.json"))
+    seeds = {case.seed for case in development.cases}
+    assert len(seeds) == 16
+    assert development.step_limit == 1000
+    for pattern in ("heldout-v*.json", "diagnostic-v*.json", "online-train-v*.json"):
+        for path in Path("configs").glob(pattern):
+            assert seeds.isdisjoint(case.seed for case in load_suite(path).cases)
+    curriculum = load_suite(Path("configs/ability-curriculum-v1.json"))
+    training = load_suite(Path("configs/training-suite.json"))
+    assert {case.seed for case in curriculum.cases} <= {
+        case.seed for case in training.cases
+    }
+
+
 def test_rejects_comparing_different_suites(tmp_path: Path) -> None:
     first = EvaluationSummary("one", "a", "now", (result(depth=1, xl=1, turns=1),))
     second = EvaluationSummary("two", "b", "now", (result(depth=1, xl=1, turns=1),))

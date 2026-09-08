@@ -1,0 +1,22 @@
+{
+  "suite_id": "development-validation-v1",
+  "step_limit": 1000,
+  "cases": [
+    {"case_id": "dev-81001", "seed": 81001},
+    {"case_id": "dev-81002", "seed": 81002},
+    {"case_id": "dev-81003", "seed": 81003},
+    {"case_id": "dev-81004", "seed": 81004},
+    {"case_id": "dev-81005", "seed": 81005},
+    {"case_id": "dev-81006", "seed": 81006},
+    {"case_id": "dev-81007", "seed": 81007},
+    {"case_id": "dev-81008", "seed": 81008},
+    {"case_id": "dev-81009", "seed": 81009},
+    {"case_id": "dev-81010", "seed": 81010},
+    {"case_id": "dev-81011", "seed": 81011},
+    {"case_id": "dev-81012", "seed": 81012},
+    {"case_id": "dev-81013", "seed": 81013},
+    {"case_id": "dev-81014", "seed": 81014},
+    {"case_id": "dev-81015", "seed": 81015},
+    {"case_id": "dev-81016", "seed": 81016}
+  ]
+}
