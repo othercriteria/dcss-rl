@@ -27,6 +27,7 @@ from dcss_rl.schema import (
 )
 from dcss_rl.units import ActionIndex
 from dcss_rl.webtiles import ObservationBatch
+from dcss_rl.webtiles.cache import StaticDataIdentity
 
 SCHEMA_VERSION = 2
 
@@ -53,6 +54,7 @@ class EpisodeMetadata:
     checkpoint_id: str | None
     reward_spec: str
     rc_sha256: str
+    static_data_identity: StaticDataIdentity | None = None
 
 
 def _revision(directory: Path) -> str | None:
@@ -192,6 +194,9 @@ class TrajectoryWriter:
             checkpoint_id=checkpoint_id,
             reward_spec="depth_xl_terminal_v1",
             rc_sha256=hashlib.sha256(rc_path.read_bytes()).hexdigest(),
+            static_data_identity=env.game.static_cache.identity
+            if env.game.static_cache is not None
+            else None,
         )
         self._write(
             {

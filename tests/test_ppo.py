@@ -387,6 +387,20 @@ def test_action_warmup_restores_unowned_parameters_after_adamw_decay() -> None:
     )
 
 
+def test_same_width_feature_migration_keeps_weights_but_rejects_downgrade() -> None:
+    original = SemanticActorCritic(
+        ModelConfig(
+            action_count=4, hidden_size=2, feature_spec_version=FeatureSpecVersion(5)
+        )
+    )
+    migrated = align_feature_spec(original, FeatureSpecVersion(6))
+    for name, parameter in original.state_dict().items():
+        assert torch.equal(parameter, migrated.state_dict()[name])
+    assert migrated.config.feature_spec_version == 6
+    with pytest.raises(ValueError, match="downgrade"):
+        align_feature_spec(migrated, FeatureSpecVersion(5))
+
+
 def test_feature_migration_preserves_outputs_before_new_inputs_are_trained() -> None:
     model = SemanticActorCritic(
         ModelConfig(

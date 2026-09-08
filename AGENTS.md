@@ -43,6 +43,10 @@ Use Poe targets wherever possible, adding discoverable targets for recurring wor
 Use sub-agents to improve velocity on independently owned work; keep a performance
 agent progressing through measured bottlenecks alongside policy research. The primary
 agent owns integration, experiment interpretation, and all promotion-suite access.
+Use 48 rollout workers as the current starting point when workload breadth permits;
+remeasure the operational knee after material performance changes. The subsecond
+unit-loop aspiration is currently lower priority than policy quality and rollout
+throughput; do not spend ongoing optimization effort on test startup alone.
 
 ## Invariants
 

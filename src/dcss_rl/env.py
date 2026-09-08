@@ -23,6 +23,7 @@ from dcss_rl.units import (
     StepLimit,
 )
 from dcss_rl.webtiles import GameConfig, ManagedGame, ObservationBatch
+from dcss_rl.webtiles.cache import StaticDataCache
 
 _LEGACY_COMMAND_ACTIONS = tuple(
     Action(kind)
@@ -144,6 +145,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         max_steps: StepLimit | None = None,
         run_root: Path | None = None,
         reward_shaping: RewardShaping | None = None,
+        static_cache: StaticDataCache | None = None,
     ) -> None:
         super().__init__()
         if len(starting_weapon_key) != 1:
@@ -154,6 +156,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.max_steps = max_steps
         self.run_root = run_root
         self.reward_shaping = reward_shaping or RewardShaping()
+        self.static_cache = static_cache
         self.action_space = spaces.Discrete(ACTION_COUNT)
         self.observation_space = SemanticObservationSpace()
         self.game: ManagedGame | None = None
@@ -196,7 +199,12 @@ class DcssEnv(gym.Env[ObservationData, int]):
             background=self.game_config.background,
             seed=game_seed,
         )
-        self.game = ManagedGame(self.binary, config=config, run_root=self.run_root)
+        self.game = ManagedGame(
+            self.binary,
+            config=config,
+            run_root=self.run_root,
+            static_cache=self.static_cache,
+        )
         self.reducer = ObservationReducer()
         setup_keycode = Keycode(ord(self.starting_weapon_key))
         self.last_batch = self.game.start(initial_keycode=setup_keycode)

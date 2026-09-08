@@ -505,3 +505,122 @@ this journal exists to keep research velocity and direction visible.
   its matched cost comparison until the direct Renounce-logit failure and current host
   load are resolved. Keep overflow detection active at zero cost so an unperturbed run
   provides counterfactual incidence for sizing the later experiment.
+- **2026-09-08 13:15–13:47 EDT — anchor-preload performance handoff.** A structural
+  profile attributed 25.03 of 31.96 sampled seconds to recursive deep copies while
+  reconstructing 2,208 anchor states. A dedicated transient replay reducer cut a
+  matched ten-trajectory sample from 12.58 to 2.90 seconds while preserving feature,
+  legality-mask, and teacher-label hashes; its content-addressed warm cache
+  loaded in 0.31 seconds. Absolute timings overlap the host rebuild, so the profile and
+  paired equivalence are stronger evidence than wall-clock totals. Candidate commit
+  `c6a9057` is published on `agent/performance-round2` but deliberately unmerged because
+  it overlaps newer PPO work on main. Decision: rebase/review it in the fresh session,
+  retaining explicit cache-contract invalidation and preparation telemetry.
+- **2026-09-08 — audited conditional ability acquisition.** Eight existing training
+  seeds contributed 1,600 deliberate-exposure decisions (`artifacts/c/ac1`): 33
+  applicable and 154 inapplicable ability menus, 14 missing-choice menus, 33 Berserk
+  selections (32 starts/one stochastic failure), 168 cancels, and no active/cooldown
+  rejection or Renounce selection. Balanced masked CE from immutable v51 update 2
+  fitted only menu-a/menu-X/cancel rows and appended feature columns, with six training
+  and two validation episodes. The initial gate compared cancel with a even though X
+  dominated both contexts; it incorrectly stopped an update improving the true choice.
+  The corrected gate measures target minus strongest legal competitor while retaining
+  pairwise telemetry. An intervening margin-auxiliary experiment was abandoned and not
+  used for selection. Canonical unchanged-CE attempt `artifacts/c/ability-probe-v4`
+  completed its predeclared 1/16/64/256 steps in about 4.5 seconds. Step 64 was first
+  to validate perfectly (9/9 applicable, 38/38 inapplicable). All unowned parameters
+  remained exact, but 58/1,399 non-ability-menu actions changed in the collected data;
+  preserving parameters is insufficient to claim behavioral preservation.
+  The one selected diagnostic check (`artifacts/e/menu64-diagnostic`) matched v51's
+  complete `(0, 0, 39956, 22, 22, 21, 211.0)` rank. Four sequences were identical;
+  case 202 added one cancel. No abilities opened. Decision: conditional menu choice
+  is learned with no aggregate diagnostic regression; next test useful opening in a
+  bounded arm. Do not promote or scale from menu accuracy alone.
+- **2026-09-08 — broader v51 development baseline.** Locked sixteen new disjoint
+  development seeds with 1,000-decision horizons before candidate comparison. V51's
+  `artifacts/e/v51-dev16` result ranks `(0, 0, 70665, 59, 59, 44, 409.0)` in 49.78
+  seconds (6,981 decisions): ten deaths, six truncations, maximum actual D:6 and XL5.
+  A manifest-wide replay audit found every truncation in a loop; repeating suffixes
+  consume 5,195 decisions (74.4%). Two involve terrain obscured/misclassified by glyphs,
+  two weapon-warning denial cycles under transformation, and two movement oscillations.
+  All relevant terrain/form/unarmed protocol fields already exist. Decision: retain
+  this fixed broader comparison and investigate terrain-aware navigation separately
+  from ability training; detailed evidence is in `docs/research-v51-frontier.md`.
+- **2026-09-08 — replay preparation integration and encoder profile.** Reviewed the
+  pending performance candidate against current selective-update/UI-budget semantics.
+  Corrected cache invalidation, corruption handling, and reconstruction ordering before
+  integration. On the same 1,600 curriculum rows, preparation took 1.560 seconds in the
+  reference loader, 0.497 transient, 0.518 cold cache, and 0.0102 warm cache. All feature,
+  mask, and teacher-label arrays matched exactly. Seven alternating feature benchmarks
+  separately measured redundant-presence-scan removal at 0.8427→0.7628 seconds (9.5%),
+  with exact equality over 6,400 version-2–5 vectors. A 768-decision, 48-worker PPO smoke
+  verified checkpointed anchor/replay counts (1,600/2,368; 33 positive anchor menu-a
+  targets). Smoke timing overlapped diagnostic evaluation and is not a scaling result.
+  Decision: use cached preparation and measure the current operational worker knee;
+  stop spending time on the non-dominant fast-test startup cost per user direction.
+- **2026-09-08 14:45 EDT — predeclared opening-only pilot.** Starting from the first
+  perfectly validating conditional-choice snapshot (ability-probe-v4 step 64), train
+  only the existing abilities action row; keep the repaired menu rows and all feature
+  columns frozen. Use the same v19/v20 anchors plus ac1, full-inverse teacher balancing,
+  masked imitation weight 1, learning rate 1e-4, four epochs per update, 48×128
+  decisions per update, at most two updates. PPO/value/ECHO/entropy weights are zero
+  for this isolated DAgger test. Retain continuing-reset/decision-cost metadata but
+  do not attribute an imitation-only result to those unused return objectives.
+  Evaluate the two scheduled snapshots only on existing diagnostics. Scale or test
+  broader development only if a snapshot starts Berserk, makes no Renounce or
+  active/cooldown-rejected selections, and retains at least the incumbent full rank
+  and its one surviving horizon. Otherwise stop this arm and prioritize independently
+  measured navigation failures. No heldout access. Launch follows the uncontended
+  worker sweep; code and outputs will identify the exact attempt.
+- **2026-09-08 14:41–14:44 EDT — current worker knee.** An uncontended sequential
+  24/48/64-worker sweep at integrated revision `86464b1` used immutable v51 update 2,
+  online-train-v3, fixed 128-decision chunks, and the same 27,333 v19/v20/ac1 anchors.
+  It completed 17,408 decisions in 163.49 seconds overall. Collection rates were
+  137.51, 161.73, and 138.36 decisions/s; collection took 22.34/37.99/59.21 seconds
+  versus optimization 0.68/0.92/1.06. Cold preparation on the first arm took 26.965
+  seconds; warm preparation on later arms took 0.302/0.307. Worker count changes seed
+  coverage and inference shape, so these are operational rates, not identical-workload
+  speedups. Commands, source/input hashes, losses and caveats are recorded in
+  `artifacts/p/astra-scaling.json`. Decision: retain 48 workers; the clear operating
+  choice does not warrant another sweep now.
+- **2026-09-08 — opening-only pilot outcome.** V65 completed 12,288 decisions in
+  about 73 seconds of update time with warm anchor preparation in 0.286 seconds.
+  `poe checkpoint-audit` verifies only the abilities row changed; the repaired menu
+  rows and encoder remained exact. Update 1 retained v51's diagnostic rank and opened
+  no abilities. Update 2 opened 331 menus: five applicable selections produced five
+  Berserk starts, while 326 inapplicable menus produced 325 cancels and one horizon
+  boundary. No Renounce or state-rejected selections occurred. Its diagnostic rank
+  fell to `(0, 0, 26016, 19, 19, 16, 152.0)`. Decision: conditional acquisition worked,
+  but opening timing moved the loop to open/cancel and failed the predeclared quality
+  gate. Stop this arm; retain it for a later matched UI-burst-cost hypothesis and move
+  to the independently evidenced terrain failures. No broader or heldout evaluation.
+- **2026-09-08 — predeclared terrain-only zero-update pilot.** Feature spec 6 keeps
+  v5's width but explicitly reinterprets traversal hints using verified minimap wall
+  categories and grounded lava. It updates local passage, adjacent navigation, and
+  BFS traversal only; masks, rewards, policy weights, flora handling, prompts, and
+  history do not change. Flight removes the grounded-lava objection without asserting
+  universal passage; uncertain categories retain the old glyph fallback. Specs 2–5
+  remain reproducible. Migrate immutable v51 directly (not the menu-repaired branch),
+  evaluate the fixed five-case diagnostic once, and run the sixteen-case development
+  comparison only if rank does not regress. Primary evidence is useful discovery,
+  XL, deaths, and the known blocked-state suffixes, not fewer loops by itself. A
+  failed zero-update arm does not justify automatic long fine-tuning.
+- **2026-09-08 — terrain-only outcome and diagnostic promotion.** V66's fixed
+  diagnostic ranks `(0, 0, 42853, 24, 24, 21, 217.0)` in 14.64 seconds. The predeclared
+  broader comparison ranks `(0, 0, 97476, 66, 66, 46, 450.0)` in 34.38 seconds:
+  discovery rises 37.9%, both terrain loops escape, but deaths rise 10→13 and maximum
+  depth remains D:6 (maximum XL5→6). Three horizon loops remain. Decision: promote
+  only the diagnostic leader from its retained summary with `poe promote-diagnostic`;
+  prioritize survival and remaining prompt/oscillation failures, not a held-out claim.
+  `poe watch-diagnostic-grid --no-animate --frame-limit 1` verifies the selected
+  terrain-v66 replay. Heldout-v5 was not evaluated or changed.
+- **2026-09-08 — static game-data startup cache.** Matched two-seed probes measured
+  cold resets at 5.802/5.928 seconds versus 0.726/0.732 seconds after private static
+  cache copies; complete validated-helper startup was 0.980 seconds. Initial state
+  and twenty transitions matched exactly. Cached v51 diagnostic action sequences
+  and full rank also matched; its 12.35-second wall time was not an uncontended
+  speedup benchmark. Cold/cached compatibility passed on 0.34.1
+  (`1eebc1a2892e1c89776a0d7a10691f8dac8d9796`) and 0.33.1
+  (`9cb173b281c11a5177f40b8c0662bacd3aac2717`), with separate content-validated snapshots
+  and verification reports under `artifacts/p/static-cache/`. Decision: retain
+  explicit opt-in caching and remeasure representative rollout scaling before
+  changing the worker default; no player saves or shared writable caches are reused.

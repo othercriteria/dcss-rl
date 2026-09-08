@@ -333,6 +333,29 @@ accepts it and responds with visible rejection. Old schema-v2 semantic snapshots
 the optional applicability field and decode it as `unknown`; their raw protocol remains
 available for any future semantic re-reduction.
 
+Feature specification v6 deliberately changes traversal semantics without changing
+v5's width. Visible minimap wall/mapped-wall categories and grounded lava block local
+walkability and BFS (including targets); uncertain categories retain glyph fallback.
+Flight removes only the grounded-lava objection. Syntactic action masks are unchanged.
+Versions 2–5 retain their original encoding. `poe migrate-features` creates an explicit
+zero-optimizer-step checkpoint with source/checkpoint and preprocessing hashes; equal
+model weights are not a claim of equal behavior after this semantic migration.
+
+Static upstream data caching is opt-in through `poe prepare-game-cache` and
+`--static-data-cache` on evaluation/training/compatibility commands. A snapshot contains
+only closed-game db/des compiled data, not player saves. Its identity hashes the
+executable and bundled data contents plus source modification times (which upstream
+uses for freshness). Loading and each private population validate member hashes and
+reject incompatible data, unsafe members, or existing destinations. Workers copy
+private files, never share writable caches or hard links. Trajectories and PPO metadata
+record the static-data identity; omitting the option preserves the cold startup path.
+
+Grid viewers resolve the held-out and diagnostic champion manifests directly. Suite
+redirects are evaluation configuration, not an additional viewer resolution layer.
+`poe promote-diagnostic --summary ...` can monotonically select an existing complete
+current-diagnostic evaluation with retained replays; its destination is fixed to the
+diagnostic manifest and cannot change the held-out track.
+
 Training worker directories use only typed worker, episode, and startup-attempt indices;
 human-controlled suite case labels never contribute to the Unix socket path. Evaluation
 keeps case labels at the outer artifact layer but gives each transient startup attempt

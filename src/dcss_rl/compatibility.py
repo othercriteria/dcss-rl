@@ -12,6 +12,7 @@ from dcss_rl.replay import replay_frames
 from dcss_rl.trajectory import RecordingEnv, TrajectoryWriter
 from dcss_rl.units import DcssVersion, GameSeed, StepLimit, VisibleCellCount
 from dcss_rl.webtiles import GameConfig
+from dcss_rl.webtiles.cache import StaticDataCache
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +25,9 @@ class CompatibilityReport:
     visible_cells: VisibleCellCount
 
 
-def run_compatibility_smoke(binary: Path, *, seed: GameSeed) -> CompatibilityReport:
+def run_compatibility_smoke(
+    binary: Path, *, seed: GameSeed, static_cache: StaticDataCache | None = None
+) -> CompatibilityReport:
     """Reset, step, record, and exactly replay one unmodified DCSS game."""
     with TemporaryDirectory(prefix="dcss-rl-compatibility-") as directory:
         root = Path(directory)
@@ -35,6 +38,7 @@ def run_compatibility_smoke(binary: Path, *, seed: GameSeed) -> CompatibilityRep
                 game_config=GameConfig(seed=seed),
                 max_steps=StepLimit(1),
                 run_root=root / "game",
+                static_cache=static_cache,
             ),
             TrajectoryWriter(trajectory_path),
             agent_id="compatibility-smoke",

@@ -23,7 +23,9 @@ informed the next feature design; v3 was locked before that design was evaluated
 Development evaluation uses `mibe-diagnostic-v2`, extending the same known five seeds
 from 200 to 500 decisions. Under rank v5, v23 scores 17,121, history-aware v26 scores
 26,857, stateless v29 scores 34,118, and continuing-decision v51 update 2 scores
-39,956 depth-weighted discovered cells.
+39,956 depth-weighted discovered cells. The current diagnostic leader is `terrain-v66`
+at 42,853, using explicitly versioned terrain preprocessing with unchanged v51 weights.
+The held-out champion remains v51; no new held-out evaluation was used for this change.
 
 Completed:
 
@@ -415,18 +417,92 @@ not the current bottleneck.
   independent per worker episode and telemetry/checkpoints record the configuration.
   Its cost defaults to zero while overflow detection remains active, so baseline runs
   expose counterfactual incidence without silently changing the current objective.
+- Performance candidate `c6a9057` is preserved and published on
+  `agent/performance-round2`, not merged. It adds preparation timing, a transient
+  anchor-replay reducer, and a content-addressed tensor cache; its paired sample fell
+  from 12.58 to 2.90 seconds cold and 0.31 seconds warm with identical feature, mask,
+  and teacher-label hashes. The fresh session should rebase and review it against the
+  newer UI-budget and selective-freeze changes before integration.
 
 Next:
 
-1. Build from v51 update 2 toward the retired true D:11 event, using heldout-v4 only as
-   historical evidence and preserving untouched heldout-v5 for promotion.
-2. Build a small non-heldout replay curriculum covering both applicable and
-   inapplicable ability-menu states, checkpoint its label/legal-exposure histograms,
-   and require a one-minibatch margin/preservation test before another cheap probe.
-   Compare the zero-cost-observable UI burst cost only after this direct coverage fix;
-   scale only if misuse falls before diagnostic quality regresses.
-3. Extend the curriculum toward branch and rune acquisition while keeping heldout-v5
-   locked and treating every earlier knob result as contextual.
+1. Build on the completed terrain-only v66 pilot while addressing survival: broader
+   development discovery rose 37.9%, but deaths rose from ten to thirteen and maximum
+   actual depth remains D:6. The opening-only ability arm is stopped after transferring
+   the loop to open/cancel.
+2. Address the independently measured blocked-action, prompt, and navigation loops
+   that dominate the broader development baseline. Prioritize useful discovery and XL
+   alongside fewer loops; do not count merely converting stalls into deaths as success.
+3. Broaden validation before scaling successful pilots toward actual D:11 progress,
+   then branch/rune acquisition. Heldout-v5 remains the promotion gate, separate from
+   development design and eventual normal unseeded headline evidence.
+
+## Astra handoff progress (2026-09-08)
+
+- User direction: current-policy progress first, bounded local pilots before justified
+  hour-scale runs, thin immediate research goals, Poe workflows, and continuing
+  independently owned performance work. These durable preferences are in `AGENTS.md`.
+- `poe collect-ability-curriculum --output artifacts/c/ac1` collected 1,600 decisions
+  from eight existing training seeds. Raw audit: 33 applicable, 154 inapplicable, and
+  14 missing-Berserk menus; 33 selections/32 starts/one stochastic failure, 168 cancels,
+  no state-rejected selections, and no Renounce selections. These deliberate exposure
+  games are training data, not a candidate benchmark.
+- `poe ability-probe` isolates conditional menu choice with six training/two validation
+  episodes, balanced masked cross-entropy, and predeclared steps 1/16/64/256. The
+  canonical `artifacts/c/ability-probe-v4` run took about 4.5 seconds. Step 64 first
+  reached 9/9 applicable and 38/38 inapplicable validation choices. Unowned parameters
+  remained bit-exact, but 58/1,399 collected non-ability-menu actions changed (58/1,050
+  training and 0/349 validation); parameter freezing is not behavioral preservation.
+  Checkpoints include coverage counts, input hashes, code hashes, and measured drift.
+  Its one diagnostic check ranks `(0, 0, 39956, 22, 22, 21, 211.0)`, exactly matching
+  v51. Four action sequences are identical; case 202 inserts one cancel at step 104.
+  No ability menus were opened, so this establishes conditional acquisition and
+  diagnostic non-regression, not an autonomous gameplay improvement.
+- A fixed sixteen-seed, 1,000-decision `development-validation-v1` baseline uses seeds
+  disjoint from all earlier training/diagnostic/promotion suites. V51 ranks
+  `(0, 0, 70665, 59, 59, 44, 409.0)` in 49.78 seconds, with ten deaths, six truncations,
+  maximum actual D:6 and XL5. Every truncation ends in a loop; the six final repeating
+  suffixes occupy 5,195/6,981 decisions (74.4%). No ability was opened in this suite.
+- Reviewed and adapted the pending replay optimization rather than merging its stale
+  PPO implementation. Transient replay, cold cache, and warm cache take 0.497/0.518/
+  0.0102 seconds versus 1.560 seconds for 1,600 reference rows, with exact feature,
+  mask, and teacher-label equality. Cache invalidation includes preprocessing sources;
+  malformed/unavailable caches rebuild. History and continuing-return/ECHO boundaries
+  remain outside the cache. PPO records anchor and actual replay coverage separately.
+  A 48-worker, 768-decision plumbing smoke restored its saved checkpoint with 1,600
+  anchor and 2,368 actual replay samples, including 33 positive menu-a anchor targets.
+- A separate redundant-scan removal reduced paired feature-encoding time by 9.5%
+  (0.8427 to 0.7628 seconds), preserving all 6,400 real vectors across feature versions
+  2–5 exactly. These are controlled preprocessing measurements, not an end-to-end
+  rollout speedup claim.
+  The subsequent uncontended operational 24/48/64 sweep at fixed 128-step chunks
+  measured 137.51/161.73/138.36 collection decisions/s over 17,408 decisions. Retain
+  48 workers. Worker-dependent seed prefixes and batch shapes prevent interpreting
+  these as identical-workload speedups. Full evidence: `artifacts/p/astra-scaling.json`.
+- The fast suite currently takes about 2.5 seconds: torch import alone costs about
+  1.2 seconds and first AdamW construction about 0.8–1.0 seconds. The original
+  subsecond fresh-process target is unmet; tests have not been removed to hide this.
+  Per user direction, further test-loop optimization is deprioritized in favor of
+  rollout throughput and policy research. Integrated commit `86464b1` passes 147 fast
+  tests, three live tests, lint, formatting, typing, and commit hooks.
+
+- Terrain v66's zero-update diagnostic ranks `(0, 0, 42853, 24, 24, 21, 217.0)`;
+  the fixed sixteen-case development comparison ranks
+  `(0, 0, 97476, 66, 66, 46, 450.0)` in 34.38 seconds. Both known terrain-blocked
+  loops and one oscillation escape, but thirteen deaths/three truncations and maximum
+  D:6/XL6 do not establish the survival or D:11 milestone. `poe promote-diagnostic`
+  promoted the retained diagnostic summary without rerunning games; a one-frame
+  `poe watch-diagnostic-grid` check resolves terrain-v66 directly from dev-champion.
+  Held-out and diagnostic viewers retain separate direct manifests, with no extra
+  suite-redirect layer on the viewing path.
+- Opt-in static DCSS data caching copies only validated upstream database/description
+  caches into private saves. Paired startup probes fell from about 5.8 seconds to
+  about 1.0 second including validation/copy, preserving initial and twenty-step
+  semantic behavior. The cached v51 diagnostic reproduces all five action sequences
+  and the full rank. `poe prepare-game-cache` and `--static-data-cache` expose the
+  opt-in path; defaults are unchanged. Cold and cached compatibility smoke both pass
+  on 0.34.1 and 0.33.1 at the exact revisions recorded below. Latest full gate:
+  186 fast tests, three live tests, formatting, lint, and typing pass.
 
 ## Verified commands
 

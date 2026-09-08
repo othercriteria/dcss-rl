@@ -11,6 +11,11 @@ from types import TracebackType
 from typing import BinaryIO
 
 from dcss_rl.units import GameSeed, Keycode, Seconds, UnixSocketPathBytes
+from dcss_rl.webtiles.cache import (
+    StaticDataCache,
+    StaticDataIdentity,
+    static_data_identity,
+)
 from dcss_rl.webtiles.transport import (
     FlushBoundary,
     ObservationBatch,
@@ -47,10 +52,15 @@ class ManagedGame:
         config: GameConfig | None = None,
         timeout: Seconds = _DEFAULT_GAME_TIMEOUT,
         run_root: Path | None = None,
+        static_cache: StaticDataCache | None = None,
+        capture_static_cache: bool = False,
     ) -> None:
         self.binary = Path(binary).resolve()
         self.config = config or GameConfig()
         self.timeout = timeout
+        self.static_cache = static_cache
+        self._capture_static_cache = capture_static_cache
+        self._static_cache_identity: StaticDataIdentity | None = None
         self._owned_root: tempfile.TemporaryDirectory[str] | None = None
         if run_root is None:
             self._owned_root = tempfile.TemporaryDirectory(prefix="dcss-rl-game-")
@@ -85,6 +95,11 @@ class ManagedGame:
         self.run_root.mkdir(parents=True, exist_ok=True)
         self.morgue_path.mkdir(exist_ok=True)
         self.save_path.mkdir(exist_ok=True)
+        if self._capture_static_cache:
+            self._static_cache_identity = static_data_identity(self.binary)
+        if self.static_cache is not None:
+            self.static_cache.populate(self.save_path, binary=self.binary)
+            self._static_cache_identity = self.static_cache.identity
         (self.run_root / "macros").mkdir(exist_ok=True)
         rc_path = self.run_root / "crawl.rc"
         rc_path.write_text(
@@ -203,6 +218,21 @@ class ManagedGame:
         if self._owned_root is not None:
             self._owned_root.cleanup()
             self._owned_root = None
+
+    def export_static_cache(self, destination: Path) -> StaticDataCache:
+        """Snapshot upstream static data only after this game's process is closed."""
+        if self.process is not None:
+            raise RuntimeError("close the DCSS game before exporting static caches")
+        if self._static_cache_identity is None:
+            raise RuntimeError(
+                "enable capture_static_cache before starting the source game"
+            )
+        return StaticDataCache.capture(
+            destination,
+            binary=self.binary,
+            closed_save_directory=self.save_path,
+            source_identity=self._static_cache_identity,
+        )
 
     def preserve(self, destination: Path) -> None:
         """Copy this episode's runtime artifacts to a durable location."""

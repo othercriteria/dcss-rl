@@ -91,14 +91,28 @@ poe watch-heldout-champion
 poe watch-heldout-grid
 ```
 
-Held-out and development leaders are deliberately separate. Diagnostic evaluations
-promote monotonically to `artifacts/dev-champion.json`; observe that track with:
+Held-out and development leaders are deliberately separate. The scripted diagnostic
+task promotes monotonically to `artifacts/dev-champion.json`; observe that track with:
 
 ```sh
 poe evaluate-scripted-diagnostic
 poe watch-diagnostic-leader
 poe watch-diagnostic-grid
 ```
+
+The grid tasks read `artifacts/champion.json` (held-out) and
+`artifacts/dev-champion.json` (diagnostic) directly. They replay the selected evaluation;
+they do not run the latest checkpoint or follow suite-config redirects. Generic
+learned evaluations do not promote unless explicitly requested. To promote an already
+completed evaluation of the complete current diagnostic suite without rerunning games:
+
+```sh
+poe promote-diagnostic --summary artifacts/e/terrain66-diagnostic/summary.json
+```
+
+This command requires retained replay files and a strictly better rank, and cannot
+write the held-out champion. Suite redirects select evaluation inputs, not viewer
+destinations; keeping the two champion manifests preserves the separate tracks.
 
 The terminal viewer identifies the resolved suite, policy, checkpoint, manifest, case,
 and recorded outcome before reconstructing either legacy full-snapshot trajectories or

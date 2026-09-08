@@ -33,6 +33,7 @@ from dcss_rl.units import (
     WorkerCount,
 )
 from dcss_rl.webtiles import GameConfig
+from dcss_rl.webtiles.cache import StaticDataCache
 
 _DEFAULT_EVALUATION_WORKERS = WorkerCount(1)
 _GAME_START_ATTEMPTS = StartupAttemptCount(3)
@@ -257,6 +258,7 @@ def evaluate_policy(
     *,
     workers: WorkerCount = _DEFAULT_EVALUATION_WORKERS,
     progress: Callable[[EvaluationProgress], None] | None = None,
+    static_cache: StaticDataCache | None = None,
 ) -> EvaluationSummary:
     """Run one policy over every fixed case and persist auditable artifacts."""
     output_directory.mkdir(parents=True, exist_ok=False)
@@ -268,7 +270,13 @@ def evaluate_policy(
     with ThreadPoolExecutor(max_workers=workers) as executor:
         future_indices: dict[Future[EpisodeResult], int] = {
             executor.submit(
-                _run_episode, binary, policy, suite, case, output_directory
+                _run_episode,
+                binary,
+                policy,
+                suite,
+                case,
+                output_directory,
+                static_cache,
             ): index
             for index, case in enumerate(suite.cases)
         }
@@ -427,6 +435,7 @@ def _run_episode(
     suite: EvaluationSuite,
     case: EvaluationCase,
     output_directory: Path,
+    static_cache: StaticDataCache | None = None,
 ) -> EpisodeResult:
     episode_directory = output_directory / case.case_id
     episode_directory.mkdir()
@@ -437,6 +446,7 @@ def _run_episode(
         episode_directory,
         agent_id=policy.policy_id,
         checkpoint_id=policy.checkpoint_id,
+        static_cache=static_cache,
     )
     env = started.env
     total_reward = 0.0
@@ -493,6 +503,7 @@ def _start_episode(
     *,
     agent_id: str,
     checkpoint_id: str | None,
+    static_cache: StaticDataCache | None = None,
 ) -> _StartedEpisode:
     """Start an evaluation episode with auditable, isolated retry artifacts."""
     last_timeout: TimeoutError | None = None
@@ -507,6 +518,7 @@ def _start_episode(
                 game_config=GameConfig(seed=case.seed),
                 max_steps=suite.step_limit,
                 run_root=game_directory,
+                static_cache=static_cache,
             ),
             TrajectoryWriter(trajectory_path),
             agent_id=agent_id,

@@ -17,12 +17,18 @@ from dcss_rl.observation import (
     visible_berserk_condition,
 )
 from dcss_rl.schema import CellView, ObservationData
+from dcss_rl.terrain import (
+    NavigationTerrainHint,
+    navigation_terrain_hint,
+    visibly_flying,
+)
 from dcss_rl.units import Coordinate, FeatureCount, FeatureSpecVersion
 
-FEATURE_SPEC_VERSION = FeatureSpecVersion(5)
+FEATURE_SPEC_VERSION = FeatureSpecVersion(6)
 _V2_FEATURE_SPEC_VERSION = FeatureSpecVersion(2)
 _V3_FEATURE_SPEC_VERSION = FeatureSpecVersion(3)
 _V4_FEATURE_SPEC_VERSION = FeatureSpecVersion(4)
+_V5_FEATURE_SPEC_VERSION = FeatureSpecVersion(5)
 LOCAL_RADIUS = 5
 _SIDE = 2 * LOCAL_RADIUS + 1
 _MAP_CHANNELS = 9
@@ -46,7 +52,7 @@ def feature_count(spec_version: FeatureSpecVersion) -> FeatureCount:
         return FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _V3_SCALAR_FEATURES)
     if spec_version == _V4_FEATURE_SPEC_VERSION:
         return FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _V4_SCALAR_FEATURES)
-    if spec_version == FEATURE_SPEC_VERSION:
+    if spec_version in {_V5_FEATURE_SPEC_VERSION, FEATURE_SPEC_VERSION}:
         return FEATURE_COUNT
     raise ValueError(f"unsupported feature specification {spec_version}")
 
@@ -59,6 +65,8 @@ def encode_observation(
     """Encode one semantic observation without learned or fitted preprocessing."""
     result = np.zeros(feature_count(spec_version), dtype=np.float32)
     player = observation["player"]
+    terrain_aware = spec_version >= 6
+    flying = visibly_flying(player) if terrain_aware else False
     position = player.get("pos", {"x": 0, "y": 0})
     origin_x, origin_y = position["x"], position["y"]
     for cell in observation["cells"]:
@@ -69,7 +77,13 @@ def encode_observation(
         glyph = cell.get("g")
         channels = (
             glyph is not None,
-            glyph is not None and glyph not in _WALL_GLYPHS,
+            glyph is not None
+            and glyph not in _WALL_GLYPHS
+            and (
+                not terrain_aware
+                or navigation_terrain_hint(cell, flying=flying)
+                is not NavigationTerrainHint.BLOCKED
+            ),
             glyph == "#",
             "mon" in cell,
             glyph in _ITEM_GLYPHS,
@@ -89,6 +103,16 @@ def encode_observation(
     mp_max = max(_number(player.get("mp_max")), 1.0)
     messages = " ".join(observation["messages"]).casefold()
     cells = {(cell["x"], cell["y"]): cell for cell in observation["cells"]}
+    blocked = (
+        frozenset(
+            point
+            for point, cell in cells.items()
+            if navigation_terrain_hint(cell, flying=flying)
+            is NavigationTerrainHint.BLOCKED
+        )
+        if terrain_aware
+        else frozenset()
+    )
     unique_cells = len(cells) == len(observation["cells"])
     origin = (origin_x, origin_y)
     monster_targets = {point for point, cell in cells.items() if "mon" in cell}
@@ -98,13 +122,20 @@ def encode_observation(
         for dx, dy in _DIRECTIONS
     )
     adjacent_walkable = tuple(
-        float(_walkable(cells.get((origin_x + dx, origin_y + dy))))
+        float(
+            (origin_x + dx, origin_y + dy) not in blocked
+            and _walkable(cells.get((origin_x + dx, origin_y + dy)))
+        )
         for dx, dy in _DIRECTIONS
     )
     monster_step = _direction_one_hot(
-        _shortest_step(origin, monster_targets, cells, stop_adjacent=True)
+        _shortest_step(
+            origin, monster_targets, cells, stop_adjacent=True, blocked=blocked
+        )
     )
-    stair_step = _direction_one_hot(_shortest_step(origin, stair_targets, cells))
+    stair_step = _direction_one_hot(
+        _shortest_step(origin, stair_targets, cells, blocked=blocked)
+    )
     scalar = (
         hp / hp_max,
         min(hp_max / 100.0, 1.0),
@@ -242,6 +273,7 @@ def _shortest_step(
     cells: Mapping[Coordinate, CellView],
     *,
     stop_adjacent: bool = False,
+    blocked: frozenset[Coordinate] = frozenset(),
 ) -> Coordinate | None:
     if not targets:
         return None
@@ -259,8 +291,10 @@ def _shortest_step(
             destination = current
             break
         for candidate in _neighbors(current):
-            if candidate in predecessors or (
-                candidate not in targets and not _walkable(cells.get(candidate))
+            if (
+                candidate in blocked
+                or candidate in predecessors
+                or (candidate not in targets and not _walkable(cells.get(candidate)))
             ):
                 continue
             predecessors[candidate] = current

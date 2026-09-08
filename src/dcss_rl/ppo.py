@@ -85,6 +85,7 @@ from dcss_rl.units import (
     WorkerIndex,
 )
 from dcss_rl.webtiles import GameConfig
+from dcss_rl.webtiles.cache import StaticDataCache, StaticDataIdentity
 
 type FloatArray = NDArray[np.float32]
 type BoolArray = NDArray[np.bool_]
@@ -134,6 +135,7 @@ class PpoConfig:
     imitation_weight: LossWeight = _DEFAULT_IMITATION_WEIGHT
     aggregate_imitation_replay: bool = True
     imitation_cache_directory: Path | None = None
+    static_data_cache: Path | None = None
     teacher_balance_exponent: Probability = _DEFAULT_TEACHER_BALANCE_EXPONENT
     clip_ratio: Probability = _DEFAULT_CLIP_RATIO
     discount: Probability = _DEFAULT_DISCOUNT
@@ -293,6 +295,7 @@ class _Worker:
     action_history: list[ActionIndex] = field(default_factory=list)
     cycle_tracker: SemanticCycleTracker | None = None
     ui_interaction_budget: UiInteractionBudget | None = None
+    static_cache: StaticDataCache | None = None
 
     def ready(self) -> tuple[ObservationData, BoolArray]:
         if self.observation is None:
@@ -376,6 +379,7 @@ class _Worker:
                 max_steps=StepLimit(self.suite.step_limit),
                 run_root=run_root,
                 reward_shaping=self.reward_shaping,
+                static_cache=self.static_cache,
             )
             try:
                 observation, info = self.env.reset_typed()
@@ -624,6 +628,11 @@ def train_ppo(
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     teacher = ScriptedMibePolicy()
+    static_cache = (
+        StaticDataCache.load(config.static_data_cache, binary=binary)
+        if config.static_data_cache is not None
+        else None
+    )
     seed_schedule = TrainingSeedSchedule(CaseCount(len(suite.cases)), config.workers)
     workers = tuple(
         _Worker(
@@ -641,6 +650,7 @@ def train_ppo(
             np.random.default_rng(config.seed + index),
             cycle_tracker=SemanticCycleTracker(config.short_cycle_window),
             ui_interaction_budget=UiInteractionBudget(config.ui_interaction_budget),
+            static_cache=static_cache,
         )
         for index in range(config.workers)
     )
@@ -733,6 +743,9 @@ def train_ppo(
                     action_history_length=model.config.action_history_length,
                     ui_interaction_overflows=ui_interaction_overflow_count,
                     anchor_coverage=anchor_coverage,
+                    static_data_identity=static_cache.identity
+                    if static_cache
+                    else None,
                     imitation_coverage=_replay_coverage(
                         tuple(imitation_replay)
                         if config.aggregate_imitation_replay
@@ -812,6 +825,7 @@ def _checkpoint_metadata(
     ui_interaction_overflows: UiInteractionOverflowCount,
     anchor_coverage: ReplayCoverage | None = None,
     imitation_coverage: ReplayCoverage | None = None,
+    static_data_identity: StaticDataIdentity | None = None,
 ) -> PpoCheckpointMetadata:
     return PpoCheckpointMetadata(
         training_method="masked-ppo",
@@ -849,6 +863,7 @@ def _checkpoint_metadata(
         ui_interaction_overflows=ui_interaction_overflows,
         anchor_coverage=anchor_coverage,
         imitation_coverage=imitation_coverage,
+        static_data_identity=static_data_identity,
     )
 
 

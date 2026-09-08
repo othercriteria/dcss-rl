@@ -24,6 +24,7 @@ from dcss_rl.units import (
     FeatureSpecVersion,
     Probability,
 )
+from dcss_rl.webtiles.cache import StaticDataIdentity
 
 CHECKPOINT_SCHEMA_VERSION = 1
 _ZERO_ACTION_HISTORY_LENGTH = ActionHistoryLength(0)
@@ -49,6 +50,16 @@ class CheckpointTrainingMetadata:
     value_weight: float
     teacher_balance_exponent: float
     validation_accuracy: float
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureMigrationMetadata:
+    training_method: str
+    source_checkpoint_sha256: CheckpointId
+    source_feature_spec: FeatureSpecVersion
+    target_feature_spec: FeatureSpecVersion
+    preprocessing_sha256: tuple[tuple[str, str], ...]
+    optimizer_steps: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +99,7 @@ class PpoCheckpointMetadata:
     ui_interaction_overflows: int = 0
     anchor_coverage: ReplayCoverage | None = None
     imitation_coverage: ReplayCoverage | None = None
+    static_data_identity: StaticDataIdentity | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,9 +301,15 @@ def add_action_history(
 def align_feature_spec(
     model: SemanticActorCritic, feature_spec_version: FeatureSpecVersion
 ) -> SemanticActorCritic:
-    """Append semantic inputs while preserving the checkpoint's exact policy."""
+    """Migrate model coordinates; same-width versions may reinterpret input meaning.
+
+    Older checkpoints keep their recorded preprocessing until explicitly migrated.
+    Weight preservation alone does not imply equal behavior under new semantics.
+    """
     if model.config.feature_spec_version == feature_spec_version:
         return model
+    if model.config.feature_spec_version > feature_spec_version:
+        raise ValueError("cannot downgrade a checkpoint feature specification")
     old_semantic_width = feature_count(model.config.feature_spec_version)
     new_semantic_width = feature_count(feature_spec_version)
     if old_semantic_width > new_semantic_width:
@@ -378,7 +396,9 @@ def save_checkpoint(
     *,
     model: SemanticActorCritic,
     policy_id: str,
-    training_metadata: CheckpointTrainingMetadata | PpoCheckpointMetadata,
+    training_metadata: CheckpointTrainingMetadata
+    | PpoCheckpointMetadata
+    | FeatureMigrationMetadata,
 ) -> None:
     """Persist weights plus every contract needed for deterministic restoration."""
     path = Path(path)

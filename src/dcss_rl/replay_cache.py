@@ -35,6 +35,7 @@ _DEPENDENCIES = (
     "schema.py",
     "training.py",
     "trajectory.py",
+    "terrain.py",
     "replay_cache.py",
 )
 

@@ -70,6 +70,7 @@ def main() -> None:
         default=Path("vendor/crawl/crawl-ref/source/crawl"),
     )
     compatibility.add_argument("--seed", type=int, default=1)
+    compatibility.add_argument("--static-data-cache", type=Path)
     evaluate = commands.add_parser("evaluate-scripted")
     evaluate.add_argument(
         "--binary",
@@ -81,6 +82,7 @@ def main() -> None:
     )
     evaluate.add_argument("--output", type=Path)
     evaluate.add_argument("--workers", type=int, default=5)
+    evaluate.add_argument("--static-data-cache", type=Path)
     evaluate.add_argument("--threshold", type=Path)
     evaluate.add_argument("--champion", type=Path)
     learned = commands.add_parser("evaluate-learned")
@@ -95,6 +97,7 @@ def main() -> None:
     )
     learned.add_argument("--output", type=Path)
     learned.add_argument("--workers", type=int, default=5)
+    learned.add_argument("--static-data-cache", type=Path)
     learned.add_argument("--threshold", type=Path)
     learned.add_argument("--champion", type=Path)
     learned.add_argument("--device", default="cuda")
@@ -157,6 +160,7 @@ def main() -> None:
         help="existing structured-action row to train during selective warmup",
     )
     ppo.add_argument("--workers", type=int, default=5)
+    ppo.add_argument("--static-data-cache", type=Path)
     ppo.add_argument("--inference-batch-size", type=int, default=64)
     ppo.add_argument("--inference-batch-wait-seconds", type=float, default=0.001)
     ppo.add_argument("--minibatch-size", type=int, default=256)
@@ -225,8 +229,16 @@ def main() -> None:
         collect_ability_curriculum(arguments.binary, arguments.output)
         return
     if arguments.command == "compatibility-smoke":
+        from dcss_rl.webtiles.cache import StaticDataCache
+
         report = run_compatibility_smoke(
-            arguments.binary, seed=GameSeed(arguments.seed)
+            arguments.binary,
+            seed=GameSeed(arguments.seed),
+            static_cache=StaticDataCache.load(
+                arguments.static_data_cache, binary=arguments.binary
+            )
+            if arguments.static_data_cache is not None
+            else None,
         )
         print(
             f"{report.version}: {report.species} D:{report.depth}, "
@@ -241,6 +253,7 @@ def main() -> None:
             champion_path=arguments.champion,
             workers=WorkerCount(arguments.workers),
             threshold_path=arguments.threshold,
+            static_data_cache=arguments.static_data_cache,
         )
         return
     if arguments.command == "evaluate-learned":
@@ -262,6 +275,7 @@ def main() -> None:
             champion_path=arguments.champion,
             workers=WorkerCount(arguments.workers),
             threshold_path=arguments.threshold,
+            static_data_cache=arguments.static_data_cache,
         )
         if isinstance(policy, ConfidenceGatedPolicy):
             print(f"learned decision fraction: {policy.learned_fraction:.3f}")
@@ -359,6 +373,7 @@ def main() -> None:
                     for trajectory in sorted(root.rglob("trajectory.jsonl"))
                 ),
                 imitation_cache_directory=arguments.imitation_cache_directory,
+                static_data_cache=arguments.static_data_cache,
                 workers=WorkerCount(arguments.workers),
                 inference_batch_size=InferenceBatchSize(arguments.inference_batch_size),
                 inference_batch_wait=Seconds(arguments.inference_batch_wait_seconds),
@@ -471,6 +486,7 @@ def _evaluate_scripted(
     champion_path: Path | None,
     workers: WorkerCount,
     threshold_path: Path | None,
+    static_data_cache: Path | None = None,
 ) -> None:
     _evaluate(
         policy=ScriptedMibePolicy(),
@@ -480,6 +496,7 @@ def _evaluate_scripted(
         champion_path=champion_path,
         workers=workers,
         threshold_path=threshold_path,
+        static_data_cache=static_data_cache,
     )
 
 
@@ -492,7 +509,10 @@ def _evaluate(
     champion_path: Path | None,
     workers: WorkerCount,
     threshold_path: Path | None,
+    static_data_cache: Path | None = None,
 ) -> None:
+    from dcss_rl.webtiles.cache import StaticDataCache
+
     suite = load_suite(suite_path)
     if output is None:
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -504,6 +524,9 @@ def _evaluate(
         output,
         workers=workers,
         progress=_print_evaluation_progress,
+        static_cache=StaticDataCache.load(static_data_cache, binary=binary)
+        if static_data_cache is not None
+        else None,
     )
     if threshold_path is not None:
         assert_meets_regression_threshold(
