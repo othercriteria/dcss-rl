@@ -192,11 +192,12 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.steps += 1
         terminated, outcome = self._terminal_outcome(self.last_batch)
         self._update_maxima(self.current)
-        reward = float(
-            3 * (self._max_depth - previous_depth)
-            + 10 * (self._max_xl - previous_xl)
-            + (1000 if outcome == "won" else 0)
-            - (10 if outcome == "dead" else 0)
+        reward = self._sparse_reward(
+            previous_depth,
+            previous_xl,
+            self._max_depth,
+            self._max_xl,
+            outcome,
         )
         reward += shaped_reward(
             previous_observation,
@@ -210,6 +211,21 @@ class DcssEnv(gym.Env[ObservationData, int]):
             terminated,
             truncated,
             self._info(structured_action, outcome=outcome),
+        )
+
+    @staticmethod
+    def _sparse_reward(
+        previous_depth: int,
+        previous_xl: int,
+        current_depth: int,
+        current_xl: int,
+        outcome: str | None,
+    ) -> float:
+        """Reward milestones without making delayed death cheaper under discounting."""
+        return float(
+            3 * (current_depth - previous_depth)
+            + 10 * (current_xl - previous_xl)
+            + (1000 if outcome == "won" else 0)
         )
 
     def _update_maxima(self, observation: SemanticObservation) -> None:

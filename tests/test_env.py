@@ -45,6 +45,12 @@ def test_player_visible_death_ends_episode_before_post_game_ui() -> None:
     assert DcssEnv._terminal_outcome(batch) == (True, "dead")
 
 
+def test_sparse_reward_does_not_pay_agent_to_postpone_death() -> None:
+    # Death is terminal feedback. An explicit negative reward would be discounted by
+    # every delaying action and could be escaped entirely at a finite time limit.
+    assert DcssEnv._sparse_reward(1, 1, 1, 1, "dead") == 0.0
+
+
 def test_dense_reward_uses_visible_potential_deltas() -> None:
     previous: ObservationData = {
         "player": {

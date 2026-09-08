@@ -252,6 +252,10 @@ not the current bottleneck.
 - Canonical track activation archived heldout-v2 and installed heldout-v3 without
   candidate-informed seed selection. Diagnostic evaluation is non-promoting unless a
   champion path is explicit, preventing cross-suite manifest comparisons.
+- Explicit death reward was removed before PPO/value optimization. With discounting,
+  a negative terminal reward pays the agent to delay an unavoidable death and a finite
+  horizon can erase the charge entirely. Death still ends the episode at zero terminal
+  value and forfeits future progress; terminal trajectories remain in the curriculum.
 
 Next:
 

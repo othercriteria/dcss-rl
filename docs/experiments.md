@@ -257,9 +257,16 @@ this journal exists to keep research velocity and direction visible.
   experiment. Decision: rerun it from the same initial checkpoint; do not tune from
   heldout-v3 failure details.
 - **2026-09-07 22:05 EDT — early-death objective audit.** Sparse environment reward
-  charges death -10, equal to one XL gain, immediately resets the worker, and retains
-  the terminal trajectory. Evaluation does not count deaths directly, but its
-  decision-weighted depth area forfeits all remaining horizon opportunity and can
-  prefer safe lingering. Decision: keep useful tactical death feedback for now and
-  design a versioned discovered-coverage/depth rank that rewards progress without
-  either stalling or treating fast experimental failure as globally ruinous.
+  charged death -10, equal to one XL gain. Under discounting, delaying an unavoidable
+  death reduces that cost's present value; reaching a finite horizon can erase it.
+  Evaluation's decision-weighted depth area independently forfeits remaining horizon
+  opportunity and can prefer safe lingering. Decision: remove the explicit death cost;
+  termination and foregone future progress still teach the value model, while terminal
+  trajectories remain in the curriculum. Design a versioned discovered-coverage/depth
+  rank that rewards progress without stalling or making fast failure globally ruinous.
+- **2026-09-07 22:06–22:12 EDT — complete feature-v3 DAgger rerun.** The clean
+  eight-update rerun consumed 49,152 decisions and ended at 56.3% current-state teacher
+  agreement. Diagnostic-v2 reached D:5 twice and aggregate XL 14, but two early deaths
+  and three passive survivors yielded rank `(0, 0, 1193, 1692, 15, 14, 100.0)`, below
+  v21's depth-area lead. Decision: reject without heldout-v3 access; the result further
+  demonstrates why depth-area and useful risky exploration need separating.
