@@ -47,6 +47,33 @@ def test_reducer_merges_sparse_player_and_map_updates() -> None:
     assert second.cells[1] == {"x": 0, "y": 0, "g": ".", "f": 60}
 
 
+def test_reducer_snapshots_do_not_share_cached_cell_data() -> None:
+    reducer = ObservationReducer()
+    first = reducer.apply(
+        batch(
+            {
+                "msg": "map",
+                "cells": [
+                    {
+                        "x": 0,
+                        "y": 0,
+                        "g": "g",
+                        "mon": {"name": "goblin", "threat": 1},
+                    }
+                ],
+            }
+        )
+    )
+    first.cells[0]["g"] = "!"
+    first.cells[0]["mon"]["name"] = "mutated"
+
+    second = reducer.apply(batch({"msg": "player", "hp": 10}))
+
+    assert second.cells == (
+        {"x": 0, "y": 0, "g": "g", "mon": {"name": "goblin", "threat": 1}},
+    )
+
+
 def test_reducer_extracts_messages_and_menu_choices() -> None:
     observation = ObservationReducer().apply(
         batch(

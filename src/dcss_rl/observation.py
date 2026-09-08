@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import cast
 
 from dcss_rl.schema import CellView, JsonObject, ObservationData, PlayerView
-from dcss_rl.units import Keycode
+from dcss_rl.units import Coordinate, Keycode
 from dcss_rl.webtiles import ObservationBatch
 
 _TAG = re.compile(r"<[^>]*>")
@@ -36,6 +36,50 @@ def _merge(target: JsonObject, delta: JsonObject) -> None:
 class MenuChoice:
     keycode: Keycode
     text: str
+
+
+@dataclass(frozen=True, slots=True)
+class _SemanticCell:
+    """Normalized cached map cell, detached from mutable protocol state."""
+
+    x: int
+    y: int
+    glyph: str | None
+    color: int | None
+    feature: int | None
+    map_feature: int | None
+    monster: JsonObject | None
+
+    @classmethod
+    def from_protocol(cls, x: int, y: int, source: JsonObject) -> _SemanticCell:
+        glyph = source.get("g")
+        color = source.get("col")
+        feature = source.get("f")
+        map_feature = source.get("mf")
+        monster = source.get("mon")
+        return cls(
+            x=x,
+            y=y,
+            glyph=glyph if isinstance(glyph, str) else None,
+            color=color if isinstance(color, int) else None,
+            feature=feature if isinstance(feature, int) else None,
+            map_feature=map_feature if isinstance(map_feature, int) else None,
+            monster=copy.deepcopy(monster) if isinstance(monster, dict) else None,
+        )
+
+    def to_view(self) -> CellView:
+        cell: CellView = {"x": self.x, "y": self.y}
+        if self.glyph is not None:
+            cell["g"] = self.glyph
+        if self.color is not None:
+            cell["col"] = self.color
+        if self.feature is not None:
+            cell["f"] = self.feature
+        if self.map_feature is not None:
+            cell["mf"] = self.map_feature
+        if self.monster is not None:
+            cell["mon"] = copy.deepcopy(self.monster)
+        return cell
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +171,9 @@ class ObservationReducer:
 
     def __init__(self) -> None:
         self._player: JsonObject = {}
-        self._cells: dict[tuple[int, int], JsonObject] = {}
+        self._cells: dict[Coordinate, JsonObject] = {}
+        self._semantic_cell_cache: dict[Coordinate, _SemanticCell] = {}
+        self._ordered_semantic_cells: tuple[_SemanticCell, ...] | None = None
         self._map_x: int | None = None
         self._map_y: int | None = None
         self._menu: JsonObject | None = None
@@ -178,6 +224,8 @@ class ObservationReducer:
     def _apply_map(self, payload: JsonObject) -> None:
         if payload.get("clear") is True:
             self._cells.clear()
+            self._semantic_cell_cache.clear()
+            self._ordered_semantic_cells = None
         cells = payload.get("cells")
         if not isinstance(cells, list):
             return
@@ -195,8 +243,13 @@ class ObservationReducer:
                     continue
                 y = self._map_y
             self._map_x, self._map_y = x, y
-            cell = self._cells.setdefault((x, y), {"x": x, "y": y})
+            coordinate: Coordinate = (x, y)
+            cell = self._cells.setdefault(coordinate, {"x": x, "y": y})
             _merge(cell, {k: v for k, v in delta.items() if k not in {"x", "y"}})
+            self._semantic_cell_cache[coordinate] = _SemanticCell.from_protocol(
+                x, y, cell
+            )
+            self._ordered_semantic_cells = None
 
     @staticmethod
     def _read_messages(payload: JsonObject) -> list[str]:
@@ -211,9 +264,7 @@ class ObservationReducer:
 
     def _semantic_player(self) -> PlayerView:
         result = {
-            key: copy.deepcopy(self._player[key])
-            for key in self.PLAYER_FIELDS
-            if key in self._player
+            key: self._player[key] for key in self.PLAYER_FIELDS if key in self._player
         }
         inventory = result.get("inv")
         if isinstance(inventory, dict):
@@ -222,30 +273,17 @@ class ObservationReducer:
                 for slot, item in inventory.items()
                 if isinstance(item, dict) and item.get("quantity", 0) > 0
             }
-        return cast(PlayerView, result)
+        return cast(PlayerView, copy.deepcopy(result))
 
     def _semantic_cells(self) -> tuple[CellView, ...]:
-        cells: list[CellView] = []
-        ordered = sorted(self._cells.items(), key=lambda item: item[0][::-1])
-        for (x, y), source in ordered:
-            cell: CellView = {"x": x, "y": y}
-            glyph = source.get("g")
-            if isinstance(glyph, str):
-                cell["g"] = glyph
-            col = source.get("col")
-            if isinstance(col, int):
-                cell["col"] = col
-            feature = source.get("f")
-            if isinstance(feature, int):
-                cell["f"] = feature
-            map_feature = source.get("mf")
-            if isinstance(map_feature, int):
-                cell["mf"] = map_feature
-            monster = source.get("mon")
-            if isinstance(monster, dict):
-                cell["mon"] = copy.deepcopy(monster)
-            cells.append(cell)
-        return tuple(cells)
+        if self._ordered_semantic_cells is None:
+            self._ordered_semantic_cells = tuple(
+                self._semantic_cell_cache[coordinate]
+                for coordinate in sorted(
+                    self._semantic_cell_cache, key=lambda point: (point[1], point[0])
+                )
+            )
+        return tuple(cell.to_view() for cell in self._ordered_semantic_cells)
 
     def _menu_type(self) -> str | None:
         if self._menu is None:

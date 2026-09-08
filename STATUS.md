@@ -361,6 +361,10 @@ not the current bottleneck.
   incidence (17,338 hits) and peaked at 29,115. None received heldout-v5 access. The
   next representation must expose action outcome/availability, not merely requested
   action history.
+- The semantic reducer now normalizes changed map cells once and caches their typed,
+  deterministic ordering while continuing to return detached snapshots. Replaying the
+  501-boundary diagnostic-v2-404 trace five times fell from a 2.514-second median to
+  1.953 seconds (22.3%); the complete observation-stream digest remained identical.
 
 Next:
 

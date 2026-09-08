@@ -56,6 +56,11 @@ protocol behaviors:
 - unknown fields remain available in raw trajectories even when not promoted to the
   semantic schema.
 
+The reducer caches normalized semantic cells behind a frozen domain type and
+invalidates their deterministic ordering on map updates. Every emitted cell view is
+still newly materialized (including nested monster data), so callers cannot mutate a
+past or future snapshot through the cache.
+
 The semantic schema should favor names, glyphs, relative geometry, and ordinary game
 statistics over version-specific tile IDs. Reducer changes must remain replayable over
 previously collected raw messages.
