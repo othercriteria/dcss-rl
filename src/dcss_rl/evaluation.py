@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
@@ -15,12 +15,16 @@ import numpy as np
 
 from dcss_rl.env import DcssEnv
 from dcss_rl.policy import Policy
-from dcss_rl.schema import JsonObject
+from dcss_rl.schema import JsonObject, ObservationData
 from dcss_rl.trajectory import RecordingEnv, TrajectoryWriter
 from dcss_rl.units import (
     DecisionProgressArea,
     DecisionsPerSecond,
+    DepthWeightedDiscovery,
     GameSeed,
+    LevelCount,
+    LevelId,
+    PlaceId,
     Seconds,
     StepLimit,
     WorkerCount,
@@ -30,7 +34,7 @@ from dcss_rl.webtiles import GameConfig
 _DEFAULT_EVALUATION_WORKERS = WorkerCount(1)
 _ZERO_SECONDS = Seconds(0.0)
 type EvaluationRank = tuple[int, int, int, int, int, int, float]
-RANK_SPEC_VERSION = 4
+RANK_SPEC_VERSION = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +59,8 @@ class EpisodeResult:
     policy_steps: int
     game_turns: int
     depth_progress_area: DecisionProgressArea
+    depth_weighted_discovery: DepthWeightedDiscovery
+    levels_visited: LevelCount
     max_depth: int
     max_xl: int
     runes: int
@@ -76,8 +82,8 @@ class EvaluationSummary:
         return (
             sum(episode.outcome == "won" for episode in self.episodes),
             sum(episode.runes for episode in self.episodes),
-            sum(episode.depth_progress_area for episode in self.episodes),
-            sum(episode.policy_steps for episode in self.episodes),
+            sum(episode.depth_weighted_discovery for episode in self.episodes),
+            sum(episode.levels_visited for episode in self.episodes),
             sum(episode.max_depth for episode in self.episodes),
             sum(episode.max_xl for episode in self.episodes),
             sum(episode.total_reward for episode in self.episodes),
@@ -89,6 +95,26 @@ class EvaluationSummary:
         if self.wall_seconds <= 0:
             return DecisionsPerSecond(0.0)
         return DecisionsPerSecond(decisions / self.wall_seconds)
+
+
+@dataclass(slots=True)
+class _DiscoveryTracker:
+    cells: set[tuple[LevelId, int, int]] = field(default_factory=set)
+    levels: set[LevelId] = field(default_factory=set)
+    score: DepthWeightedDiscovery = field(
+        default_factory=lambda: DepthWeightedDiscovery(0)
+    )
+
+    def observe(self, observation: ObservationData) -> None:
+        player = observation["player"]
+        depth = max(player.get("depth", 1), 1)
+        level = (PlaceId(player.get("place", "Dungeon")), depth)
+        self.levels.add(level)
+        for cell in observation["cells"]:
+            cell_key = (level, cell["x"], cell["y"])
+            if cell_key not in self.cells:
+                self.cells.add(cell_key)
+                self.score = DepthWeightedDiscovery(self.score + depth)
 
 
 @dataclass(frozen=True, slots=True)
@@ -387,8 +413,10 @@ def _run_episode(
     )
     total_reward = 0.0
     depth_progress_area = DecisionProgressArea(0)
+    discovery = _DiscoveryTracker()
     outcome = "unknown"
     observation, info = env.reset()
+    discovery.observe(observation)
     try:
         while True:
             mask = info.get("action_mask")
@@ -398,6 +426,7 @@ def _run_episode(
             observation, reward, terminated, truncated, info = env.step(action)
             total_reward += reward
             player = observation["player"]
+            discovery.observe(observation)
             depth_progress_area = DecisionProgressArea(
                 depth_progress_area + max(player.get("depth", 1) - 1, 0)
             )
@@ -414,6 +443,8 @@ def _run_episode(
             _required_int(info, "steps"),
             player.get("turn", 0),
             depth_progress_area,
+            discovery.score,
+            LevelCount(len(discovery.levels)),
             _required_int(info, "max_depth"),
             _required_int(info, "max_xl"),
             0,

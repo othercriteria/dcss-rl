@@ -129,20 +129,18 @@ manifest therefore contains a disjoint, untouched seed set and is used only for
 champion evaluation. Independent cases execute concurrently; deterministic result
 ordering follows manifest order rather than completion order.
 
-The frozen scripted-v2 held-out rank is also checked in as a regression floor. The
+The canonical learned held-out rank is also checked in as a regression floor. The
 standard scripted evaluation command verifies that floor before writing a champion
 manifest. Threshold comparison uses the same lexicographic metric ordering as
 champion selection, so improvement on a higher-priority milestone is not vetoed by a
-lower-priority aggregate. Rank v4 orders wins, runes, decision-weighted depth progress
-(`sum(depth - 1)`), bounded policy decisions survived, aggregate maximum-depth
-frontier, final/maximum XL, then shaped reward. D:1 idling therefore contributes no
-depth progress, while reaching deeper earlier and surviving there accumulates credit.
-XL is monotonic in normal play, so integrating it over decisions would reward risky
-front-loading rather than additional progression. The rank deliberately excludes raw DCSS game turns: automatic
-rest/travel can advance thousands of turns behind one policy decision and therefore
-makes that count an exploitable survival proxy. The initial depth-progress coordinate
-is valid for the Dungeon-only curriculum; branch play requires a versioned mapping
-from `(place, branch depth)` into intentional progression values.
+lower-priority aggregate. Rank v5 orders wins, runes, depth-weighted newly discovered
+cells, distinct `(place, branch depth)` levels visited, aggregate maximum depth,
+maximum XL, then reward. Already-seen cells, repeated actions, and lingering add no
+credit; newly exploring after a tactical or strategic retreat does. Death preserves
+progress accumulated before reset instead of forfeiting an artificial remainder of
+the evaluation horizon. XL is monotonic in normal play, so integrating it over
+decisions would reward risky front-loading rather than additional progression. The
+rank excludes both policy decisions and raw DCSS turns as survival proxies.
 
 ## Initial research comparisons
 
@@ -177,6 +175,12 @@ the feature-spec version and fail closed when loading older checkpoints.
 Diagnostic and held-out champion manifests are separate monotonic tracks. A candidate
 can replace a track only when its metric vector strictly outranks the existing
 same-suite manifest; cross-suite promotion is rejected.
+
+PPO return estimation distinguishes true terminal states from administrative episode
+limits. A time limit bootstraps the value of its final player-visible observation but
+cuts GAE recursion before the reset episode; death uses zero terminal value. There is
+no explicit negative death reward: discounting such a cost would pay the policy to
+postpone unavoidable death and a finite limit could erase it entirely.
 
 The first promoted agent uses a confidence gate calibrated only on diagnostic expert
 states. At threshold 0.98, neural decisions covered 23.7% of diagnostic actions with

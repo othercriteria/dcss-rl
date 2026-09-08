@@ -27,6 +27,7 @@ from dcss_rl.learned import (
     save_checkpoint,
 )
 from dcss_rl.policy import ScriptedMibePolicy
+from dcss_rl.returns import generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.schema import ObservationData
 from dcss_rl.units import (
@@ -183,6 +184,16 @@ class PpoLosses:
     imitation: float
 
 
+@dataclass(frozen=True, slots=True)
+class _WorkerStep:
+    observation: ObservationData
+    action_mask: BoolArray
+    reward: float
+    terminated: bool
+    truncated: bool
+    completed_return: float | None
+
+
 @dataclass(slots=True)
 class _Worker:
     binary: Path
@@ -205,13 +216,14 @@ class _Worker:
             raise RuntimeError("online worker failed to reset")
         return self.observation, self.action_mask
 
-    def step(
-        self, action: ActionIndex
-    ) -> tuple[ObservationData, float, bool, float | None]:
+    def step(self, action: ActionIndex) -> _WorkerStep:
         if self.env is None:
             raise RuntimeError("online worker is not ready")
         observation, reward, terminated, truncated, info = self.env.step(action)
         done = terminated or truncated
+        mask = info.get("action_mask")
+        if not isinstance(mask, np.ndarray) or mask.dtype != np.bool_:
+            raise RuntimeError("environment returned an invalid action mask")
         self.episode_return += reward
         completed_return = self.episode_return if done else None
         if done:
@@ -222,11 +234,15 @@ class _Worker:
             self.episode_return = 0.0
         else:
             self.observation = observation
-            mask = info.get("action_mask")
-            if not isinstance(mask, np.ndarray) or mask.dtype != np.bool_:
-                raise RuntimeError("environment returned an invalid action mask")
             self.action_mask = mask
-        return observation, reward, done, completed_return
+        return _WorkerStep(
+            observation,
+            mask,
+            reward,
+            terminated,
+            truncated,
+            completed_return,
+        )
 
     def close(self) -> None:
         if self.env is not None:
@@ -614,6 +630,7 @@ def _collect_worker_rollout(
     values: list[float] = []
     rewards: list[float] = []
     dones: list[bool] = []
+    time_limit_bootstraps: list[float] = []
     next_deltas: list[FloatArray] = []
     teacher_actions: list[int] = []
     completed_returns: list[float] = []
@@ -626,23 +643,26 @@ def _collect_worker_rollout(
         probabilities = inference.probabilities
         value = inference.value
         action = int(worker.rng.choice(len(probabilities), p=probabilities))
-        next_observation, reward, done, completed_return = worker.step(
-            ActionIndex(action)
-        )
+        step = worker.step(ActionIndex(action))
+        next_observation = step.observation
         next_feature = encode_observation(
             next_observation, spec_version=batcher.feature_spec_version
         )
+        time_limit_bootstrap = 0.0
+        if step.truncated and not step.terminated:
+            time_limit_bootstrap = batcher.infer(next_feature, step.action_mask).value
         features.append(feature)
         masks.append(mask)
         actions.append(action)
         log_probabilities.append(float(np.log(probabilities[action])))
         values.append(value)
-        rewards.append(reward)
-        dones.append(done)
+        rewards.append(step.reward)
+        dones.append(step.terminated or step.truncated)
+        time_limit_bootstraps.append(time_limit_bootstrap)
         next_deltas.append(next_feature - feature)
         teacher_actions.append(int(teacher.select(observation, mask)))
-        if completed_return is not None:
-            completed_returns.append(completed_return)
+        if step.completed_return is not None:
+            completed_returns.append(step.completed_return)
 
     final_value = 0.0
     if not dones[-1]:
@@ -654,10 +674,11 @@ def _collect_worker_rollout(
     reward_array = np.asarray(rewards, dtype=np.float32)[:, None]
     value_array = np.asarray(values, dtype=np.float32)[:, None]
     done_array = np.asarray(dones, dtype=np.bool_)[:, None]
-    advantages, returns = _gae(
+    advantages, returns = generalized_advantage_estimate(
         reward_array,
         value_array,
         done_array,
+        np.asarray(time_limit_bootstraps, dtype=np.float32)[:, None],
         np.asarray([final_value], dtype=np.float32),
         discount=config.discount,
         gae_lambda=config.gae_lambda,
@@ -674,27 +695,6 @@ def _collect_worker_rollout(
         np.asarray(teacher_actions, dtype=np.int64),
         tuple(completed_returns),
     )
-
-
-def _gae(
-    rewards: FloatArray,
-    values: FloatArray,
-    dones: BoolArray,
-    final_values: FloatArray,
-    *,
-    discount: float,
-    gae_lambda: float,
-) -> tuple[FloatArray, FloatArray]:
-    advantages = np.zeros_like(rewards)
-    future_advantage = np.zeros(rewards.shape[1], dtype=np.float32)
-    next_values = final_values
-    for step in range(len(rewards) - 1, -1, -1):
-        alive = 1.0 - dones[step].astype(np.float32)
-        delta = rewards[step] + discount * next_values * alive - values[step]
-        future_advantage = delta + discount * gae_lambda * alive * future_advantage
-        advantages[step] = future_advantage
-        next_values = values[step]
-    return advantages, advantages + values
 
 
 def _ppo_update(

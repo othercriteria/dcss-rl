@@ -1,5 +1,5 @@
 {
   "suite_id": "mibe-heldout-v3",
   "baseline_policy_id": "scripted-v6-dagger-v21",
-  "minimum_rank": [0, 0, 2416, 2120, 13, 12, 84.0]
+  "minimum_rank": [0, 0, 15677, 13, 13, 12, 94.0]
 }

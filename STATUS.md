@@ -146,10 +146,10 @@ not the current bottleneck.
   through training seeds rather than returning to their initial seed, and transient
   DCSS startup timeouts receive three fresh-directory attempts. These were added after
   a 20-seed experiment lost seven otherwise healthy updates at an episode restart.
-- Champion rank v4 uses decision-weighted depth progress and bounded policy survival
-  after wins and runes, with maximum depth and monotonic XL as later frontier measures.
-  Raw game turns were removed because rest/travel can inflate them behind one action;
-  XL area was removed because it rewards risky front-loading rather than more XP.
+- Champion rank v5 uses depth-weighted newly discovered cells and distinct levels after
+  wins and runes, with maximum depth and monotonic XL as later frontier measures.
+  Lingering, repeated commands, already-seen backtracking, policy steps, and raw game
+  turns add no credit; useful exploration after retreat does.
 - DCSS can abort when an overlong run directory produces a Unix socket path beyond
   Linux's 107-byte payload limit. Managed games now reject such paths before launch
   with a clear instruction to shorten the output root.
@@ -238,8 +238,8 @@ not the current bottleneck.
   blocking poison/fire states, and handles broader nearby-monster wording. Its clean
   64-seed/1,000-step curriculum produced 9,123 decisions, 63 deaths, one truncation,
   and aggregate max-depth 257. Death/reset trajectories remain useful feedback; the
-  sparse death reward is only -10, while evaluation's lingering-sensitive depth area
-  is the more likely source of excessive early-death penalties.
+  terminal trajectories remain useful feedback rather than grounds to optimize inert
+  horizon survival.
 - Unweighted behavior cloning followed by eight-update aggregate DAgger produced the
   fallback-free `scripted-v6-dagger-v21` policy. It led diagnostic-v2 at
   `(0, 0, 3122, 2500, 12, 10, 71.0)`, survived every case deterministically, then
@@ -256,17 +256,19 @@ not the current bottleneck.
   a negative terminal reward pays the agent to delay an unavoidable death and a finite
   horizon can erase the charge entirely. Death still ends the episode at zero terminal
   value and forfeits future progress; terminal trajectories remain in the curriculum.
+- PPO now bootstraps value at administrative time limits while cutting GAE recursion
+  across the reset boundary. Rank-v5 recalibration scored v21 at 11,483 diagnostic and
+  15,677 heldout depth-weighted discovered cells. Feature-v3 DAgger v23 scored 17,121
+  diagnostic and cleared the locked heldout-v3 floor at 16,202, becoming canonical;
+  its three heldout deaths retain their prior progress rather than erasing it.
 
 Next:
 
-1. Continue feature-v3 aggregate DAgger without using heldout-v3 traces, then promote
-   only after diagnostic improvement and one locked heldout evaluation.
-2. Replace lingering-sensitive ranking with a versioned player-visible progress metric
-   (likely discovered traversable coverage plus depth) that neither rewards stalling
-   nor makes early reset intrinsically catastrophic; recalibrate on untouched data.
-3. Run matched masked PPO/ECHO-on/off experiments from the strongest learned policy,
-   then expand toward longer horizons and rune curricula. Explicit action/history
-   memory is a subsequent ablation for oscillation and repeated-prompt failures.
+1. Run matched masked PPO/ECHO-on/off experiments from the v23 learned champion, then
+   expand toward longer horizons and rune curricula. Explicit action/history memory is
+   a subsequent ablation for oscillation and repeated-prompt failures.
+2. Improve survival and XL while retaining v23's non-stalling exploration frontier.
+3. Revalidate integration trajectories on trunk and the two pinned stable releases.
 
 ## Verified commands
 

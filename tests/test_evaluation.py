@@ -14,11 +14,22 @@ from dcss_rl.evaluation import (
     promote_champion,
     select_champion,
 )
-from dcss_rl.units import DecisionProgressArea, GameSeed
+from dcss_rl.units import (
+    DecisionProgressArea,
+    DepthWeightedDiscovery,
+    GameSeed,
+    LevelCount,
+)
 
 
 def result(
-    *, depth: int, xl: int, turns: int, reward: float = 0.0, policy_steps: int = 10
+    *,
+    depth: int,
+    xl: int,
+    turns: int,
+    reward: float = 0.0,
+    policy_steps: int = 10,
+    discovery: int | None = None,
 ) -> EpisodeResult:
     return EpisodeResult(
         case_id="case",
@@ -28,6 +39,10 @@ def result(
         policy_steps=policy_steps,
         game_turns=turns,
         depth_progress_area=DecisionProgressArea(max(depth - 1, 0) * policy_steps),
+        depth_weighted_discovery=DepthWeightedDiscovery(
+            discovery if discovery is not None else depth * 10
+        ),
+        levels_visited=LevelCount(depth),
         max_depth=depth,
         max_xl=xl,
         runes=0,
@@ -104,7 +119,7 @@ def test_checked_in_regression_threshold_matches_frozen_baseline() -> None:
 
 
 def test_rejects_rank_below_regression_threshold() -> None:
-    threshold = RegressionThreshold("suite", "baseline", (0, 0, 2, 1, 1, 1, 0.0))
+    threshold = RegressionThreshold("suite", "baseline", (0, 0, 11, 1, 1, 1, 0.0))
     summary = EvaluationSummary(
         "suite", "candidate", "now", (result(depth=1, xl=20, turns=9999),)
     )
@@ -137,7 +152,7 @@ def test_champion_promotion_is_monotonic(tmp_path: Path) -> None:
     assert json.loads(destination.read_text())["policy_id"] == "strong"
 
 
-def test_rank_uses_bounded_policy_survival_not_inflatable_game_turns() -> None:
+def test_rank_ignores_lingering_policy_steps_and_game_turns() -> None:
     rests = EvaluationSummary(
         "suite",
         "rests",
@@ -151,7 +166,24 @@ def test_rank_uses_bounded_policy_survival_not_inflatable_game_turns() -> None:
         (result(depth=2, xl=2, turns=50, policy_steps=10),),
     )
 
-    assert survives.rank > rests.rank
+    assert survives.rank == rests.rank
+
+
+def test_rank_rewards_new_depth_weighted_cells_not_lingering() -> None:
+    loops = EvaluationSummary(
+        "suite",
+        "loops",
+        "now",
+        (result(depth=3, xl=2, turns=5000, policy_steps=500, discovery=100),),
+    )
+    explores = EvaluationSummary(
+        "suite",
+        "explores",
+        "now",
+        (result(depth=3, xl=2, turns=50, policy_steps=50, discovery=101),),
+    )
+
+    assert explores.rank > loops.rank
 
 
 def test_promoting_same_policy_migrates_older_rank_spec(tmp_path: Path) -> None:
@@ -170,8 +202,8 @@ def test_promoting_same_policy_migrates_older_rank_spec(tmp_path: Path) -> None:
 
     assert promote_champion(candidate, destination)
     migrated = json.loads(destination.read_text())
-    assert migrated["rank_spec_version"] == 4
-    assert migrated["rank"][2] == 10
+    assert migrated["rank_spec_version"] == 5
+    assert migrated["rank"][2] == 20
 
 
 def test_activates_validated_champion_track_and_archives_previous(
@@ -186,7 +218,7 @@ def test_activates_validated_champion_track_and_archives_previous(
             {
                 "suite_id": "new",
                 "policy_id": "winner",
-                "rank_spec_version": 4,
+                "rank_spec_version": 5,
             }
         )
     )
