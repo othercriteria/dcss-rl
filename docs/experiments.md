@@ -202,3 +202,15 @@ this journal exists to keep research velocity and direction visible.
   Model tensors were bit-identical between unbatched, batched, and repeated batched
   runs. Decision: retain one millisecond and expose timing/batch occupancy; collection
   and environment work, not optimizer/checkpoint work, remain dominant.
+- **2026-09-07 20:27–20:34 EDT — unweighted online imitation.** An exponent-zero arm
+  consumed the same 49,152 decisions with 48 workers and ended at 71.9% teacher
+  agreement. On diagnostic-v2 it ranked `(0, 0, 973, 1600, 11, 9, 38.0)`: two early
+  deaths, two D:1 truncations, and one D:3 truncation. Rest fell from 1,068 weighted-arm
+  decisions to two, but explore rose to 1,009/1,600 and opposing NW/SE moves accounted
+  for another 362. Decision: reject without heldout access; weighting brackets two
+  different attractors rather than solving autonomous control.
+- **2026-09-07 20:36 EDT — legality-mask consistency audit.** Offline trajectory
+  training independently reconstructed a permissive command mask that exposed both
+  stair actions everywhere, unlike live execution's player-visible underfoot stair
+  affordance. Decision: restore the semantic domain type from trajectory dictionaries
+  and route offline training through the same action-mask implementation as live play.

@@ -270,25 +270,10 @@ def _class_weights(actions: ActionVector) -> Tensor:
 def _training_action_mask(
     observation: ObservationData,
 ) -> ActionMaskVector:
-    from dcss_rl.actions import Action, ActionKind
-    from dcss_rl.env import action_to_index
-    from dcss_rl.units import Keycode
+    from dcss_rl.env import action_mask
+    from dcss_rl.observation import SemanticObservation
 
-    result = np.zeros(ACTION_COUNT, dtype=np.bool_)
-    menu = observation["menu"]
-    if menu is not None:
-        for choice in menu["choices"]:
-            index = action_to_index(Action.menu_select(Keycode(choice["keycode"])))
-            result[index] = True
-        result[action_to_index(Action(ActionKind.CANCEL))] = True
-        return result
-    if observation["input_mode"] == 1:
-        for kind in ActionKind:
-            if kind is not ActionKind.MENU_SELECT:
-                result[action_to_index(Action(kind))] = True
-    else:
-        result[action_to_index(Action(ActionKind.CANCEL))] = True
-    return result
+    return action_mask(SemanticObservation.from_dict(observation))
 
 
 def _seed_everything(seed: int) -> None:

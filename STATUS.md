@@ -212,6 +212,14 @@ not the current bottleneck.
   was slightly worse at 165.13/s. Batched and unbatched model tensors were bit-identical.
   Per-update telemetry now separates collection, optimization, checkpointing, batch
   count, and mean batch size; collection remains over 97% of measured update time.
+- Unweighted online imitation removed the rest-confirm collapse but shifted to 1,009
+  explore actions and 362 opposing NW/SE moves. Its diagnostic-v2 rank
+  `(0, 0, 973, 1600, 11, 9, 38.0)` is below the learned frontier and included two early
+  deaths. The weighted and unweighted endpoints bracket distinct failure modes.
+- Offline imitation previously reconstructed a broader legality mask than live play,
+  including stair commands without a visible under-player stair affordance. Semantic
+  observations now round-trip from trajectory dictionaries and both paths use the same
+  action-mask implementation.
 
 Next:
 

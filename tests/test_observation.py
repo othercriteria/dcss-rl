@@ -1,4 +1,9 @@
-from dcss_rl.observation import MenuChoice, ObservationReducer, plain_text
+from dcss_rl.observation import (
+    MenuChoice,
+    ObservationReducer,
+    SemanticObservation,
+    plain_text,
+)
 from dcss_rl.schema import JsonObject
 from dcss_rl.units import Keycode
 from dcss_rl.webtiles import Message, ObservationBatch
@@ -88,6 +93,7 @@ def test_reducer_extracts_structured_prompt_menu_hotkeys() -> None:
         MenuChoice(Keycode(ord("N")), "N - No"),
         MenuChoice(Keycode(ord("n")), "N - No"),
     )
+    assert SemanticObservation.from_dict(observation.to_dict()) == observation
 
 
 def test_reducer_omits_empty_inventory_slots() -> None:

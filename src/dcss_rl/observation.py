@@ -50,6 +50,25 @@ class SemanticObservation:
     choices: tuple[MenuChoice, ...]
     input_mode: int | None
 
+    @classmethod
+    def from_dict(cls, observation: ObservationData) -> SemanticObservation:
+        """Restore the semantic domain type at a trajectory/Gym boundary."""
+        menu = observation["menu"]
+        return cls(
+            observation["player"],
+            tuple(observation["cells"]),
+            tuple(observation["messages"]),
+            menu["type"] if menu is not None else None,
+            menu["prompt"] if menu is not None else None,
+            tuple(
+                MenuChoice(Keycode(choice["keycode"]), choice["text"])
+                for choice in menu["choices"]
+            )
+            if menu is not None
+            else (),
+            observation["input_mode"],
+        )
+
     def to_dict(self) -> ObservationData:
         """Return a deterministic, JSON-compatible representation for trajectories."""
         return {
