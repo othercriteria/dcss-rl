@@ -340,13 +340,23 @@ not the current bottleneck.
   was locked and calibrated exactly once. v51 scored `(0, 0, 16234, 18, 18, 14,
   129.0)` with one 500-decision survivor and four deaths; this became the checked-in
   floor and canonical track, while the v4 champion manifest was archived.
+- Matched 49,152-decision continuations from v51 compared ECHO weight `0` and `0.1`
+  under the promoted continuing-reset decision-cost objective. Exhaustive diagnostic
+  curves peaked at 28,677 off and 32,439 on, both below unchanged v51's 39,956; neither
+  received heldout-v5 access. ECHO-on again learned its auxiliary target and was
+  directionally stronger than off in this context, but did not prevent PPO regression.
+- A four-way diagnostic sweep exposed two harness edge cases: a training case label
+  could exceed the Unix socket limit only after later episode rotation, and evaluation
+  had no startup retry under transient 20-game contention. Worker paths now exclude
+  unbounded labels, startup counts/indices are semantic types, and evaluation preserves
+  three isolated attempts. The retry recovered the sole missing ECHO snapshot.
 
 Next:
 
 1. Build from v51 update 2 toward the retired true D:11 event, using heldout-v4 only as
    historical evidence and preserving untouched heldout-v5 for promotion.
-2. Run matched ECHO-off/on continuation from the promoted decision-cost objective and
-   characterize whether broader seeds, longer horizons, or recurrent policy state best
+2. Reuse the stable anchored Berserk pretraining checkpoint under continuing-reset
+   decision-cost PPO, then characterize whether explicit recurrent policy state can
    improve survival without restoring rest/movement cycles.
 3. Revisit anchored Berserk acquisition in the stronger objective context; then extend
    the curriculum toward branch and rune acquisition while keeping heldout-v5 locked.

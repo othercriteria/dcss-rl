@@ -397,3 +397,17 @@ this journal exists to keep research velocity and direction visible.
   rank `(0, 0, 16234, 18, 18, 14, 129.0)`, four deaths, and one 500-decision survivor.
   Decision: install that result as the v5 floor/canonical champion, archive v4, and do
   not inspect v5 again until a candidate passes diagnostic selection.
+- **2026-09-08 10:20–10:40 EDT — matched ECHO continuation.** From immutable v51
+  update 2, two anchored 49,152-decision arms retained continuing-reset returns and
+  decision cost `0.01`; only ECHO differed (`0` versus `0.1`). Full diagnostic curves
+  peaked at update 1/off 28,677 and update 1/on 32,439; on update 6 visited 23 aggregate
+  levels but ranked 30,652. All remain below v51's 39,956, so heldout-v5 stays untouched.
+  ECHO-on reduced its auxiliary loss and was directionally stronger here, but did not
+  prevent late PPO regression. Decision: retain ECHO as a contextual objective and
+  next revisit anchored Berserk acquisition from its stable selective checkpoint.
+- **2026-09-08 10:41 EDT — adversarial startup reliability.** Twenty concurrent
+  diagnostic games caused one transient startup timeout, while a verbose training root
+  failed only after four completed updates when rotation reached a longer case label.
+  Decision: remove case labels from bounded worker socket paths, type startup counts and
+  indices, and retry evaluation starts in isolated attempt directories. The hardened
+  evaluator recovered the missing snapshot on its first run.

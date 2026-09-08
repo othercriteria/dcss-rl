@@ -17,6 +17,7 @@ from dcss_rl.env import DcssEnv, index_to_action
 from dcss_rl.schema import (
     CellView,
     CharacterData,
+    EnvironmentInfo,
     ObservationData,
     ObservationDeltaData,
     PlayerView,
@@ -215,7 +216,7 @@ class TrajectoryWriter:
         reward: float,
         terminated: bool,
         truncated: bool,
-        info: dict[str, Any],
+        info: EnvironmentInfo,
     ) -> None:
         if not self._started:
             raise RuntimeError("trajectory has not started")
@@ -279,7 +280,7 @@ class RecordingEnv:
         self.checkpoint_id = checkpoint_id
         self._observation: ObservationData | None = None
 
-    def reset(self, **kwargs: Any) -> tuple[ObservationData, dict[str, Any]]:
+    def reset(self, **kwargs: Any) -> tuple[ObservationData, EnvironmentInfo]:
         observation, info = self.env.reset(**kwargs)
         self.writer.start(
             self.env,
@@ -288,16 +289,18 @@ class RecordingEnv:
             checkpoint_id=self.checkpoint_id,
         )
         self._observation = observation
-        return observation, info
+        return observation, cast(EnvironmentInfo, info)
 
     def step(
         self, action_index: ActionIndex
-    ) -> tuple[ObservationData, float, bool, bool, dict[str, Any]]:
+    ) -> tuple[ObservationData, float, bool, bool, EnvironmentInfo]:
         if self._observation is None:
             raise RuntimeError("reset must be called before step")
         previous = self._observation
-        result = self.env.step(action_index)
-        observation, reward, terminated, truncated, info = result
+        observation, reward, terminated, truncated, raw_info = self.env.step(
+            action_index
+        )
+        info = cast(EnvironmentInfo, raw_info)
         self.writer.transition(
             self.env,
             previous,
@@ -309,7 +312,7 @@ class RecordingEnv:
             info,
         )
         self._observation = observation
-        return result
+        return observation, reward, terminated, truncated, info
 
     def close(self) -> None:
         self.writer.close()

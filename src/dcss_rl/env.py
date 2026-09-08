@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import gymnasium as gym
 import numpy as np
@@ -13,7 +13,7 @@ from gymnasium import spaces
 
 from dcss_rl.actions import Action, ActionKind, encode_action, legal_actions
 from dcss_rl.observation import ObservationReducer, SemanticObservation
-from dcss_rl.schema import GymMetadata, ObservationData
+from dcss_rl.schema import EnvironmentInfo, GymMetadata, ObservationData
 from dcss_rl.units import ActionCount, ActionIndex, Keycode, RewardWeight, StepLimit
 from dcss_rl.webtiles import GameConfig, ManagedGame, ObservationBatch
 
@@ -192,7 +192,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.last_keycodes = tuple(keycodes)
 
         self._update_maxima(self.current)
-        return self.current.to_dict(), self._info(None)
+        return self.current.to_dict(), cast(dict[str, Any], self._info(None))
 
     def step(
         self, action: int
@@ -234,7 +234,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
             reward,
             terminated,
             truncated,
-            self._info(structured_action, outcome=outcome),
+            cast(dict[str, Any], self._info(structured_action, outcome=outcome)),
         )
 
     @staticmethod
@@ -284,7 +284,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
 
     def _info(
         self, action: Action | None, *, outcome: str | None = None
-    ) -> dict[str, Any]:
+    ) -> EnvironmentInfo:
         if self.current is None:
             raise RuntimeError("environment has no current observation")
         return {

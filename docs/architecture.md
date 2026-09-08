@@ -260,6 +260,12 @@ target while the separately encoded reset state is cached for the next policy de
 and value bootstrap. Default-disabled reward shaping bypasses its full-map potential
 scan, and Gym materializes the returned current observation only once.
 
+Training worker directories use only typed worker, episode, and startup-attempt indices;
+human-controlled suite case labels never contribute to the Unix socket path. Evaluation
+keeps case labels at the outer artifact layer but gives each transient startup attempt
+its own trajectory and game directory. Both paths retry startup timeouts three times,
+preserving failed-attempt evidence rather than overwriting it.
+
 On a fixed five-case, 50-decision learned-policy workload, throughput scales from
 2.96 decisions/s with one worker to 5.55 with two and 12.13 with five. All worker
 counts produce the identical metric vector and learned-action fraction. This makes

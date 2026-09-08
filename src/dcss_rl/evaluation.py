@@ -15,7 +15,7 @@ import numpy as np
 
 from dcss_rl.env import DcssEnv
 from dcss_rl.policy import Policy
-from dcss_rl.schema import JsonObject, ObservationData
+from dcss_rl.schema import EnvironmentInfo, JsonObject, ObservationData
 from dcss_rl.trajectory import RecordingEnv, TrajectoryWriter
 from dcss_rl.units import (
     ActionIndex,
@@ -27,12 +27,15 @@ from dcss_rl.units import (
     LevelId,
     PlaceId,
     Seconds,
+    StartupAttemptCount,
+    StartupAttemptIndex,
     StepLimit,
     WorkerCount,
 )
 from dcss_rl.webtiles import GameConfig
 
 _DEFAULT_EVALUATION_WORKERS = WorkerCount(1)
+_GAME_START_ATTEMPTS = StartupAttemptCount(3)
 _ZERO_SECONDS = Seconds(0.0)
 type EvaluationRank = tuple[int, int, int, int, int, int, float]
 RANK_SPEC_VERSION = 5
@@ -138,6 +141,15 @@ class RegressionThreshold:
     suite_id: str
     baseline_policy_id: str
     minimum_rank: EvaluationRank
+
+
+@dataclass(frozen=True, slots=True)
+class _StartedEpisode:
+    env: RecordingEnv
+    observation: ObservationData
+    info: EnvironmentInfo
+    trajectory_path: Path
+    game_directory: Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -399,24 +411,20 @@ def _run_episode(
 ) -> EpisodeResult:
     episode_directory = output_directory / case.case_id
     episode_directory.mkdir()
-    trajectory_path = episode_directory / "trajectory.jsonl"
-    base = DcssEnv(
+    started = _start_episode(
         binary,
-        game_config=GameConfig(seed=case.seed),
-        max_steps=suite.step_limit,
-        run_root=episode_directory / "game",
-    )
-    env = RecordingEnv(
-        base,
-        TrajectoryWriter(trajectory_path),
+        suite,
+        case,
+        episode_directory,
         agent_id=policy.policy_id,
         checkpoint_id=policy.checkpoint_id,
     )
+    env = started.env
     total_reward = 0.0
     depth_progress_area = DecisionProgressArea(0)
     discovery = _DiscoveryTracker()
     outcome = "unknown"
-    observation, info = env.reset()
+    observation, info = started.observation, started.info
     discovery.observe(observation)
     action_history: list[ActionIndex] = []
     try:
@@ -451,14 +459,54 @@ def _run_episode(
             _required_int(info, "max_depth"),
             _required_int(info, "max_xl"),
             0,
-            str(trajectory_path),
-            str(episode_directory / "game"),
+            str(started.trajectory_path),
+            str(started.game_directory),
         )
     finally:
         env.close()
 
 
-def _required_int(values: dict[str, object], key: str) -> int:
+def _start_episode(
+    binary: Path,
+    suite: EvaluationSuite,
+    case: EvaluationCase,
+    episode_directory: Path,
+    *,
+    agent_id: str,
+    checkpoint_id: str | None,
+) -> _StartedEpisode:
+    """Start an evaluation episode with auditable, isolated retry artifacts."""
+    last_timeout: TimeoutError | None = None
+    for raw_attempt in range(_GAME_START_ATTEMPTS):
+        attempt = StartupAttemptIndex(raw_attempt)
+        attempt_directory = episode_directory / f"attempt-{attempt}"
+        trajectory_path = attempt_directory / "trajectory.jsonl"
+        game_directory = attempt_directory / "game"
+        env = RecordingEnv(
+            DcssEnv(
+                binary,
+                game_config=GameConfig(seed=case.seed),
+                max_steps=suite.step_limit,
+                run_root=game_directory,
+            ),
+            TrajectoryWriter(trajectory_path),
+            agent_id=agent_id,
+            checkpoint_id=checkpoint_id,
+        )
+        try:
+            observation, info = env.reset()
+        except TimeoutError as error:
+            last_timeout = error
+            env.close()
+            continue
+        return _StartedEpisode(env, observation, info, trajectory_path, game_directory)
+    raise RuntimeError(
+        f"evaluation case {case.case_id!r} could not start after "
+        f"{_GAME_START_ATTEMPTS} attempts"
+    ) from last_timeout
+
+
+def _required_int(values: EnvironmentInfo, key: str) -> int:
     value = values.get(key)
     if not isinstance(value, int):
         raise RuntimeError(f"environment info field {key!r} is not an integer")

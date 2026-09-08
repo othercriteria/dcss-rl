@@ -1,4 +1,5 @@
 from concurrent.futures import Future
+from pathlib import Path
 from typing import cast
 
 import numpy as np
@@ -21,6 +22,7 @@ from dcss_rl.ppo import (
     _uses_reset_bootstrap,
     _warmup_action_indices,
     _Worker,
+    _worker_run_root,
     _WorkerStep,
 )
 from dcss_rl.returns import ReturnBoundaryMode, generalized_advantage_estimate
@@ -32,6 +34,7 @@ from dcss_rl.units import (
     EpisodeIndex,
     Keycode,
     RolloutLength,
+    StartupAttemptIndex,
     TerminalOutcome,
     WorkerCount,
     WorkerIndex,
@@ -116,6 +119,17 @@ def test_rollout_reuses_next_feature_at_following_decision(
     assert encode_calls == 4
     assert rollout.features[:, 0].tolist() == [1.0, 2.0, 3.0]
     assert rollout.next_deltas[:, 0].tolist() == [1.0, 1.0, 1.0]
+
+
+def test_worker_run_root_does_not_include_unbounded_case_label() -> None:
+    root = _worker_run_root(
+        Path("/tmp/run"),
+        WorkerIndex(47),
+        EpisodeIndex(123),
+        StartupAttemptIndex(2),
+    )
+
+    assert root == Path("/tmp/run/worker-47/episode-123-attempt-2")
 
 
 def test_inference_requests_are_padded_to_reproducible_fixed_shape() -> None:

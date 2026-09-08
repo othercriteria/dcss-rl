@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Literal, NotRequired, Required, TypedDict
 
+import numpy as np
+
 type JsonScalar = str | int | float | bool | None
 type JsonValue = JsonScalar | list[JsonValue] | dict[str, JsonValue]
 type JsonObject = dict[str, JsonValue]
@@ -103,6 +105,18 @@ class ObservationDeltaData(TypedDict):
 class ActionData(TypedDict):
     kind: str
     keycode: int | None
+
+
+class EnvironmentInfo(TypedDict):
+    """Typed Gym boundary emitted by every DCSS reset and transition."""
+
+    action_mask: np.ndarray
+    structured_action: ActionData | None
+    emitted_keycodes: tuple[int, ...]
+    outcome: str | None
+    steps: int
+    max_depth: int
+    max_xl: int
 
 
 class RawMessageData(TypedDict):

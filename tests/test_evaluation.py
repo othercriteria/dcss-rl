@@ -1,12 +1,14 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from dcss_rl.evaluation import (
     EpisodeResult,
     EvaluationSummary,
     RegressionThreshold,
+    _start_episode,
     activate_champion_track,
     assert_meets_regression_threshold,
     load_regression_threshold,
@@ -14,6 +16,8 @@ from dcss_rl.evaluation import (
     promote_champion,
     select_champion,
 )
+from dcss_rl.schema import EnvironmentInfo, ObservationData
+from dcss_rl.trajectory import RecordingEnv
 from dcss_rl.units import (
     DecisionProgressArea,
     DepthWeightedDiscovery,
@@ -57,6 +61,57 @@ def test_loads_checked_in_heldout_suite() -> None:
     assert suite.suite_id == "mibe-heldout-v1"
     assert len(suite.cases) == 5
     assert len({case.seed for case in suite.cases}) == len(suite.cases)
+
+
+def test_evaluation_retries_startup_in_isolated_attempt_directories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attempts: list[Path] = []
+
+    def reset(self: RecordingEnv) -> tuple[ObservationData, EnvironmentInfo]:
+        attempts.append(self.env.run_root or Path())
+        if len(attempts) < 3:
+            raise TimeoutError("transient startup")
+        return (
+            {
+                "player": {},
+                "cells": [],
+                "messages": [],
+                "menu": None,
+                "input_mode": 1,
+            },
+            {
+                "action_mask": np.ones(1, dtype=np.bool_),
+                "structured_action": None,
+                "emitted_keycodes": (),
+                "outcome": None,
+                "steps": 0,
+                "max_depth": 1,
+                "max_xl": 1,
+            },
+        )
+
+    monkeypatch.setattr(RecordingEnv, "reset", reset)
+    suite = load_suite(Path("configs/heldout-v5.json"))
+    episode_directory = tmp_path / "case"
+    episode_directory.mkdir()
+
+    started = _start_episode(
+        tmp_path / "crawl",
+        suite,
+        suite.cases[0],
+        episode_directory,
+        agent_id="policy",
+        checkpoint_id=None,
+    )
+    started.env.close()
+
+    assert attempts == [
+        episode_directory / "attempt-0/game",
+        episode_directory / "attempt-1/game",
+        episode_directory / "attempt-2/game",
+    ]
+    assert started.trajectory_path == episode_directory / "attempt-2/trajectory.jsonl"
 
 
 def test_broad_training_suite_is_unique_and_disjoint_from_evaluation() -> None:

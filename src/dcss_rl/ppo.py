@@ -62,6 +62,8 @@ from dcss_rl.units import (
     RolloutLength,
     Seconds,
     ShortCycleCost,
+    StartupAttemptCount,
+    StartupAttemptIndex,
     StepLimit,
     TerminalOutcome,
     UpdateCount,
@@ -96,7 +98,7 @@ _ZERO_REWARD_WEIGHT = RewardWeight(0.0)
 _ZERO_DECISION_COST = DecisionCost(0.0)
 _ZERO_SHORT_CYCLE_COST = ShortCycleCost(0.0)
 _DEFAULT_SHORT_CYCLE_WINDOW = DecisionWindow(8)
-_GAME_START_ATTEMPTS = 3
+_GAME_START_ATTEMPTS = StartupAttemptCount(3)
 _WIN_OUTCOME = TerminalOutcome("won")
 
 
@@ -326,11 +328,10 @@ class _Worker:
         episode_index = self.episode_index
         self.episode_index = EpisodeIndex(self.episode_index + 1)
         last_timeout: TimeoutError | None = None
-        for attempt in range(_GAME_START_ATTEMPTS):
-            run_root = (
-                self.root
-                / f"worker-{self.worker_index}"
-                / f"episode-{episode_index}-{case.case_id}-attempt-{attempt}"
+        for raw_attempt in range(_GAME_START_ATTEMPTS):
+            attempt = StartupAttemptIndex(raw_attempt)
+            run_root = _worker_run_root(
+                self.root, self.worker_index, episode_index, attempt
             )
             self.env = DcssEnv(
                 self.binary,
@@ -358,6 +359,20 @@ class _Worker:
         self.action_mask = mask
         if self.cycle_tracker is not None:
             self.cycle_tracker.reset(observation)
+
+
+def _worker_run_root(
+    root: Path,
+    worker_index: WorkerIndex,
+    episode_index: EpisodeIndex,
+    attempt_index: StartupAttemptIndex,
+) -> Path:
+    """Build a bounded path; suite case IDs already live in trajectory metadata."""
+    return (
+        root
+        / f"worker-{worker_index}"
+        / f"episode-{episode_index}-attempt-{attempt_index}"
+    )
 
 
 @dataclass(frozen=True, slots=True)
