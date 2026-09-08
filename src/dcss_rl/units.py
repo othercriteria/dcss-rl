@@ -38,6 +38,7 @@ PlaceId = NewType("PlaceId", str)
 type LevelId = tuple[PlaceId, int]
 UpdateCount = NewType("UpdateCount", int)
 RolloutLength = NewType("RolloutLength", int)
+ActionHistoryLength = NewType("ActionHistoryLength", int)
 UnixSocketPathBytes = NewType("UnixSocketPathBytes", int)
 
 type Coordinate = tuple[int, int]

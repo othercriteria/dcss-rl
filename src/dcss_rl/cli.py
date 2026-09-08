@@ -20,6 +20,7 @@ from dcss_rl.evaluation import (
 from dcss_rl.policy import Policy, ScriptedMibePolicy
 from dcss_rl.replay import champion_trajectory, watch_grid, watch_replay
 from dcss_rl.units import (
+    ActionHistoryLength,
     BatchSize,
     EpochCount,
     FrameLimit,
@@ -101,6 +102,7 @@ def main() -> None:
     ppo.add_argument("--run-root", type=Path, default=Path("artifacts/ppo-runs"))
     ppo.add_argument("--updates", type=int, default=4)
     ppo.add_argument("--rollout-length", type=int, default=128)
+    ppo.add_argument("--action-history-length", type=int)
     ppo.add_argument("--workers", type=int, default=5)
     ppo.add_argument("--inference-batch-size", type=int, default=64)
     ppo.add_argument("--inference-batch-wait-seconds", type=float, default=0.001)
@@ -243,6 +245,11 @@ def main() -> None:
                 seed=arguments.seed,
                 updates=UpdateCount(arguments.updates),
                 rollout_length=RolloutLength(arguments.rollout_length),
+                action_history_length=ActionHistoryLength(
+                    arguments.action_history_length
+                )
+                if arguments.action_history_length is not None
+                else None,
                 workers=WorkerCount(arguments.workers),
                 inference_batch_size=InferenceBatchSize(arguments.inference_batch_size),
                 inference_batch_wait=Seconds(arguments.inference_batch_wait_seconds),

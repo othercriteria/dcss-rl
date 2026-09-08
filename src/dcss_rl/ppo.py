@@ -20,17 +20,21 @@ from torch.nn import functional as F
 from dcss_rl.env import DcssEnv, RewardShaping
 from dcss_rl.evaluation import EvaluationSuite
 from dcss_rl.features import encode_observation
+from dcss_rl.history import encode_action_history
 from dcss_rl.learned import (
     LearnedPolicy,
+    ModelConfig,
     PpoCheckpointMetadata,
     SemanticActorCritic,
+    add_action_history,
     save_checkpoint,
 )
-from dcss_rl.policy import ScriptedMibePolicy
+from dcss_rl.policy import ActionHistory, ScriptedMibePolicy
 from dcss_rl.returns import generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.schema import ObservationData
 from dcss_rl.units import (
+    ActionHistoryLength,
     ActionIndex,
     BatchSize,
     CaseCount,
@@ -104,6 +108,7 @@ class PpoConfig:
     depth_progress_reward: RewardWeight = _ZERO_REWARD_WEIGHT
     experience_progress_reward: RewardWeight = _ZERO_REWARD_WEIGHT
     hp_fraction_reward: RewardWeight = _ZERO_REWARD_WEIGHT
+    action_history_length: ActionHistoryLength | None = None
     device: str = "cuda"
 
     def __post_init__(self) -> None:
@@ -117,6 +122,8 @@ class PpoConfig:
         )
         if any(value < 1 for value in positive_integers):
             raise ValueError("PPO counts must be positive")
+        if self.action_history_length is not None and self.action_history_length < 0:
+            raise ValueError("action history length cannot be negative")
         if self.learning_rate <= 0:
             raise ValueError("PPO learning rate must be positive")
         if self.inference_batch_wait < 0:
@@ -192,6 +199,7 @@ class _WorkerStep:
     terminated: bool
     truncated: bool
     completed_return: float | None
+    action_history: ActionHistory
 
 
 @dataclass(slots=True)
@@ -208,6 +216,7 @@ class _Worker:
     observation: ObservationData | None = None
     action_mask: BoolArray | None = None
     episode_return: float = 0.0
+    action_history: list[ActionIndex] = field(default_factory=list)
 
     def ready(self) -> tuple[ObservationData, BoolArray]:
         if self.observation is None:
@@ -215,6 +224,9 @@ class _Worker:
         if self.observation is None or self.action_mask is None:
             raise RuntimeError("online worker failed to reset")
         return self.observation, self.action_mask
+
+    def history(self) -> ActionHistory:
+        return tuple(self.action_history)
 
     def step(self, action: ActionIndex) -> _WorkerStep:
         if self.env is None:
@@ -226,12 +238,15 @@ class _Worker:
             raise RuntimeError("environment returned an invalid action mask")
         self.episode_return += reward
         completed_return = self.episode_return if done else None
+        self.action_history.append(action)
+        next_history = tuple(self.action_history)
         if done:
             self.env.close()
             self.env = None
             self.observation = None
             self.action_mask = None
             self.episode_return = 0.0
+            self.action_history.clear()
         else:
             self.observation = observation
             self.action_mask = mask
@@ -242,6 +257,7 @@ class _Worker:
             terminated,
             truncated,
             completed_return,
+            next_history,
         )
 
     def close(self) -> None:
@@ -291,6 +307,7 @@ class _Worker:
 @dataclass(frozen=True, slots=True)
 class _Rollout:
     features: FloatArray
+    action_histories: FloatArray
     masks: BoolArray
     actions: IntArray
     log_probabilities: FloatArray
@@ -307,6 +324,7 @@ class _Rollout:
 @dataclass(frozen=True, slots=True)
 class _WorkerRollout:
     features: FloatArray
+    action_histories: FloatArray
     masks: BoolArray
     actions: IntArray
     log_probabilities: FloatArray
@@ -327,6 +345,7 @@ class _InferenceResult:
 @dataclass(frozen=True, slots=True)
 class _InferenceRequest:
     feature: FloatArray
+    action_history: FloatArray
     mask: BoolArray
     future: Future[_InferenceResult]
 
@@ -358,12 +377,18 @@ class _InferenceBatcher:
     def feature_spec_version(self) -> int:
         return self._model.config.feature_spec_version
 
-    def infer(self, feature: FloatArray, mask: BoolArray) -> _InferenceResult:
+    @property
+    def model_config(self) -> ModelConfig:
+        return self._model.config
+
+    def infer(
+        self, feature: FloatArray, action_history: FloatArray, mask: BoolArray
+    ) -> _InferenceResult:
         future: Future[_InferenceResult] = Future()
         with self._state_lock:
             if self._closed.is_set():
                 raise RuntimeError("inference batcher is closed")
-            self._requests.put(_InferenceRequest(feature, mask, future))
+            self._requests.put(_InferenceRequest(feature, action_history, mask, future))
         return future.result()
 
     def close(self) -> None:
@@ -403,8 +428,11 @@ class _InferenceBatcher:
         masks = torch.from_numpy(np.stack([request.mask for request in requests])).to(
             self._device
         )
+        histories = torch.from_numpy(
+            np.stack([request.action_history for request in requests])
+        ).to(self._device)
         with torch.inference_mode():
-            logits, values, _ = self._model(features)
+            logits, values, _ = self._model(features, histories)
             probabilities = (
                 torch.softmax(logits.masked_fill(~masks, -torch.inf), dim=-1)
                 .cpu()
@@ -432,6 +460,8 @@ def train_ppo(
     _seed_everything(config.seed)
     restored = LearnedPolicy(initial_checkpoint, device=config.device)
     model = restored.model
+    if config.action_history_length is not None:
+        model = add_action_history(model, config.action_history_length)
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     teacher = ScriptedMibePolicy()
@@ -491,6 +521,7 @@ def train_ppo(
                         config,
                         updates=UpdateCount(update_index + 1),
                         mean_episode_return=mean_return,
+                        action_history_length=model.config.action_history_length,
                     ),
                 )
                 checkpoint_finished = perf_counter()
@@ -541,6 +572,7 @@ def _checkpoint_metadata(
     *,
     updates: UpdateCount,
     mean_episode_return: float,
+    action_history_length: ActionHistoryLength,
 ) -> PpoCheckpointMetadata:
     return PpoCheckpointMetadata(
         training_method="masked-ppo",
@@ -563,6 +595,7 @@ def _checkpoint_metadata(
         hp_fraction_reward=config.hp_fraction_reward,
         clip_ratio=config.clip_ratio,
         mean_episode_return=mean_episode_return,
+        action_history_length=action_history_length,
     )
 
 
@@ -600,6 +633,7 @@ def _collect_rollout(
     )
     return _Rollout(
         np.concatenate([rollout.features for rollout in worker_rollouts]),
+        np.concatenate([rollout.action_histories for rollout in worker_rollouts]),
         np.concatenate([rollout.masks for rollout in worker_rollouts]),
         np.concatenate([rollout.actions for rollout in worker_rollouts]),
         np.concatenate([rollout.log_probabilities for rollout in worker_rollouts]),
@@ -624,6 +658,7 @@ def _collect_worker_rollout(
     config: PpoConfig,
 ) -> _WorkerRollout:
     features: list[FloatArray] = []
+    action_histories: list[FloatArray] = []
     masks: list[BoolArray] = []
     actions: list[int] = []
     log_probabilities: list[float] = []
@@ -639,7 +674,12 @@ def _collect_worker_rollout(
         feature = encode_observation(
             observation, spec_version=batcher.feature_spec_version
         )
-        inference = batcher.infer(feature, mask)
+        action_history = encode_action_history(
+            worker.history(),
+            action_count=batcher.model_config.action_count,
+            length=batcher.model_config.action_history_length,
+        )
+        inference = batcher.infer(feature, action_history, mask)
         probabilities = inference.probabilities
         value = inference.value
         action = int(worker.rng.choice(len(probabilities), p=probabilities))
@@ -650,8 +690,16 @@ def _collect_worker_rollout(
         )
         time_limit_bootstrap = 0.0
         if step.truncated and not step.terminated:
-            time_limit_bootstrap = batcher.infer(next_feature, step.action_mask).value
+            next_history = encode_action_history(
+                step.action_history,
+                action_count=batcher.model_config.action_count,
+                length=batcher.model_config.action_history_length,
+            )
+            time_limit_bootstrap = batcher.infer(
+                next_feature, next_history, step.action_mask
+            ).value
         features.append(feature)
+        action_histories.append(action_history)
         masks.append(mask)
         actions.append(action)
         log_probabilities.append(float(np.log(probabilities[action])))
@@ -670,7 +718,12 @@ def _collect_worker_rollout(
         final_feature = encode_observation(
             final_observation, spec_version=batcher.feature_spec_version
         )
-        final_value = batcher.infer(final_feature, final_mask).value
+        final_history = encode_action_history(
+            worker.history(),
+            action_count=batcher.model_config.action_count,
+            length=batcher.model_config.action_history_length,
+        )
+        final_value = batcher.infer(final_feature, final_history, final_mask).value
     reward_array = np.asarray(rewards, dtype=np.float32)[:, None]
     value_array = np.asarray(values, dtype=np.float32)[:, None]
     done_array = np.asarray(dones, dtype=np.bool_)[:, None]
@@ -685,6 +738,7 @@ def _collect_worker_rollout(
     )
     return _WorkerRollout(
         np.stack(features),
+        np.stack(action_histories),
         np.stack(masks),
         np.asarray(actions, dtype=np.int64),
         np.asarray(log_probabilities, dtype=np.float32),
@@ -710,6 +764,7 @@ def _ppo_update(
         torch.from_numpy(value).to(device)
         for value in (
             rollout.features,
+            rollout.action_histories,
             rollout.masks,
             rollout.actions,
             rollout.log_probabilities,
@@ -718,10 +773,13 @@ def _ppo_update(
             rollout.next_deltas,
         )
     )
-    features, masks, actions, old_logs, advantages, returns, deltas = tensors
+    features, histories, masks, actions, old_logs, advantages, returns, deltas = tensors
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
     replay_features = torch.from_numpy(
         np.concatenate([item.features for item in imitation_replay])
+    ).to(device)
+    replay_histories = torch.from_numpy(
+        np.concatenate([item.action_histories for item in imitation_replay])
     ).to(device)
     replay_masks = torch.from_numpy(
         np.concatenate([item.masks for item in imitation_replay])
@@ -745,7 +803,9 @@ def _ppo_update(
         for indices in torch.randperm(len(actions), device=device).split(
             config.minibatch_size
         ):
-            logits, values, predicted_deltas = model(features[indices])
+            logits, values, predicted_deltas = model(
+                features[indices], histories[indices]
+            )
             logits = logits.masked_fill(~masks[indices], -torch.inf)
             distribution = Categorical(logits=logits)
             logs = distribution.log_prob(actions[indices])
@@ -761,7 +821,9 @@ def _ppo_update(
             replay_indices = torch.randint(
                 len(replay_teachers), (len(indices),), device=device
             )
-            replay_logits, _, _ = model(replay_features[replay_indices])
+            replay_logits, _, _ = model(
+                replay_features[replay_indices], replay_histories[replay_indices]
+            )
             replay_logits = replay_logits.masked_fill(
                 ~replay_masks[replay_indices], -torch.inf
             )

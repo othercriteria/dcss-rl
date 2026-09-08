@@ -18,6 +18,7 @@ from dcss_rl.policy import Policy
 from dcss_rl.schema import JsonObject, ObservationData
 from dcss_rl.trajectory import RecordingEnv, TrajectoryWriter
 from dcss_rl.units import (
+    ActionIndex,
     DecisionProgressArea,
     DecisionsPerSecond,
     DepthWeightedDiscovery,
@@ -417,13 +418,15 @@ def _run_episode(
     outcome = "unknown"
     observation, info = env.reset()
     discovery.observe(observation)
+    action_history: list[ActionIndex] = []
     try:
         while True:
             mask = info.get("action_mask")
             if not isinstance(mask, np.ndarray):
                 raise RuntimeError("environment did not provide an ndarray action mask")
-            action = policy.select(observation, mask)
+            action = policy.select(observation, mask, tuple(action_history))
             observation, reward, terminated, truncated, info = env.step(action)
+            action_history.append(action)
             total_reward += reward
             player = observation["player"]
             discovery.observe(observation)

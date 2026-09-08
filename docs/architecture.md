@@ -172,6 +172,14 @@ version, model configuration, plain state dictionary, policy identity, training
 method/hyperparameters, source counts, and validation accuracy. Feature changes bump
 the feature-spec version and fail closed when loading older checkpoints.
 
+Action history is agent-side context, not an environment observation. History-aware
+models concatenate a checkpointed, fixed number of newest-first one-hot action slots
+at the encoder boundary; ECHO continues to predict only the semantic next-environment
+delta. Evaluation owns one history per episode and rollout workers own one per game,
+so concurrent cases cannot contaminate each other. A stateless checkpoint can be
+expanded with zero history columns, preserving its initial function before online
+DAgger/PPO learns history-dependent behavior.
+
 Diagnostic and held-out champion manifests are separate monotonic tracks. A candidate
 can replace a track only when its metric vector strictly outranks the existing
 same-suite manifest; cross-suite promotion is rejected.

@@ -262,6 +262,10 @@ not the current bottleneck.
   15,677 heldout depth-weighted discovered cells. Feature-v3 DAgger v23 scored 17,121
   diagnostic and cleared the locked heldout-v3 floor at 16,202, becoming canonical;
   its three heldout deaths retain their prior progress rather than erasing it.
+- Policy-side action history is now checkpointed separately from semantic observations.
+  Evaluation and rollout workers maintain isolated per-episode histories; ECHO targets
+  remain environment-only. `--action-history-length` expands a stateless checkpoint
+  with zero history columns so online DAgger/PPO can learn loop-sensitive behavior.
 
 Next:
 

@@ -12,11 +12,13 @@ import torch
 from torch import Tensor, nn
 
 from dcss_rl.features import FEATURE_SPEC_VERSION, encode_observation, feature_count
-from dcss_rl.policy import Policy
+from dcss_rl.history import encode_action_history
+from dcss_rl.policy import ActionHistory, Policy
 from dcss_rl.schema import ObservationData
-from dcss_rl.units import ActionIndex, CheckpointId, Probability
+from dcss_rl.units import ActionHistoryLength, ActionIndex, CheckpointId, Probability
 
 CHECKPOINT_SCHEMA_VERSION = 1
+_ZERO_ACTION_HISTORY_LENGTH = ActionHistoryLength(0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +26,7 @@ class ModelConfig:
     action_count: int
     hidden_size: int = 256
     feature_spec_version: int = FEATURE_SPEC_VERSION
+    action_history_length: ActionHistoryLength = _ZERO_ACTION_HISTORY_LENGTH
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +65,7 @@ class PpoCheckpointMetadata:
     hp_fraction_reward: float
     clip_ratio: float
     mean_episode_return: float
+    action_history_length: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +81,11 @@ class SemanticActorCritic(nn.Module):
         super().__init__()
         self.config = config
         self.encoder = nn.Sequential(
-            nn.Linear(feature_count(config.feature_spec_version), config.hidden_size),
+            nn.Linear(
+                feature_count(config.feature_spec_version)
+                + config.action_count * config.action_history_length,
+                config.hidden_size,
+            ),
             nn.GELU(),
             nn.Linear(config.hidden_size, config.hidden_size),
             nn.GELU(),
@@ -88,7 +96,13 @@ class SemanticActorCritic(nn.Module):
             config.hidden_size, feature_count(config.feature_spec_version)
         )
 
-    def forward(self, features: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    def forward(
+        self, features: Tensor, action_history: Tensor | None = None
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        if self.config.action_history_length:
+            if action_history is None:
+                raise ValueError("model requires action-history features")
+            features = torch.cat((features, action_history), dim=-1)
         encoded = self.encoder(features)
         return (
             self.policy_head(encoded),
@@ -118,6 +132,9 @@ class LearnedPolicy:
             action_count=int(raw_config["action_count"]),
             hidden_size=int(raw_config["hidden_size"]),
             feature_spec_version=raw_feature_spec_version,
+            action_history_length=ActionHistoryLength(
+                int(raw_config.get("action_history_length", 0))
+            ),
         )
         self.model = SemanticActorCritic(config).to(device)
         self.model.load_state_dict(payload["model_state"])
@@ -131,12 +148,18 @@ class LearnedPolicy:
         self.checkpoint_id = CheckpointId(digest)
 
     def select(
-        self, observation: ObservationData, action_mask: np.ndarray
+        self,
+        observation: ObservationData,
+        action_mask: np.ndarray,
+        action_history: ActionHistory = (),
     ) -> ActionIndex:
-        return self.propose(observation, action_mask).action
+        return self.propose(observation, action_mask, action_history).action
 
     def propose(
-        self, observation: ObservationData, action_mask: np.ndarray
+        self,
+        observation: ObservationData,
+        action_mask: np.ndarray,
+        action_history: ActionHistory = (),
     ) -> PolicyProposal:
         features = torch.from_numpy(
             encode_observation(
@@ -144,8 +167,15 @@ class LearnedPolicy:
             )
         ).to(self.device)
         mask = torch.from_numpy(action_mask).to(self.device)
+        history = torch.from_numpy(
+            encode_action_history(
+                action_history,
+                action_count=self.model.config.action_count,
+                length=self.model.config.action_history_length,
+            )
+        ).to(self.device)
         with torch.inference_mode():
-            logits, _, _ = self.model(features.unsqueeze(0))
+            logits, _, _ = self.model(features.unsqueeze(0), history.unsqueeze(0))
             logits = logits.squeeze(0).masked_fill(~mask, -torch.inf)
             probabilities = torch.softmax(logits, dim=-1)
             action = ActionIndex(int(torch.argmax(probabilities).item()))
@@ -173,22 +203,53 @@ class ConfidenceGatedPolicy:
         self._fallback_decisions = 0
 
     def select(
-        self, observation: ObservationData, action_mask: np.ndarray
+        self,
+        observation: ObservationData,
+        action_mask: np.ndarray,
+        action_history: ActionHistory = (),
     ) -> ActionIndex:
-        proposal = self.learned.propose(observation, action_mask)
+        proposal = self.learned.propose(observation, action_mask, action_history)
         if proposal.confidence >= self.threshold:
             with self._lock:
                 self._learned_decisions += 1
             return proposal.action
         with self._lock:
             self._fallback_decisions += 1
-        return self.fallback.select(observation, action_mask)
+        return self.fallback.select(observation, action_mask, action_history)
 
     @property
     def learned_fraction(self) -> float:
         with self._lock:
             total = self._learned_decisions + self._fallback_decisions
             return self._learned_decisions / total if total else 0.0
+
+
+def add_action_history(
+    model: SemanticActorCritic, length: ActionHistoryLength
+) -> SemanticActorCritic:
+    """Expand a stateless checkpoint while preserving its exact initial policy."""
+    if model.config.action_history_length == length:
+        return model
+    if model.config.action_history_length:
+        raise ValueError("cannot resize an existing action-history model")
+    expanded = SemanticActorCritic(
+        ModelConfig(
+            action_count=model.config.action_count,
+            hidden_size=model.config.hidden_size,
+            feature_spec_version=model.config.feature_spec_version,
+            action_history_length=length,
+        )
+    ).to(next(model.parameters()).device)
+    old_state = model.state_dict()
+    new_state = expanded.state_dict()
+    for name, value in old_state.items():
+        if name == "encoder.0.weight":
+            new_state[name].zero_()
+            new_state[name][:, : value.shape[1]] = value
+        else:
+            new_state[name] = value
+    expanded.load_state_dict(new_state)
+    return expanded
 
 
 def save_checkpoint(

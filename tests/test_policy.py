@@ -2,9 +2,10 @@ import numpy as np
 
 from dcss_rl.actions import Action, ActionKind
 from dcss_rl.env import action_to_index
+from dcss_rl.history import encode_action_history
 from dcss_rl.policy import ScriptedMibePolicy
 from dcss_rl.schema import CellView, ObservationData
-from dcss_rl.units import Keycode
+from dcss_rl.units import ActionHistoryLength, ActionIndex, Keycode
 
 
 def observation(
@@ -164,3 +165,14 @@ def test_select_falls_back_to_legal_cancel() -> None:
     mask[cancel] = True
 
     assert ScriptedMibePolicy().select(observation(), mask) == cancel
+
+
+def test_action_history_is_newest_first_and_bounded() -> None:
+    encoded = encode_action_history(
+        (ActionIndex(2), ActionIndex(4), ActionIndex(6)),
+        action_count=8,
+        length=ActionHistoryLength(2),
+    )
+
+    assert encoded.shape == (16,)
+    assert np.flatnonzero(encoded).tolist() == [6, 12]

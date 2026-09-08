@@ -134,6 +134,9 @@ ordinary cross-entropy and one is full inverse-frequency weighting. Online imita
 aggregates learner-visited labels across updates by default, as required by DAgger;
 `--no-aggregate-imitation-replay` exists for matched ablations. PPO, value, and ECHO
 objectives always use only the current on-policy rollout.
+`--action-history-length N` expands a stateless initial checkpoint with `N`
+newest-first action slots. History remains policy-side context: it is reset per game,
+kept separate across concurrent workers, and excluded from ECHO environment targets.
 
 Checkpoints and generated rollouts remain untracked. Learned candidates must first
 improve the diagnostic track and then clear the checked-in held-out floor before

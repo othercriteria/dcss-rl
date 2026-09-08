@@ -13,6 +13,8 @@ from dcss_rl.env import action_to_index
 from dcss_rl.schema import CellView, ObservationData
 from dcss_rl.units import ActionIndex, CheckpointId, Coordinate, Keycode
 
+type ActionHistory = tuple[ActionIndex, ...]
+
 
 class Policy(Protocol):
     """An agent that selects one catalog action at an input boundary."""
@@ -24,7 +26,10 @@ class Policy(Protocol):
     def checkpoint_id(self) -> CheckpointId | None: ...
 
     def select(
-        self, observation: ObservationData, action_mask: np.ndarray
+        self,
+        observation: ObservationData,
+        action_mask: np.ndarray,
+        action_history: ActionHistory = (),
     ) -> ActionIndex: ...
 
 
@@ -159,8 +164,12 @@ class ScriptedMibePolicy:
         return PolicyDecision(Action(ActionKind.EXPLORE), "continue autoexploration")
 
     def select(
-        self, observation: ObservationData, action_mask: np.ndarray
+        self,
+        observation: ObservationData,
+        action_mask: np.ndarray,
+        action_history: ActionHistory = (),
     ) -> ActionIndex:
+        del action_history
         decision = self.decide(observation)
         index = action_to_index(decision.action)
         if index >= len(action_mask) or not bool(action_mask[index]):
