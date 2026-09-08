@@ -356,6 +356,28 @@ redirects are evaluation configuration, not an additional viewer resolution laye
 current-diagnostic evaluation with retained replays; its destination is fixed to the
 diagnostic manifest and cannot change the held-out track.
 
+Selective warmup freezes all parameters outside its declared policy rows and appended
+input columns by default. Optional `warmup_train_value` additionally permits the
+separate value-head weight/bias to learn, without opening the shared encoder. This
+allows clipped-PPO timing experiments to adapt their critic while preserving repaired
+conditional menu logits. The setting is checkpointed; exact ownership audits require
+an explicit value-head allowance and still reject any encoder or unrelated row drift.
+
+PPO's opt-in raw rollout recording uses the existing trajectory writer after successful
+reset and before terminal cleanup. Before each collection, an immutable versioned
+checkpoint is saved under the run's exclusive `collector-checkpoints` directory.
+Transitions carry its SHA and one-based collection-update index. Header checkpoint
+identity is null because optimizer boundaries can occur within an episode. Ordinary
+replay ignores this optional provenance without dropping raw exchanges. Numeric
+worker/episode/attempt paths preserve scheduling order; terminal bootstrap resets may
+produce a zero-action trailing episode and must be considered separately in comparisons.
+Recording also captures the exact choice probability vector and a canonical SHA of
+the pre-choice PCG64 state, without renormalizing or advancing the generator. The
+first-update comparison validates each arm's collector file hash and compares actual
+model tensors (file hashes can legitimately differ with experiment metadata). It
+separates semantic/action/reward/bootstrap agreement from stored raw-message and
+sampling equality; absent sampling evidence does not establish sampling equality.
+
 Training worker directories use only typed worker, episode, and startup-attempt indices;
 human-controlled suite case labels never contribute to the Unix socket path. Evaluation
 keeps case labels at the outer artifact layer but gives each transient startup attempt

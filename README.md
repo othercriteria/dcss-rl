@@ -114,6 +114,13 @@ This command requires retained replay files and a strictly better rank, and cann
 write the held-out champion. Suite redirects select evaluation inputs, not viewer
 destinations; keeping the two champion manifests preserves the separate tracks.
 
+For selective PPO experiments, `poe train-ppo --new-action-warmup-updates ...
+--warmup-action-kind abilities --warmup-train-value ...` can train the named policy
+row and critic while freezing the encoder and other action rows. Critic warmup is
+opt-in. Verify the resulting ownership with `poe checkpoint-audit --checkpoint ...
+--reference ... --allow-action-kind abilities --allow-value-head`; the audit rejects
+unrelated tensor changes and incompatible model configurations.
+
 The terminal viewer identifies the resolved suite, policy, checkpoint, manifest, case,
 and recorded outcome before reconstructing either legacy full-snapshot trajectories or
 compact schema-v2 deltas. Pass `--case CASE_ID` to the track-specific Poe task to inspect
@@ -192,6 +199,23 @@ and records non-ability-menu action drift separately. Its validation is a condit
 menu-choice check, not evidence of stronger gameplay. Output attempts are immutable.
 
 `poe train-ppo` and `poe evaluate-learned` expose the corresponding CLI workflows.
+
+Use `poe train-ppo --record-rollout-trajectories ...` for experiments that need raw
+training replay and matched-collection audits. Each worker episode retains its
+trajectory, including raw exchanges; transitions name the collection update and SHA
+of an immutable checkpoint under `RUN_ROOT/collector-checkpoints/`. Episode headers
+do not claim one checkpoint because an episode can span multiple updates. Recording
+is opt-in; old training game logs alone cannot establish exact rollout equality.
+Recorded sampling evidence retains the actual probability vector and pre-choice RNG
+fingerprint without changing either. Compare complete first collections with:
+
+```sh
+poe compare-training-rollouts --reference RUN_A --candidate RUN_B --workers 48 --steps 128
+```
+
+The report separates semantic/action agreement, raw-message equality, and sampling
+equality, validates collector checkpoints, and checks terminal bootstrap resets.
+Missing sampling evidence is unknown, not a successful equality check.
 PPO prepares anchor replay through a transient reducer and a disposable tensor cache
 (`--imitation-cache-directory`, default `.cache/imitation-replay`). Content and
 preprocessing-source hashes invalidate the cache; only environment features, legality

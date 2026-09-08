@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import random
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -52,11 +54,18 @@ from dcss_rl.replay_cache import prepare_imitation_replay
 from dcss_rl.returns import ReturnBoundaryMode, generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.schema import ObservationData
+from dcss_rl.trajectory import (
+    CollectionProvenance,
+    SamplingEvidence,
+    SamplingStateHash,
+    TrajectoryWriter,
+)
 from dcss_rl.units import (
     ActionHistoryLength,
     ActionIndex,
     BatchSize,
     CaseCount,
+    CheckpointId,
     DecisionCost,
     DecisionsPerSecond,
     DecisionWindow,
@@ -155,6 +164,7 @@ class PpoConfig:
     new_action_warmup_menu_keycodes: tuple[Keycode, ...] = ()
     warmup_action_kinds: tuple[ActionKind, ...] = ()
     warmup_train_value: bool = False
+    record_rollout_trajectories: bool = False
     imitation_trajectories: tuple[Path, ...] = ()
     device: str = "cuda"
 
@@ -297,6 +307,10 @@ class _Worker:
     cycle_tracker: SemanticCycleTracker | None = None
     ui_interaction_budget: UiInteractionBudget | None = None
     static_cache: StaticDataCache | None = None
+    record_rollout_trajectories: bool = False
+    recording_agent_id: str = "masked-ppo"
+    writer: TrajectoryWriter | None = None
+    collection_provenance: CollectionProvenance | None = None
 
     def ready(self) -> tuple[ObservationData, BoolArray]:
         if self.observation is None:
@@ -308,10 +322,34 @@ class _Worker:
     def history(self) -> ActionHistory:
         return tuple(self.action_history)
 
-    def step(self, action: ActionIndex) -> _WorkerStep:
+    def step(
+        self, action: ActionIndex, *, sampling_evidence: SamplingEvidence | None = None
+    ) -> _WorkerStep:
         if self.env is None:
             raise RuntimeError("online worker is not ready")
+        previous = self.observation
+        if self.record_rollout_trajectories and (
+            previous is None
+            or self.writer is None
+            or self.collection_provenance is None
+        ):
+            raise RuntimeError(
+                "recorded worker has no observation, writer or provenance"
+            )
         observation, reward, terminated, truncated, info = self.env.step_typed(action)
+        if self.writer is not None and previous is not None:
+            self.writer.transition(
+                self.env,
+                previous,
+                action,
+                observation,
+                reward,
+                terminated,
+                truncated,
+                info,
+                collection_provenance=self.collection_provenance,
+                sampling_evidence=sampling_evidence,
+            )
         done = terminated or truncated
         mask = info.get("action_mask")
         if not isinstance(mask, np.ndarray) or mask.dtype != np.bool_:
@@ -335,6 +373,9 @@ class _Worker:
         self.action_history.append(action)
         next_history = tuple(self.action_history)
         if done:
+            if self.writer is not None:
+                self.writer.close()
+                self.writer = None
             self.env.close()
             self.env = None
             self.observation = None
@@ -358,6 +399,9 @@ class _Worker:
         )
 
     def close(self) -> None:
+        if self.writer is not None:
+            self.writer.close()
+            self.writer = None
         if self.env is not None:
             self.env.close()
             self.env = None
@@ -384,11 +428,28 @@ class _Worker:
             )
             try:
                 observation, info = self.env.reset_typed()
+                reset_mask = info.get("action_mask")
+                if (
+                    not isinstance(reset_mask, np.ndarray)
+                    or reset_mask.dtype != np.bool_
+                ):
+                    raise RuntimeError("environment returned an invalid action mask")
+                if self.record_rollout_trajectories:
+                    self.writer = TrajectoryWriter(run_root / "trajectory.jsonl")
+                    self.writer.start(
+                        self.env,
+                        observation,
+                        agent_id=self.recording_agent_id,
+                        checkpoint_id=None,
+                    )
                 break
             except TimeoutError as error:
                 last_timeout = error
-                self.env.close()
+                self.close()
                 self.env = None
+            except BaseException:
+                self.close()
+                raise
         else:
             raise RuntimeError(
                 f"worker {self.worker_index} could not start {case.case_id} after "
@@ -411,7 +472,7 @@ def _worker_run_root(
     episode_index: EpisodeIndex,
     attempt_index: StartupAttemptIndex,
 ) -> Path:
-    """Build a bounded path; suite case IDs already live in trajectory metadata."""
+    """Build a bounded numeric path; recorded episode headers retain the seed."""
     return (
         root
         / f"worker-{worker_index}"
@@ -652,6 +713,8 @@ def train_ppo(
             cycle_tracker=SemanticCycleTracker(config.short_cycle_window),
             ui_interaction_budget=UiInteractionBudget(config.ui_interaction_budget),
             static_cache=static_cache,
+            record_rollout_trajectories=config.record_rollout_trajectories,
+            recording_agent_id=policy_id,
         )
         for index in range(config.workers)
     )
@@ -689,9 +752,47 @@ def train_ppo(
             )
         )
     try:
+        collector_directory = run_root / "collector-checkpoints"
+        if config.record_rollout_trajectories:
+            collector_directory.mkdir(parents=True, exist_ok=False)
         with ThreadPoolExecutor(max_workers=config.workers) as executor:
             for update_index in range(config.updates):
                 update_started = perf_counter()
+                if config.record_rollout_trajectories:
+                    collector_path = (
+                        collector_directory / f"update-{update_index:04d}.pt"
+                    )
+                    if collector_path.exists():
+                        raise FileExistsError(collector_path)
+                    save_checkpoint(
+                        collector_path,
+                        model=model,
+                        policy_id=policy_id,
+                        training_metadata=_checkpoint_metadata(
+                            config,
+                            updates=UpdateCount(update_index),
+                            mean_episode_return=float(np.mean(completed_returns))
+                            if completed_returns
+                            else 0.0,
+                            action_history_length=model.config.action_history_length,
+                            ui_interaction_overflows=ui_interaction_overflow_count,
+                            anchor_coverage=anchor_coverage,
+                            imitation_coverage=_replay_coverage(
+                                tuple(imitation_replay)
+                            ),
+                            static_data_identity=static_cache.identity
+                            if static_cache
+                            else None,
+                        ),
+                    )
+                    provenance = CollectionProvenance(
+                        UpdateCount(update_index + 1),
+                        CheckpointId(
+                            hashlib.sha256(collector_path.read_bytes()).hexdigest()
+                        ),
+                    )
+                    for worker in workers:
+                        worker.collection_provenance = provenance
                 rollout = _collect_rollout(
                     model, workers, executor, teacher, config=config
                 )
@@ -854,6 +955,7 @@ def _checkpoint_metadata(
         new_action_warmup_menu_keycodes=tuple(config.new_action_warmup_menu_keycodes),
         warmup_action_kinds=tuple(kind.value for kind in config.warmup_action_kinds),
         warmup_train_value=config.warmup_train_value,
+        record_rollout_trajectories=config.record_rollout_trajectories,
         imitation_trajectories=tuple(map(str, config.imitation_trajectories)),
         return_boundary=config.return_boundary.value,
         decision_cost=config.decision_cost,
@@ -943,6 +1045,22 @@ def _collect_rollout(
     )
 
 
+def _sampling_evidence(
+    probabilities: FloatArray, rng: np.random.Generator
+) -> SamplingEvidence:
+    """Capture choice inputs without normalizing again or advancing the RNG.
+
+    Workers use default_rng's PCG64 state (JSON-native integer fields). The
+    softmax array is exactly the array passed to numpy choice, including dtype
+    rounding; converting each element to Python float preserves its value.
+    """
+    state = json.dumps(rng.bit_generator.state, sort_keys=True, separators=(",", ":"))
+    return SamplingEvidence(
+        tuple(Probability(float(value)) for value in probabilities),
+        SamplingStateHash(hashlib.sha256(state.encode("utf-8")).hexdigest()),
+    )
+
+
 def _collect_worker_rollout(
     worker: _Worker,
     teacher: ScriptedMibePolicy,
@@ -980,8 +1098,17 @@ def _collect_worker_rollout(
         inference = batcher.infer(worker.worker_index, feature, action_history, mask)
         probabilities = inference.probabilities
         value = inference.value
+        sampling_evidence = (
+            _sampling_evidence(probabilities, worker.rng)
+            if config.record_rollout_trajectories
+            else None
+        )
         action = int(worker.rng.choice(len(probabilities), p=probabilities))
-        step = worker.step(ActionIndex(action))
+        step = (
+            worker.step(ActionIndex(action), sampling_evidence=sampling_evidence)
+            if sampling_evidence is not None
+            else worker.step(ActionIndex(action))
+        )
         next_observation = step.observation
         next_feature = encode_observation(
             next_observation, spec_version=batcher.feature_spec_version

@@ -89,6 +89,7 @@ class PpoCheckpointMetadata:
     new_action_warmup_menu_keycodes: tuple[int, ...] = ()
     warmup_action_kinds: tuple[str, ...] = ()
     warmup_train_value: bool = False
+    record_rollout_trajectories: bool = False
     imitation_trajectories: tuple[str, ...] = ()
     return_boundary: str = "episodic"
     decision_cost: float = 0.0

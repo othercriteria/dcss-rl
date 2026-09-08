@@ -87,6 +87,8 @@ compare-replays = ".venv/bin/python -m dcss_rl.replay_compare"
 migrate-features = ".venv/bin/python -m dcss_rl.feature_migration"
 promote-diagnostic = ".venv/bin/python -m dcss_rl.diagnostic_promotion"
 prepare-game-cache = ".venv/bin/python -m dcss_rl.prepare_game_cache"
+benchmark-startup-cache = ".venv/bin/python -m dcss_rl.benchmark_startup_cache"
+compare-training-rollouts = ".venv/bin/python -m dcss_rl.training_rollout_compare"
 
 [tool.ty.environment]
 python-version = "3.13"

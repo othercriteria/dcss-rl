@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Literal, cast
+from typing import Any, Literal, NewType, cast
 
 from dcss_rl.env import DcssEnv, index_to_action
 from dcss_rl.schema import (
@@ -25,11 +25,28 @@ from dcss_rl.schema import (
     RawMessageData,
     ResetOptions,
 )
-from dcss_rl.units import ActionIndex
+from dcss_rl.units import ActionIndex, CheckpointId, Probability, UpdateCount
 from dcss_rl.webtiles import ObservationBatch
 from dcss_rl.webtiles.cache import StaticDataIdentity
 
 SCHEMA_VERSION = 2
+SamplingStateHash = NewType("SamplingStateHash", str)
+
+
+@dataclass(frozen=True, slots=True)
+class SamplingEvidence:
+    """Exact choice probabilities and pre-choice generator-state fingerprint."""
+
+    probabilities: tuple[Probability, ...]
+    rng_state_sha256: SamplingStateHash
+
+
+@dataclass(frozen=True, slots=True)
+class CollectionProvenance:
+    """Actual frozen collector identity, independent of episode boundaries."""
+
+    update: UpdateCount
+    checkpoint_sha256: CheckpointId
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,6 +240,9 @@ class TrajectoryWriter:
         terminated: bool,
         truncated: bool,
         info: EnvironmentInfo,
+        *,
+        collection_provenance: CollectionProvenance | None = None,
+        sampling_evidence: SamplingEvidence | None = None,
     ) -> None:
         if not self._started:
             raise RuntimeError("trajectory has not started")
@@ -235,6 +255,16 @@ class TrajectoryWriter:
         self._write(
             {
                 "type": "transition",
+                **(
+                    {"sampling_evidence": asdict(sampling_evidence)}
+                    if sampling_evidence is not None
+                    else {}
+                ),
+                **(
+                    {"collection_provenance": asdict(collection_provenance)}
+                    if collection_provenance is not None
+                    else {}
+                ),
                 "step": self._step,
                 "action_index": action_index,
                 "action": action,

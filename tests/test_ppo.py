@@ -1,6 +1,9 @@
+import hashlib
+import json
 from concurrent.futures import Future
 from pathlib import Path
 from typing import cast
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -8,7 +11,8 @@ import torch
 
 from dcss_rl.actions import Action, ActionKind
 from dcss_rl.costs import UiInteractionBudgetConfig
-from dcss_rl.env import ACTION_COUNT, action_to_index
+from dcss_rl.env import ACTION_COUNT, DcssEnv, RewardShaping, action_to_index
+from dcss_rl.evaluation import EvaluationCase, EvaluationSuite
 from dcss_rl.features import feature_count
 from dcss_rl.learned import ModelConfig, SemanticActorCritic, align_feature_spec
 from dcss_rl.policy import ScriptedMibePolicy
@@ -22,6 +26,7 @@ from dcss_rl.ppo import (
     _InferenceResult,
     _restore_warmup_parameters,
     _restrict_warmup_gradients,
+    _sampling_evidence,
     _uses_reset_bootstrap,
     _warmup_action_indices,
     _Worker,
@@ -31,15 +36,19 @@ from dcss_rl.ppo import (
 from dcss_rl.returns import ReturnBoundaryMode, generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.schema import ObservationData
+from dcss_rl.trajectory import CollectionProvenance, TrajectoryWriter
 from dcss_rl.units import (
     ActionHistoryLength,
     ActionIndex,
     CaseCount,
+    CheckpointId,
     EpisodeIndex,
     FeatureSpecVersion,
+    GameSeed,
     Keycode,
     RolloutLength,
     StartupAttemptIndex,
+    StepLimit,
     TerminalOutcome,
     UiInteractionCost,
     UiInteractionOverflowCount,
@@ -142,12 +151,131 @@ def test_worker_run_root_does_not_include_unbounded_case_label() -> None:
     assert root == Path("/tmp/run/worker-47/episode-123-attempt-2")
 
 
+def test_sampling_evidence_preserves_exact_probabilities_and_rng_sequence() -> None:
+    rng = np.random.default_rng(7)
+    control = np.random.default_rng(7)
+    probabilities = np.asarray([0.1, 0.2, 0.7], dtype=np.float32)
+    expected_hash = hashlib.sha256(
+        json.dumps(
+            rng.bit_generator.state, sort_keys=True, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    evidence = _sampling_evidence(probabilities, rng)
+    assert evidence.probabilities == tuple(float(value) for value in probabilities)
+    assert evidence.rng_state_sha256 == expected_hash
+    np.testing.assert_array_equal(
+        rng.choice(3, size=20, p=probabilities),
+        control.choice(3, size=20, p=probabilities),
+    )
+    assert _sampling_evidence(probabilities, rng).rng_state_sha256 != expected_hash
+
+
+def test_recorded_worker_writes_terminal_transition_before_cleanup(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    env = MagicMock(spec=DcssEnv)
+    writer = MagicMock(spec=TrajectoryWriter)
+    env.step_typed.return_value = (
+        _rollout_observation(1),
+        0.0,
+        True,
+        False,
+        {"action_mask": np.ones(int(ACTION_COUNT), dtype=np.bool_), "outcome": "dead"},
+    )
+    writer.transition.side_effect = lambda *args, **kwargs: events.append("transition")
+    writer.close.side_effect = lambda: events.append("writer-close")
+    env.close.side_effect = lambda: events.append("env-close")
+    worker = _Worker(
+        Path("unused"),
+        cast(EvaluationSuite, MagicMock()),
+        tmp_path,
+        WorkerIndex(0),
+        TrainingSeedSchedule(CaseCount(1), WorkerCount(1)),
+        RewardShaping(),
+        np.random.default_rng(1),
+        env=cast(DcssEnv, env),
+        observation=_rollout_observation(0),
+        record_rollout_trajectories=True,
+        writer=cast(TrajectoryWriter, writer),
+        collection_provenance=CollectionProvenance(
+            UpdateCount(1), CheckpointId("a" * 64)
+        ),
+    )
+    evidence = _sampling_evidence(np.asarray([1.0], dtype=np.float32), worker.rng)
+    worker.step(ActionIndex(0), sampling_evidence=evidence)
+    assert events == ["transition", "writer-close", "env-close"]
+    assert writer.transition.call_args.kwargs["collection_provenance"].update == 1
+    assert writer.transition.call_args.kwargs["sampling_evidence"] == evidence
+    assert worker.writer is None
+    assert worker.env is None
+    worker.close()
+    assert len(events) == 3
+
+
+def test_recorded_worker_rejects_missing_provenance_before_action(
+    tmp_path: Path,
+) -> None:
+    env = MagicMock(spec=DcssEnv)
+    worker = _Worker(
+        Path("unused"),
+        cast(EvaluationSuite, MagicMock()),
+        tmp_path,
+        WorkerIndex(0),
+        TrainingSeedSchedule(CaseCount(1), WorkerCount(1)),
+        RewardShaping(),
+        np.random.default_rng(1),
+        env=cast(DcssEnv, env),
+        observation=_rollout_observation(0),
+        record_rollout_trajectories=True,
+    )
+    with pytest.raises(RuntimeError, match="provenance"):
+        worker.step(ActionIndex(0))
+    env.step_typed.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", [TimeoutError, FileExistsError])
+def test_recording_reset_failure_closes_writer_and_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: type[Exception],
+) -> None:
+    env = MagicMock(spec=DcssEnv)
+    env.reset_typed.return_value = (
+        _rollout_observation(0),
+        {"action_mask": np.ones(1, dtype=np.bool_)},
+    )
+    writer = MagicMock(spec=TrajectoryWriter)
+    writer.start.side_effect = failure("recording failed")
+    monkeypatch.setattr("dcss_rl.ppo.DcssEnv", lambda *args, **kwargs: env)
+    monkeypatch.setattr("dcss_rl.ppo.TrajectoryWriter", lambda *args, **kwargs: writer)
+    suite = EvaluationSuite(
+        "training", StepLimit(8), (EvaluationCase("case", GameSeed(3001)),)
+    )
+    worker = _Worker(
+        Path("unused"),
+        suite,
+        tmp_path,
+        WorkerIndex(0),
+        TrainingSeedSchedule(CaseCount(1), WorkerCount(1)),
+        RewardShaping(),
+        np.random.default_rng(1),
+        record_rollout_trajectories=True,
+    )
+    with pytest.raises(RuntimeError if failure is TimeoutError else failure):
+        worker.ready()
+    assert writer.close.call_count == writer.start.call_count
+    assert env.close.call_count == writer.start.call_count
+    assert worker.writer is None
+
+
 @pytest.mark.parametrize("train_value", [False, True])
 def test_checkpoint_metadata_records_ui_budget_and_cumulative_overflows(
     train_value: bool,
 ) -> None:
     config = PpoConfig(
         warmup_train_value=train_value,
+        record_rollout_trajectories=train_value,
         ui_interaction_budget=UiInteractionBudgetConfig(
             capacity=UiInteractionTokenCapacity(3.0),
             refill_per_turn=UiInteractionRefillPerTurn(0.5),
@@ -169,6 +297,7 @@ def test_checkpoint_metadata_records_ui_budget_and_cumulative_overflows(
     assert metadata.ui_interaction_cost == 0.125
     assert metadata.ui_interaction_overflows == 7
     assert metadata.warmup_train_value is train_value
+    assert metadata.record_rollout_trajectories is train_value
 
 
 def test_inference_requests_are_padded_to_reproducible_fixed_shape() -> None:

@@ -643,3 +643,30 @@ this journal exists to keep research velocity and direction visible.
   stop; fewer menus alone does not meet the goal. First-update collection should match
   across arms; subsequent divergence is expected from the different objectives.
   Heldout-v5 stays untouched. Representative cache timing runs finish before this pair.
+- **2026-09-08 — UI-pilot control and retreat coverage prerequisites.** The migrated
+  opening-capable control retains rank `(0, 0, 26016, 19, 19, 16, 152.0)` in 12.49
+  seconds:331 opens,5 successful activations,326 inapplicable menus,325 cancels,
+  no Renounce or state-rejected selections. Its ac1 validation remains9/9 applicable
+  and38/38 inapplicable correct; training remains20/24 and109/116, not perfect.
+  These are qualifications to the repaired starting point, not new live success.
+  Separately, all136 training trajectories contain447 upstairs-legal pre-action
+  observations with valid HP, but minimum HP fraction is0.79365. No threatened
+  low-HP examples exist at the predeclared25/50/75% bands. Decision: do not fit an
+  upstairs escape row from these anchors; deliberate training exposure is necessary.
+  Details: `docs/research-retreat-coverage.md`.
+- **2026-09-08 — representative static-cache pair and prelaunch amendment.**
+  `poe benchmark-startup-cache` ran matched48×128 single-update configurations from
+  terrain-v66, with anchor priming31.313 seconds separately and warm per-arm
+  preparation0.249/0.243 seconds. Off/on collection took39.02/50.82 seconds;
+  wall44.556/56.152 and awaited child CPU635.891/147.05 seconds. Source/input hashes
+  remained unchanged. Despite the CPU reduction, outcomes diverged:20/22 completed
+  episodes,982/926 cycles,19/5 UI overflows, and8/10 model-state tensors changed.
+  This is confounded operational evidence, not a matched-workload speedup or proof
+  of cache-induced behavior change. Earlier deterministic parity probes do not
+  establish stochastic48-worker parity. Report: `artifacts/p/v66cache/report.json`.
+  Decision: do not enable cache by default or spend more throughput budget yet.
+  Before launching the UI-return pair, amend both arms to cold startup and enable
+  optional raw rollout recording with actual per-update collector checkpoints.
+  The audit found existing PPO retained game logs but not replayable trajectories;
+  aggregate counts alone cannot verify matched first-update collection. Budgets,
+  objectives, success/stop gates, and held-out exclusion remain unchanged.

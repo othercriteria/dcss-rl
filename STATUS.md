@@ -503,6 +503,22 @@ Next:
   opt-in path; defaults are unchanged. Cold and cached compatibility smoke both pass
   on 0.34.1 and 0.33.1 at the exact revisions recorded below. Latest full gate:
   186 fast tests, three live tests, formatting, lint, and typing pass.
+- Integrated terrain/cache changes are committed at `916408b`; optional selective
+  critic learning and the predeclared UI-return experiment are committed at `9f0d08c`.
+  A later matched48-worker startup-cache pair does **not** justify default activation:
+  collection regressed39.02→50.82 seconds despite child CPU635.89→147.05 seconds,
+  and stochastic rollouts/model tensors diverged. Keep caching opt-in and investigate
+  parity before further optimization. Exact report: `artifacts/p/v66cache/report.json`.
+- The next bounded UI-cost comparison uses the same opening-capable v65→feature6
+  start, abilities-row plus critic learning, and cost0 versus0.1. Both arms use cold
+  startup following the performance result. Optional raw PPO recording closes an
+  evidence gap in earlier training logs: per-transition provenance references exact
+  collector checkpoints, including across optimizer boundaries. Its2×8 smoke passes
+  and exact ownership allows only abilities/value-head changes. Full pilot pending.
+- A training-only retreat audit finds no low-HP upstairs examples among447 legal
+  states in136 anchor episodes (minimum HP79.365%). Do not relabel these as escape
+  training; deliberate exposure is needed. `docs/research-retreat-coverage.md` records
+  the negative coverage evidence.
 
 ## Verified commands
 

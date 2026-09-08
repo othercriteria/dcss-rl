@@ -166,6 +166,11 @@ def main() -> None:
     )
     ppo.add_argument("--workers", type=int, default=5)
     ppo.add_argument("--static-data-cache", type=Path)
+    ppo.add_argument(
+        "--record-rollout-trajectories",
+        action="store_true",
+        help="retain raw rollout replays with collector checkpoint provenance",
+    )
     ppo.add_argument("--inference-batch-size", type=int, default=64)
     ppo.add_argument("--inference-batch-wait-seconds", type=float, default=0.001)
     ppo.add_argument("--minibatch-size", type=int, default=256)
@@ -380,6 +385,7 @@ def main() -> None:
                 ),
                 imitation_cache_directory=arguments.imitation_cache_directory,
                 static_data_cache=arguments.static_data_cache,
+                record_rollout_trajectories=arguments.record_rollout_trajectories,
                 workers=WorkerCount(arguments.workers),
                 inference_batch_size=InferenceBatchSize(arguments.inference_batch_size),
                 inference_batch_wait=Seconds(arguments.inference_batch_wait_seconds),
