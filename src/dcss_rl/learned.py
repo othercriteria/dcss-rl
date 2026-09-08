@@ -45,6 +45,8 @@ class PpoCheckpointMetadata:
     updates: int
     rollout_steps: int
     worker_count: int
+    inference_batch_size: int
+    inference_batch_wait_seconds: float
     learning_rate: float
     echo_weight: float
     policy_weight: float

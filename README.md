@@ -139,6 +139,11 @@ Online fine-tuning restores the same checkpoint and samples only legality-masked
 actions. `configs/online-train-v2.json` supplies 64 training-only seeds with
 1,000-decision horizons. Workers collect independent chunks without per-action barriers;
 worker-local seeded samplers make repeated runs deterministic across thread schedules.
+Asynchronous requests are combined into bounded GPU inference batches; tune
+`--inference-batch-size` and the typed
+`--inference-batch-wait-seconds` only from measured worker workloads. Per-update logs
+separate collection, optimization, and checkpoint time and report realized mean batch
+size.
 Optional depth, exploration, XP-progress, and HP-potential rewards use only
 player-visible state and affect training environments only. Set `--echo-weight 0` for
 the matched ECHO-off ablation. Teacher class balancing uses square-root inverse

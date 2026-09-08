@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from threading import Lock
+from queue import Empty, Queue
+from threading import Event, Lock, Thread
 from time import perf_counter
 
 import numpy as np
@@ -36,11 +37,15 @@ from dcss_rl.units import (
     EpisodeIndex,
     EpochCount,
     GameSeed,
+    InferenceBatchCount,
+    InferenceBatchSize,
     LearningRate,
     LossWeight,
+    MeanInferenceBatchSize,
     Probability,
     RewardWeight,
     RolloutLength,
+    Seconds,
     StepLimit,
     UpdateCount,
     WorkerCount,
@@ -55,6 +60,8 @@ type IntArray = NDArray[np.int64]
 _DEFAULT_UPDATES = UpdateCount(4)
 _DEFAULT_ROLLOUT_LENGTH = RolloutLength(128)
 _DEFAULT_WORKERS = WorkerCount(5)
+_DEFAULT_INFERENCE_BATCH_SIZE = InferenceBatchSize(64)
+_DEFAULT_INFERENCE_BATCH_WAIT = Seconds(0.001)
 _DEFAULT_BATCH_SIZE = BatchSize(256)
 _DEFAULT_LEARNING_RATE = LearningRate(1e-4)
 _DEFAULT_ECHO_WEIGHT = LossWeight(0.1)
@@ -77,6 +84,8 @@ class PpoConfig:
     updates: UpdateCount = _DEFAULT_UPDATES
     rollout_length: RolloutLength = _DEFAULT_ROLLOUT_LENGTH
     workers: WorkerCount = _DEFAULT_WORKERS
+    inference_batch_size: InferenceBatchSize = _DEFAULT_INFERENCE_BATCH_SIZE
+    inference_batch_wait: Seconds = _DEFAULT_INFERENCE_BATCH_WAIT
     minibatch_size: BatchSize = _DEFAULT_BATCH_SIZE
     learning_rate: LearningRate = _DEFAULT_LEARNING_RATE
     echo_weight: LossWeight = _DEFAULT_ECHO_WEIGHT
@@ -100,6 +109,7 @@ class PpoConfig:
             self.updates,
             self.rollout_length,
             self.workers,
+            self.inference_batch_size,
             self.minibatch_size,
             self.epochs_per_update,
         )
@@ -107,6 +117,8 @@ class PpoConfig:
             raise ValueError("PPO counts must be positive")
         if self.learning_rate <= 0:
             raise ValueError("PPO learning rate must be positive")
+        if self.inference_batch_wait < 0:
+            raise ValueError("inference batch wait cannot be negative")
         if not 0 < self.discount <= 1 or not 0 <= self.gae_lambda <= 1:
             raise ValueError("PPO discount and GAE lambda must be probabilities")
         if not 0 < self.clip_ratio < 1:
@@ -148,6 +160,11 @@ class PpoUpdateReport:
     update: UpdateCount
     decisions: int
     decision_rate: DecisionsPerSecond
+    collection_seconds: Seconds
+    optimization_seconds: Seconds
+    checkpoint_seconds: Seconds
+    inference_batches: InferenceBatchCount
+    mean_inference_batch_size: MeanInferenceBatchSize
     completed_episodes: int
     mean_completed_return: float
     policy_loss: float
@@ -266,6 +283,8 @@ class _Rollout:
     next_deltas: FloatArray
     teacher_actions: IntArray
     completed_returns: tuple[float, ...]
+    inference_batches: InferenceBatchCount
+    mean_inference_batch_size: MeanInferenceBatchSize
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,6 +299,101 @@ class _WorkerRollout:
     next_deltas: FloatArray
     teacher_actions: IntArray
     completed_returns: tuple[float, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _InferenceResult:
+    probabilities: FloatArray
+    value: float
+
+
+@dataclass(frozen=True, slots=True)
+class _InferenceRequest:
+    feature: FloatArray
+    mask: BoolArray
+    future: Future[_InferenceResult]
+
+
+class _InferenceBatcher:
+    """Combine asynchronous worker requests into bounded GPU forwards."""
+
+    def __init__(
+        self,
+        model: SemanticActorCritic,
+        *,
+        device: str,
+        batch_size: InferenceBatchSize,
+        batch_wait: Seconds,
+    ) -> None:
+        self._model = model
+        self._device = torch.device(device)
+        self._batch_size = batch_size
+        self._batch_wait = batch_wait
+        self._requests: Queue[_InferenceRequest | None] = Queue()
+        self._state_lock = Lock()
+        self._closed = Event()
+        self.request_count = 0
+        self.batch_count = 0
+        self._thread = Thread(target=self._run, name="ppo-inference", daemon=True)
+        self._thread.start()
+
+    def infer(self, feature: FloatArray, mask: BoolArray) -> _InferenceResult:
+        future: Future[_InferenceResult] = Future()
+        with self._state_lock:
+            if self._closed.is_set():
+                raise RuntimeError("inference batcher is closed")
+            self._requests.put(_InferenceRequest(feature, mask, future))
+        return future.result()
+
+    def close(self) -> None:
+        with self._state_lock:
+            self._closed.set()
+            self._requests.put(None)
+        self._thread.join()
+
+    def _run(self) -> None:
+        while (first := self._requests.get()) is not None:
+            requests = [first]
+            deadline = perf_counter() + self._batch_wait
+            while len(requests) < self._batch_size:
+                remaining = deadline - perf_counter()
+                if remaining <= 0:
+                    break
+                try:
+                    request = self._requests.get(timeout=remaining)
+                except Empty:
+                    break
+                if request is None:
+                    self._resolve(requests)
+                    return
+                requests.append(request)
+            try:
+                self._resolve(requests)
+            except BaseException as error:
+                for request in requests:
+                    request.future.set_exception(error)
+
+    def _resolve(self, requests: list[_InferenceRequest]) -> None:
+        self.request_count += len(requests)
+        self.batch_count += 1
+        features = torch.from_numpy(
+            np.stack([request.feature for request in requests])
+        ).to(self._device)
+        masks = torch.from_numpy(np.stack([request.mask for request in requests])).to(
+            self._device
+        )
+        with torch.inference_mode():
+            logits, values, _ = self._model(features)
+            probabilities = (
+                torch.softmax(logits.masked_fill(~masks, -torch.inf), dim=-1)
+                .cpu()
+                .numpy()
+            )
+            host_values = values.cpu().numpy()
+        for index, request in enumerate(requests):
+            request.future.set_result(
+                _InferenceResult(probabilities[index], float(host_values[index]))
+            )
 
 
 def train_ppo(
@@ -328,8 +442,10 @@ def train_ppo(
                 rollout = _collect_rollout(
                     model, workers, executor, teacher, config=config
                 )
+                collection_finished = perf_counter()
                 completed_returns.extend(rollout.completed_returns)
                 losses = _ppo_update(model, optimizer, rollout, config=config)
+                optimization_finished = perf_counter()
                 teacher_agreement = Probability(
                     float(np.mean(rollout.actions == rollout.teacher_actions))
                 )
@@ -346,6 +462,7 @@ def train_ppo(
                         mean_episode_return=mean_return,
                     ),
                 )
+                checkpoint_finished = perf_counter()
                 if progress is not None:
                     update_decisions = int(config.rollout_length * config.workers)
                     update_returns = rollout.completed_returns
@@ -354,8 +471,14 @@ def train_ppo(
                             UpdateCount(update_index + 1),
                             update_decisions,
                             DecisionsPerSecond(
-                                update_decisions / (perf_counter() - update_started)
+                                update_decisions
+                                / (checkpoint_finished - update_started)
                             ),
+                            Seconds(collection_finished - update_started),
+                            Seconds(optimization_finished - collection_finished),
+                            Seconds(checkpoint_finished - optimization_finished),
+                            rollout.inference_batches,
+                            rollout.mean_inference_batch_size,
                             len(update_returns),
                             float(np.mean(update_returns)) if update_returns else 0.0,
                             losses.policy,
@@ -394,6 +517,8 @@ def _checkpoint_metadata(
         updates=updates,
         rollout_steps=config.rollout_length,
         worker_count=config.workers,
+        inference_batch_size=config.inference_batch_size,
+        inference_batch_wait_seconds=config.inference_batch_wait,
         learning_rate=config.learning_rate,
         echo_weight=config.echo_weight,
         policy_weight=config.policy_weight,
@@ -417,18 +542,29 @@ def _collect_rollout(
     *,
     config: PpoConfig,
 ) -> _Rollout:
-    model_lock = Lock()
-    worker_rollouts = tuple(
-        executor.map(
-            lambda worker: _collect_worker_rollout(
-                model,
-                worker,
-                teacher,
-                model_lock=model_lock,
-                config=config,
-            ),
-            workers,
+    batcher = _InferenceBatcher(
+        model,
+        device=config.device,
+        batch_size=config.inference_batch_size,
+        batch_wait=config.inference_batch_wait,
+    )
+    try:
+        worker_rollouts = tuple(
+            executor.map(
+                lambda worker: _collect_worker_rollout(
+                    worker,
+                    teacher,
+                    batcher=batcher,
+                    config=config,
+                ),
+                workers,
+            )
         )
+    finally:
+        batcher.close()
+    inference_batches = InferenceBatchCount(batcher.batch_count)
+    mean_inference_batch_size = MeanInferenceBatchSize(
+        batcher.request_count / batcher.batch_count if batcher.batch_count else 0.0
     )
     return _Rollout(
         np.concatenate([rollout.features for rollout in worker_rollouts]),
@@ -443,18 +579,18 @@ def _collect_rollout(
         tuple(
             value for rollout in worker_rollouts for value in rollout.completed_returns
         ),
+        inference_batches,
+        mean_inference_batch_size,
     )
 
 
 def _collect_worker_rollout(
-    model: SemanticActorCritic,
     worker: _Worker,
     teacher: ScriptedMibePolicy,
     *,
-    model_lock: Lock,
+    batcher: _InferenceBatcher,
     config: PpoConfig,
 ) -> _WorkerRollout:
-    device = torch.device(config.device)
     features: list[FloatArray] = []
     masks: list[BoolArray] = []
     actions: list[int] = []
@@ -468,15 +604,9 @@ def _collect_worker_rollout(
     for _ in range(config.rollout_length):
         observation, mask = worker.ready()
         feature = encode_observation(observation)
-        with model_lock, torch.inference_mode():
-            feature_tensor = torch.from_numpy(feature).to(device).unsqueeze(0)
-            mask_tensor = torch.from_numpy(mask).to(device).unsqueeze(0)
-            logits, value_tensor, _ = model(feature_tensor)
-            masked_logits = logits.squeeze(0).masked_fill(
-                ~mask_tensor.squeeze(0), -torch.inf
-            )
-            probabilities = torch.softmax(masked_logits, dim=-1).cpu().numpy()
-            value = float(value_tensor.item())
+        inference = batcher.infer(feature, mask)
+        probabilities = inference.probabilities
+        value = inference.value
         action = int(worker.rng.choice(len(probabilities), p=probabilities))
         next_observation, reward, done, completed_return = worker.step(
             ActionIndex(action)
@@ -496,13 +626,9 @@ def _collect_worker_rollout(
 
     final_value = 0.0
     if not dones[-1]:
-        final_observation, _ = worker.ready()
+        final_observation, final_mask = worker.ready()
         final_feature = encode_observation(final_observation)
-        with model_lock, torch.inference_mode():
-            _, final_value_tensor, _ = model(
-                torch.from_numpy(final_feature).to(device).unsqueeze(0)
-            )
-            final_value = float(final_value_tensor.item())
+        final_value = batcher.infer(final_feature, final_mask).value
     reward_array = np.asarray(rewards, dtype=np.float32)[:, None]
     value_array = np.asarray(values, dtype=np.float32)[:, None]
     done_array = np.asarray(dones, dtype=np.bool_)[:, None]

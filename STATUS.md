@@ -206,6 +206,12 @@ not the current bottleneck.
   CPU time over a 12-second paused interval after startup. A matched post-fix sweep at
   24/32/40/48/64 workers reached 137.12/145.24/150.57/154.03/149.70 decisions/s, moving
   the measured collector knee to 48 workers.
+- A bounded asynchronous inference service combines worker requests without a game
+  step barrier. At 48 workers its one-millisecond window realized mean batches of 18
+  and improved matched throughput to 166.18 decisions/s; a three-millisecond window
+  was slightly worse at 165.13/s. Batched and unbatched model tensors were bit-identical.
+  Per-update telemetry now separates collection, optimization, checkpointing, batch
+  count, and mean batch size; collection remains over 97% of measured update time.
 
 Next:
 

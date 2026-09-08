@@ -183,6 +183,15 @@ states. Evaluation reports the realized learned-action fraction so hybrid gains 
 be mistaken for fully autonomous neural control. Increasing that fraction while
 retaining depth is the next learning objective.
 
+Online PPO collection assigns each worker an independent episode chunk so slow games
+do not impose a per-action barrier. Workers submit encoded states to one inference
+service, which waits a typed, bounded interval to coalesce GPU requests while game
+processes continue independently. The model is immutable during each rollout and is
+updated only after all chunks complete. Worker-local random generators preserve action
+sampling independence; fixed-suite repeats must remain tensor-identical despite
+request scheduling. Checkpoint metadata records the inference batch bound and wait,
+while update telemetry separates collection, optimization, and persistence time.
+
 On a fixed five-case, 50-decision learned-policy workload, throughput scales from
 2.96 decisions/s with one worker to 5.55 with two and 12.13 with five. All worker
 counts produce the identical metric vector and learned-action fraction. This makes

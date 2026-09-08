@@ -193,3 +193,12 @@ this journal exists to keep research velocity and direction visible.
   149.70 decisions/s at 24, 32, 40, 48, and 64 workers. Decision: retain the pipe and
   use 48 workers for representative training; the new knee is 65% faster than the old
   pre-fix 40-worker result.
+- **2026-09-07 20:19 EDT — asynchronous inference batching.** A dedicated inference
+  thread now coalesces otherwise serialized worker requests without imposing a game
+  step barrier. At 48 workers and 128 steps, one-millisecond/64-request batching
+  realized mean batches of 18.0 and raised throughput from 154.03 to 166.18
+  decisions/s. Collection took 36.15 seconds, optimization 0.82, and checkpointing
+  under 0.01. A three-millisecond arm produced a smaller 17.2 mean batch and 165.13/s.
+  Model tensors were bit-identical between unbatched, batched, and repeated batched
+  runs. Decision: retain one millisecond and expose timing/batch occupancy; collection
+  and environment work, not optimizer/checkpoint work, remain dominant.

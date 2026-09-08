@@ -24,6 +24,7 @@ from dcss_rl.units import (
     EpochCount,
     FrameLimit,
     GameSeed,
+    InferenceBatchSize,
     LearningRate,
     LossWeight,
     Probability,
@@ -104,6 +105,8 @@ def main() -> None:
     ppo.add_argument("--updates", type=int, default=4)
     ppo.add_argument("--rollout-length", type=int, default=128)
     ppo.add_argument("--workers", type=int, default=5)
+    ppo.add_argument("--inference-batch-size", type=int, default=64)
+    ppo.add_argument("--inference-batch-wait-seconds", type=float, default=0.001)
     ppo.add_argument("--minibatch-size", type=int, default=256)
     ppo.add_argument("--learning-rate", type=float, default=1e-4)
     ppo.add_argument("--echo-weight", type=float, default=0.1)
@@ -213,6 +216,10 @@ def main() -> None:
             print(
                 f"update {update.update}: decisions={update.decisions}; "
                 f"rate={update.decision_rate:.2f}/s; "
+                f"seconds={update.collection_seconds:.2f}/"
+                f"{update.optimization_seconds:.2f}/{update.checkpoint_seconds:.2f}; "
+                f"inference_batches={update.inference_batches}; "
+                f"mean_batch={update.mean_inference_batch_size:.2f}; "
                 f"episodes={update.completed_episodes}; "
                 f"mean_return={update.mean_completed_return:.3f}; "
                 f"losses={update.policy_loss:.3f}/{update.value_loss:.3f}/"
@@ -232,6 +239,8 @@ def main() -> None:
                 updates=UpdateCount(arguments.updates),
                 rollout_length=RolloutLength(arguments.rollout_length),
                 workers=WorkerCount(arguments.workers),
+                inference_batch_size=InferenceBatchSize(arguments.inference_batch_size),
+                inference_batch_wait=Seconds(arguments.inference_batch_wait_seconds),
                 minibatch_size=BatchSize(arguments.minibatch_size),
                 learning_rate=LearningRate(arguments.learning_rate),
                 echo_weight=LossWeight(arguments.echo_weight),
