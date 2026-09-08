@@ -32,6 +32,7 @@ from dcss_rl.units import (
     ActionIndex,
     CaseCount,
     EpisodeIndex,
+    FeatureSpecVersion,
     Keycode,
     RolloutLength,
     StartupAttemptIndex,
@@ -102,7 +103,7 @@ def test_rollout_reuses_next_feature_at_following_decision(
     encode_calls = 0
 
     def counting_encode(
-        _observation: ObservationData, *, spec_version: int
+        _observation: ObservationData, *, spec_version: FeatureSpecVersion
     ) -> np.ndarray:
         nonlocal encode_calls
         encode_calls += 1
@@ -253,6 +254,16 @@ def test_action_warmup_includes_appended_and_companion_menu_rows() -> None:
     assert set(indices) == {ActionIndex(270), menu_a}
 
 
+def test_action_warmup_can_select_companion_row_without_action_expansion() -> None:
+    menu_a = action_to_index(Action.menu_select(Keycode(ord("a"))))
+
+    indices = _warmup_action_indices(
+        int(ACTION_COUNT), int(ACTION_COUNT), (Keycode(ord("a")),)
+    )
+
+    assert indices == (menu_a,)
+
+
 def test_action_warmup_zeros_every_unrelated_gradient() -> None:
     model = SemanticActorCritic(ModelConfig(action_count=4, hidden_size=2))
     for parameter in model.parameters():
@@ -291,16 +302,21 @@ def test_action_warmup_can_train_only_new_semantic_columns() -> None:
 
 def test_feature_migration_preserves_outputs_before_new_inputs_are_trained() -> None:
     model = SemanticActorCritic(
-        ModelConfig(action_count=4, hidden_size=2, feature_spec_version=3)
+        ModelConfig(
+            action_count=4,
+            hidden_size=2,
+            feature_spec_version=FeatureSpecVersion(3),
+        )
     )
-    old_features = torch.randn(3, feature_count(3))
+    old_features = torch.randn(3, feature_count(FeatureSpecVersion(3)))
     old_outputs = model(old_features)
 
-    migrated = align_feature_spec(model, 4)
+    migrated = align_feature_spec(model, FeatureSpecVersion(4))
     new_features = torch.cat((old_features, torch.zeros(3, 2)), dim=1)
     new_outputs = migrated(new_features)
 
     torch.testing.assert_close(old_outputs[0], new_outputs[0])
     torch.testing.assert_close(old_outputs[1], new_outputs[1])
-    torch.testing.assert_close(old_outputs[2], new_outputs[2][:, : feature_count(3)])
-    torch.testing.assert_close(new_outputs[2][:, feature_count(3) :], torch.zeros(3, 2))
+    old_feature_count = feature_count(FeatureSpecVersion(3))
+    torch.testing.assert_close(old_outputs[2], new_outputs[2][:, :old_feature_count])
+    torch.testing.assert_close(new_outputs[2][:, old_feature_count:], torch.zeros(3, 2))

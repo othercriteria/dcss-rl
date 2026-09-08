@@ -432,3 +432,17 @@ this journal exists to keep research velocity and direction visible.
   dependency. Decision: the isolated-analysis/owned-component seam paid for itself;
   retain primary merge authority and expand parallelism where files and evidence can
   remain similarly independent.
+- **2026-09-08 12:10–12:45 EDT — affordance evidence and training renunciation.** A
+  read-only parallel audit of all v56/v57 diagnostic snapshots partitioned 4,804
+  Berserk selections exactly into 76 starts, nine stochastic failures, 4,271 active
+  rejections, and 448 cooldown rejections. All 4,719 state rejections consumed no game
+  turn. Enabled menus had no colour field; state-disabled Berserk was visibly colour 8.
+  Feature v4 also aliased structured `-Berserk` cooldown with active rage. Separately,
+  retained training logs rendered the Renounce Religion confirmation 1,356 times;
+  this is a redraw-sensitive proxy rather than a direct action count. Six renunciations
+  completed, and all six games died to monsters created by Trog's wrath on D:1–6.
+  Decision: add feature-v5 exact phase/applicability/outcome semantics, teach scripted-v8
+  to cancel visibly inapplicable Berserk without changing the syntactic mask, and retain
+  a typed `poe audit-affordances` utility for future cheap probes. A root-cause state fix
+  resets the compute prior: start below the prior 49,152-decision budget and scale only
+  if the failure mode changes and the diagnostic curve earns it.

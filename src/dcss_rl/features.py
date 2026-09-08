@@ -9,18 +9,27 @@ from collections.abc import Mapping
 import numpy as np
 from numpy.typing import NDArray
 
+from dcss_rl.observation import (
+    BerserkCondition,
+    MenuChoiceApplicability,
+    VisibleActionFeedback,
+    visible_action_feedback,
+    visible_berserk_condition,
+)
 from dcss_rl.schema import CellView, ObservationData
-from dcss_rl.units import Coordinate, FeatureCount
+from dcss_rl.units import Coordinate, FeatureCount, FeatureSpecVersion
 
-FEATURE_SPEC_VERSION = 4
-_V2_FEATURE_SPEC_VERSION = 2
-_V3_FEATURE_SPEC_VERSION = 3
+FEATURE_SPEC_VERSION = FeatureSpecVersion(5)
+_V2_FEATURE_SPEC_VERSION = FeatureSpecVersion(2)
+_V3_FEATURE_SPEC_VERSION = FeatureSpecVersion(3)
+_V4_FEATURE_SPEC_VERSION = FeatureSpecVersion(4)
 LOCAL_RADIUS = 5
 _SIDE = 2 * LOCAL_RADIUS + 1
 _MAP_CHANNELS = 9
 _V2_SCALAR_FEATURES = 56
 _V3_SCALAR_FEATURES = 64
-_SCALAR_FEATURES = 66
+_V4_SCALAR_FEATURES = 66
+_SCALAR_FEATURES = 79
 FEATURE_COUNT = FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _SCALAR_FEATURES)
 
 type FeatureVector = NDArray[np.float32]
@@ -29,19 +38,23 @@ _ITEM_GLYPHS = frozenset(")([!?%$=:|/\\}")
 _WALL_GLYPHS = frozenset({" ", "#", "≈", "♣"})
 
 
-def feature_count(spec_version: int) -> FeatureCount:
+def feature_count(spec_version: FeatureSpecVersion) -> FeatureCount:
     """Return the fixed width for a supported versioned feature contract."""
     if spec_version == _V2_FEATURE_SPEC_VERSION:
         return FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _V2_SCALAR_FEATURES)
     if spec_version == _V3_FEATURE_SPEC_VERSION:
         return FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _V3_SCALAR_FEATURES)
+    if spec_version == _V4_FEATURE_SPEC_VERSION:
+        return FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _V4_SCALAR_FEATURES)
     if spec_version == FEATURE_SPEC_VERSION:
         return FEATURE_COUNT
     raise ValueError(f"unsupported feature specification {spec_version}")
 
 
 def encode_observation(
-    observation: ObservationData, *, spec_version: int = FEATURE_SPEC_VERSION
+    observation: ObservationData,
+    *,
+    spec_version: FeatureSpecVersion = FEATURE_SPEC_VERSION,
 ) -> FeatureVector:
     """Encode one semantic observation without learned or fitted preprocessing."""
     result = np.zeros(feature_count(spec_version), dtype=np.float32)
@@ -146,6 +159,44 @@ def encode_observation(
             *scalar,
             float("berserk" in statuses),
             float("exhaust" in statuses),
+        )
+    if spec_version >= 5:
+        menu = observation["menu"]
+        ability_menu = menu is not None and menu["type"] == "ability"
+        berserk_choice = (
+            next(
+                (
+                    choice
+                    for choice in menu["choices"]
+                    if "berserk" in choice["text"].casefold()
+                ),
+                None,
+            )
+            if ability_menu and menu is not None
+            else None
+        )
+        applicability = (
+            MenuChoiceApplicability(berserk_choice.get("applicability", "unknown"))
+            if berserk_choice is not None
+            else MenuChoiceApplicability.UNKNOWN
+        )
+        feedback = visible_action_feedback(observation["messages"])
+        berserk_condition = visible_berserk_condition(player)
+        scalar = (
+            *scalar,
+            float(berserk_condition is BerserkCondition.ACTIVE),
+            float(berserk_condition is BerserkCondition.COOLDOWN),
+            float(ability_menu),
+            float(berserk_choice is not None),
+            float(applicability is MenuChoiceApplicability.APPLICABLE),
+            float(applicability is MenuChoiceApplicability.INAPPLICABLE),
+            float(VisibleActionFeedback.BERSERK_STARTED in feedback),
+            float(VisibleActionFeedback.BERSERK_ACTIVE_REJECTED in feedback),
+            float(VisibleActionFeedback.BERSERK_COOLDOWN_REJECTED in feedback),
+            float(VisibleActionFeedback.ABILITY_FAILED in feedback),
+            float(VisibleActionFeedback.ABILITY_LOST in feedback),
+            float(VisibleActionFeedback.BERSERK_EXHAUSTED in feedback),
+            float(VisibleActionFeedback.BERSERK_RECOVERED in feedback),
         )
     result[offset:] = scalar
     return result

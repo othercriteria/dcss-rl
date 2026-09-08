@@ -7,6 +7,7 @@ from dcss_rl.features import (
     feature_count,
 )
 from dcss_rl.schema import CellView, ObservationData
+from dcss_rl.units import FeatureSpecVersion
 
 
 def state(*, offset: int = 0, downstairs: bool = True) -> ObservationData:
@@ -35,7 +36,7 @@ def test_feature_encoding_is_fixed_width_and_translation_invariant() -> None:
     first = encode_observation(state())
     translated = encode_observation(state(offset=17))
 
-    assert FEATURE_SPEC_VERSION == 4
+    assert FEATURE_SPEC_VERSION == 5
     assert first.shape == (FEATURE_COUNT,)
     assert first.dtype == np.float32
     np.testing.assert_array_equal(first, translated)
@@ -44,10 +45,10 @@ def test_feature_encoding_is_fixed_width_and_translation_invariant() -> None:
 def test_feature_v3_extends_v2_without_changing_legacy_values() -> None:
     observation = state()
     observation["messages"] = ["Done waiting."]
-    legacy = encode_observation(observation, spec_version=2)
-    current = encode_observation(observation, spec_version=3)
+    legacy = encode_observation(observation, spec_version=FeatureSpecVersion(2))
+    current = encode_observation(observation, spec_version=FeatureSpecVersion(3))
 
-    assert legacy.shape == (feature_count(2),)
+    assert legacy.shape == (feature_count(FeatureSpecVersion(2)),)
     np.testing.assert_array_equal(current[: len(legacy)], legacy)
     assert current[-5] == 1.0
 
@@ -59,11 +60,69 @@ def test_feature_v4_distinguishes_berserk_and_exhaustion() -> None:
         {"light": "Exhausted", "text": "recovering"},
     ]
 
-    legacy = encode_observation(observation, spec_version=3)
-    current = encode_observation(observation)
+    legacy = encode_observation(observation, spec_version=FeatureSpecVersion(3))
+    current = encode_observation(observation, spec_version=FeatureSpecVersion(4))
 
     np.testing.assert_array_equal(current[: len(legacy)], legacy)
     np.testing.assert_array_equal(current[-2:], np.asarray([1.0, 1.0]))
+
+
+def test_feature_v5_distinguishes_berserk_applicability_and_outcome() -> None:
+    observation = state()
+    observation["messages"] = ["You are too berserk!"]
+    observation["menu"] = {
+        "type": "ability",
+        "prompt": "Ability - do what?",
+        "choices": [
+            {
+                "keycode": ord("a"),
+                "text": "a - Berserk",
+                "applicability": "inapplicable",
+            }
+        ],
+    }
+
+    legacy = encode_observation(observation, spec_version=FeatureSpecVersion(4))
+    current = encode_observation(observation)
+
+    np.testing.assert_array_equal(current[: len(legacy)], legacy)
+    np.testing.assert_array_equal(
+        current[-13:],
+        np.asarray(
+            [
+                0.0,
+                0.0,
+                1.0,
+                1.0,
+                0.0,
+                1.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            ]
+        ),
+    )
+
+
+def test_feature_v5_does_not_alias_berserk_cooldown_with_active() -> None:
+    observation = state()
+    observation["player"]["status"] = [
+        {
+            "light": "-Berserk",
+            "text": "on berserk cooldown",
+            "desc": "You are recovering from your berserk rage.",
+        }
+    ]
+
+    legacy = encode_observation(observation, spec_version=FeatureSpecVersion(4))
+    current = encode_observation(observation)
+
+    assert legacy[-2] == 1.0
+    np.testing.assert_array_equal(current[-13:-11], np.asarray([0.0, 1.0]))
 
 
 def test_global_navigation_summary_distinguishes_known_downstairs() -> None:

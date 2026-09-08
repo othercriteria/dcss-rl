@@ -16,7 +16,13 @@ from dcss_rl.features import FEATURE_SPEC_VERSION, encode_observation, feature_c
 from dcss_rl.history import encode_action_history
 from dcss_rl.policy import ActionHistory, Policy
 from dcss_rl.schema import ObservationData
-from dcss_rl.units import ActionHistoryLength, ActionIndex, CheckpointId, Probability
+from dcss_rl.units import (
+    ActionHistoryLength,
+    ActionIndex,
+    CheckpointId,
+    FeatureSpecVersion,
+    Probability,
+)
 
 CHECKPOINT_SCHEMA_VERSION = 1
 _ZERO_ACTION_HISTORY_LENGTH = ActionHistoryLength(0)
@@ -26,7 +32,7 @@ _ZERO_ACTION_HISTORY_LENGTH = ActionHistoryLength(0)
 class ModelConfig:
     action_count: int
     hidden_size: int = 256
-    feature_spec_version: int = FEATURE_SPEC_VERSION
+    feature_spec_version: FeatureSpecVersion = FEATURE_SPEC_VERSION
     action_history_length: ActionHistoryLength = _ZERO_ACTION_HISTORY_LENGTH
 
 
@@ -140,14 +146,15 @@ class LearnedPolicy:
         raw_feature_spec_version = payload.get("feature_spec_version")
         if not isinstance(raw_feature_spec_version, int):
             raise ValueError("checkpoint lacks a feature specification")
-        feature_count(raw_feature_spec_version)
+        feature_spec_version = FeatureSpecVersion(raw_feature_spec_version)
+        feature_count(feature_spec_version)
         raw_config = payload.get("model_config")
         if not isinstance(raw_config, dict):
             raise ValueError("checkpoint lacks model configuration")
         config = ModelConfig(
             action_count=int(raw_config["action_count"]),
             hidden_size=int(raw_config["hidden_size"]),
-            feature_spec_version=raw_feature_spec_version,
+            feature_spec_version=feature_spec_version,
             action_history_length=ActionHistoryLength(
                 int(raw_config.get("action_history_length", 0))
             ),
@@ -272,7 +279,7 @@ def add_action_history(
 
 
 def align_feature_spec(
-    model: SemanticActorCritic, feature_spec_version: int
+    model: SemanticActorCritic, feature_spec_version: FeatureSpecVersion
 ) -> SemanticActorCritic:
     """Append semantic inputs while preserving the checkpoint's exact policy."""
     if model.config.feature_spec_version == feature_spec_version:

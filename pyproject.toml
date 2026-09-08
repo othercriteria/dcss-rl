@@ -77,6 +77,7 @@ watch-heldout-champion = ".venv/bin/dcss-rl watch-best --champion artifacts/cham
 watch-diagnostic-leader = ".venv/bin/dcss-rl watch-best --champion artifacts/dev-champion.json"
 watch-heldout-grid = ".venv/bin/dcss-rl watch-grid --champion artifacts/champion.json"
 watch-diagnostic-grid = ".venv/bin/dcss-rl watch-grid --champion artifacts/dev-champion.json"
+audit-affordances = ".venv/bin/dcss-rl audit-affordances"
 
 [tool.ty.environment]
 python-version = "3.13"

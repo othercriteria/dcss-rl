@@ -368,14 +368,21 @@ not the current bottleneck.
   deterministic ordering while continuing to return detached snapshots. Replaying the
   501-boundary diagnostic-v2-404 trace five times fell from a 2.514-second median to
   1.953 seconds (22.3%); the complete observation-stream digest remained identical.
+- Feature specification v5 preserves visible ability applicability, separates active
+  Berserk from `-Berserk` cooldown, and encodes explicit success/rejection/failure/loss
+  feedback without turning tactical applicability into an action mask. Scripted-v8
+  cancels visibly inapplicable Berserk. A typed `poe audit-affordances` command audits
+  raw trajectories plus retained Crawl logs/morgues; it confirmed 4,719 zero-turn
+  state rejections in v56/v57 diagnostics and six of six completed training
+  renunciations ending in deaths to Trog-wrath monsters.
 
 Next:
 
 1. Build from v51 update 2 toward the retired true D:11 event, using heldout-v4 only as
    historical evidence and preserving untouched heldout-v5 for promotion.
-2. Represent visible multi-step action outcome/availability so anchored Berserk
-   acquisition can distinguish success, exhaustion, rejection, and stale menu flow;
-   then train from the stable pretraining frontier without ability retry loops.
+2. Cheap-probe the appended feature-v5 outcome/applicability state from the stable
+   anchored pretraining frontier; scale only if ability retries and renunciation fall
+   before diagnostic quality regresses.
 3. Extend the curriculum toward branch and rune acquisition while keeping heldout-v5
    locked and treating every earlier knob result as contextual.
 

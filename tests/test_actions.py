@@ -8,7 +8,11 @@ from dcss_rl.actions import (
     legal_actions,
 )
 from dcss_rl.env import ACTION_COUNT, action_to_index, index_to_action
-from dcss_rl.observation import MenuChoice, SemanticObservation
+from dcss_rl.observation import (
+    MenuChoice,
+    MenuChoiceApplicability,
+    SemanticObservation,
+)
 from dcss_rl.units import Keycode
 
 
@@ -72,6 +76,21 @@ def test_menu_actions_are_derived_from_visible_choices() -> None:
         Action(ActionKind.CANCEL),
     )
     assert encode_action(Action.menu_select(Keycode(ord("c"))), menu) == ord("c")
+
+
+def test_visible_inapplicability_does_not_become_a_tactical_mask() -> None:
+    menu = observation(
+        menu_type="ability",
+        choices=(
+            MenuChoice(
+                Keycode(ord("a")),
+                "a - Berserk",
+                MenuChoiceApplicability.INAPPLICABLE,
+            ),
+        ),
+    )
+
+    assert Action.menu_select(Keycode(ord("a"))) in legal_actions(menu)
 
 
 def test_action_mask_fails_closed_for_unknown_input_mode() -> None:

@@ -1,8 +1,11 @@
 from dcss_rl.observation import (
     MenuChoice,
+    MenuChoiceApplicability,
     ObservationReducer,
     SemanticObservation,
+    VisibleActionFeedback,
     plain_text,
+    visible_action_feedback,
 )
 from dcss_rl.schema import JsonObject
 from dcss_rl.units import Keycode
@@ -121,6 +124,55 @@ def test_reducer_extracts_structured_prompt_menu_hotkeys() -> None:
         MenuChoice(Keycode(ord("n")), "N - No"),
     )
     assert SemanticObservation.from_dict(observation.to_dict()) == observation
+
+
+def test_reducer_preserves_visible_ability_applicability() -> None:
+    observation = ObservationReducer().apply(
+        batch(
+            {
+                "msg": "menu",
+                "tag": "ability",
+                "items": [
+                    {"hotkeys": [97], "text": " a - Berserk", "colour": 8},
+                    {"hotkeys": [88], "text": " X - Renounce Religion"},
+                ],
+            }
+        )
+    )
+
+    assert observation.choices == (
+        MenuChoice(
+            Keycode(ord("a")),
+            "a - Berserk",
+            MenuChoiceApplicability.INAPPLICABLE,
+        ),
+        MenuChoice(
+            Keycode(ord("X")),
+            "X - Renounce Religion",
+            MenuChoiceApplicability.APPLICABLE,
+        ),
+    )
+    assert SemanticObservation.from_dict(observation.to_dict()) == observation
+
+
+def test_visible_action_feedback_classifies_berserk_outcomes() -> None:
+    feedback = visible_action_feedback(
+        (
+            "A red film seems to cover your vision as you go berserk!",
+            "You fail to use your ability.",
+            "You can no longer go berserk at will.",
+            "You are exhausted. You feel yourself slow down.",
+        )
+    )
+
+    assert feedback == frozenset(
+        {
+            VisibleActionFeedback.BERSERK_STARTED,
+            VisibleActionFeedback.ABILITY_FAILED,
+            VisibleActionFeedback.ABILITY_LOST,
+            VisibleActionFeedback.BERSERK_EXHAUSTED,
+        }
+    )
 
 
 def test_reducer_omits_empty_inventory_slots() -> None:

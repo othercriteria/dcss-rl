@@ -234,6 +234,13 @@ objective weights, and budget. A failed arm controls the next local decision; it
 not evidence that its knob is permanently useless after those surrounding conditions
 change.
 
+Representation and harness fixes reset the compute prior. The first post-fix experiment
+uses the smallest probe capable of exposing the targeted behavior and inspects its
+learning curve before inheriting the previous full budget. Periodic reduced-budget
+probes test for model overhang: capacity or update counts once needed to compensate for
+ambiguous state, missing feedback, or a harness defect may become avoidable after the
+root cause is repaired.
+
 Long online runs may retain an immutable checkpoint after every completed update in
 addition to the atomically replaced final checkpoint. Intermediate policy selection
 uses only the known diagnostic suite; heldout access remains a single final promotion
@@ -266,6 +273,18 @@ continuing death boundary, the terminal encoding remains the ECHO next-environme
 target while the separately encoded reset state is cached for the next policy decision
 and value bootstrap. Default-disabled reward shaping bypasses its full-map potential
 scan, and Gym materializes the returned current observation only once.
+
+Feature specification v5 preserves Crawl's player-visible ability applicability as a
+semantic enum, separates exact active Berserk from the `-Berserk` cooldown status, and
+classifies visible success, active rejection, cooldown rejection, stochastic failure,
+ability loss, exhaustion, and recovery messages. Older feature columns are unchanged:
+v4's coarse substring bit remains frozen for checkpoint reproducibility, while appended
+v5 columns disambiguate it. Menu colour 8 is decoded because canonical Crawl emits
+`COL_INAPPLICABLE` (`DARKGRAY`) for `check_ability_possible == false`; this affects
+policy input only. The syntactic mask continues to offer the hotkey because Crawl
+accepts it and responds with visible rejection. Old schema-v2 semantic snapshots lack
+the optional applicability field and decode it as `unknown`; their raw protocol remains
+available for any future semantic re-reduction.
 
 Training worker directories use only typed worker, episode, and startup-attempt indices;
 human-controlled suite case labels never contribute to the Unix socket path. Evaluation

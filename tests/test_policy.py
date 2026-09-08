@@ -89,6 +89,20 @@ def test_selects_berserk_from_ability_menu() -> None:
     )
 
 
+def test_cancels_ability_menu_when_berserk_is_visibly_inapplicable() -> None:
+    state = menu_observation("ability", [])
+    assert state["menu"] is not None
+    state["menu"]["choices"] = [
+        {
+            "keycode": ord("a"),
+            "text": "Berserk",
+            "applicability": "inapplicable",
+        }
+    ]
+
+    assert ScriptedMibePolicy().decide(state).action == Action(ActionKind.CANCEL)
+
+
 def test_waits_out_berserk_when_no_target_remains() -> None:
     state = observation()
     state["player"]["status"] = [{"light": "Berserk"}]

@@ -61,7 +61,7 @@ _IGNORED_STATIONARY_MONSTERS = frozenset(
 class ScriptedMibePolicy:
     """Deterministic MiBe baseline using only the semantic player view."""
 
-    policy_id = "scripted-mibe-v7"
+    policy_id = "scripted-mibe-v8"
     checkpoint_id = None
 
     def decide(self, observation: ObservationData) -> PolicyDecision:
@@ -69,7 +69,12 @@ class ScriptedMibePolicy:
         if menu is not None:
             choices = menu["choices"]
             berserk = next(
-                (item for item in choices if "berserk" in item["text"].casefold()),
+                (
+                    item
+                    for item in choices
+                    if "berserk" in item["text"].casefold()
+                    and item.get("applicability") != "inapplicable"
+                ),
                 None,
             )
             if menu["type"] == "ability" and berserk is not None:

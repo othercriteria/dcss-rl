@@ -9,6 +9,7 @@ import numpy as np
 type JsonScalar = str | int | float | bool | None
 type JsonValue = JsonScalar | list[JsonValue] | dict[str, JsonValue]
 type JsonObject = dict[str, JsonValue]
+type MenuChoiceApplicabilityData = Literal["unknown", "applicable", "inapplicable"]
 
 
 class Position(TypedDict):
@@ -74,6 +75,7 @@ class CellView(TypedDict, total=False):
 class MenuChoiceData(TypedDict):
     keycode: int
     text: str
+    applicability: NotRequired[MenuChoiceApplicabilityData]
 
 
 class MenuView(TypedDict):

@@ -50,6 +50,7 @@ from dcss_rl.units import (
     DecisionWindow,
     EpisodeIndex,
     EpochCount,
+    FeatureSpecVersion,
     GameSeed,
     InferenceBatchCount,
     InferenceBatchSize,
@@ -457,7 +458,7 @@ class _InferenceBatcher:
         self._thread.start()
 
     @property
-    def feature_spec_version(self) -> int:
+    def feature_spec_version(self) -> FeatureSpecVersion:
         return self._model.config.feature_spec_version
 
     @property
@@ -638,7 +639,6 @@ def train_ppo(
                         config.new_action_warmup_menu_keycodes,
                     )
                     if update_index < config.new_action_warmup_updates
-                    and established_action_count < model.config.action_count
                     else None,
                     trainable_feature_indices=tuple(
                         range(

@@ -5,7 +5,9 @@ from __future__ import annotations
 import copy
 import html
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import cast
 
 from dcss_rl.schema import CellView, JsonObject, ObservationData, PlayerView
@@ -16,6 +18,7 @@ _TAG = re.compile(r"<[^>]*>")
 _PROMPT_CHOICE = re.compile(r"\(([A-Za-z])\)([A-Za-z]+)")
 _MORE_INPUT_MODE = 5
 _PROMPT_INPUT_MODE = 7
+_INAPPLICABLE_MENU_COLOUR = 8
 
 
 def plain_text(value: str) -> str:
@@ -32,10 +35,97 @@ def _merge(target: JsonObject, delta: JsonObject) -> None:
             target[key] = copy.deepcopy(value)
 
 
+class MenuChoiceApplicability(StrEnum):
+    """Player-visible applicability of a menu choice."""
+
+    UNKNOWN = "unknown"
+    APPLICABLE = "applicable"
+    INAPPLICABLE = "inapplicable"
+
+
+def menu_choice_applicability(
+    menu_type: str | None, item: JsonObject
+) -> MenuChoiceApplicability:
+    """Interpret visible styling without changing syntactic legality."""
+    if menu_type != "ability":
+        return MenuChoiceApplicability.UNKNOWN
+    return (
+        MenuChoiceApplicability.INAPPLICABLE
+        if item.get("colour") == _INAPPLICABLE_MENU_COLOUR
+        else MenuChoiceApplicability.APPLICABLE
+    )
+
+
+class BerserkCondition(StrEnum):
+    """Exact player-visible Berserk status, avoiding `-Berserk` aliasing."""
+
+    INACTIVE = "inactive"
+    ACTIVE = "active"
+    COOLDOWN = "cooldown"
+
+
+def visible_berserk_condition(player: PlayerView) -> BerserkCondition:
+    """Classify active rage and cooldown from structured visible statuses."""
+    for status in player.get("status", []):
+        light = str(status.get("light", "")).strip().casefold()
+        text = str(status.get("text", "")).strip().casefold()
+        description = str(status.get("desc", "")).casefold()
+        if (
+            light == "-berserk"
+            or "berserk cooldown" in text
+            or "recovering from your berserk rage" in description
+        ):
+            return BerserkCondition.COOLDOWN
+        if light == "berserk" or text == "berserking":
+            return BerserkCondition.ACTIVE
+    return BerserkCondition.INACTIVE
+
+
+class VisibleActionFeedback(StrEnum):
+    """Stable semantic outcomes derived only from player-visible messages."""
+
+    BERSERK_STARTED = "berserk_started"
+    BERSERK_ACTIVE_REJECTED = "berserk_active_rejected"
+    BERSERK_COOLDOWN_REJECTED = "berserk_cooldown_rejected"
+    ABILITY_FAILED = "ability_failed"
+    ABILITY_LOST = "ability_lost"
+    BERSERK_EXHAUSTED = "berserk_exhausted"
+    BERSERK_RECOVERED = "berserk_recovered"
+
+
+def visible_action_feedback(
+    messages: Iterable[str],
+) -> frozenset[VisibleActionFeedback]:
+    """Classify visible action feedback without consulting the requested action."""
+    text = " ".join(messages).casefold()
+    result: set[VisibleActionFeedback] = set()
+    phrases = (
+        (
+            "red film seems to cover your vision as you go berserk",
+            VisibleActionFeedback.BERSERK_STARTED,
+        ),
+        ("you are too berserk", VisibleActionFeedback.BERSERK_ACTIVE_REJECTED),
+        (
+            "still recovering from your berserk rage",
+            VisibleActionFeedback.BERSERK_COOLDOWN_REJECTED,
+        ),
+        ("you fail to use your ability", VisibleActionFeedback.ABILITY_FAILED),
+        ("can no longer go berserk at will", VisibleActionFeedback.ABILITY_LOST),
+        ("you are exhausted", VisibleActionFeedback.BERSERK_EXHAUSTED),
+        ("recover from your berserk rage", VisibleActionFeedback.BERSERK_RECOVERED),
+        ("you are no longer berserk", VisibleActionFeedback.BERSERK_RECOVERED),
+    )
+    for phrase, feedback in phrases:
+        if phrase in text:
+            result.add(feedback)
+    return frozenset(result)
+
+
 @dataclass(frozen=True, slots=True)
 class MenuChoice:
     keycode: Keycode
     text: str
+    applicability: MenuChoiceApplicability = MenuChoiceApplicability.UNKNOWN
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +195,11 @@ class SemanticObservation:
             menu["type"] if menu is not None else None,
             menu["prompt"] if menu is not None else None,
             tuple(
-                MenuChoice(Keycode(choice["keycode"]), choice["text"])
+                MenuChoice(
+                    Keycode(choice["keycode"]),
+                    choice["text"],
+                    MenuChoiceApplicability(choice.get("applicability", "unknown")),
+                )
                 for choice in menu["choices"]
             )
             if menu is not None
@@ -123,7 +217,11 @@ class SemanticObservation:
                 "type": self.menu_type,
                 "prompt": self.prompt,
                 "choices": [
-                    {"keycode": choice.keycode, "text": choice.text}
+                    {
+                        "keycode": choice.keycode,
+                        "text": choice.text,
+                        "applicability": choice.applicability.value,
+                    }
                     for choice in self.choices
                 ],
             }
@@ -339,8 +437,9 @@ class ObservationReducer:
                 hotkeys = item.get("hotkeys", [])
                 if not isinstance(hotkeys, list):
                     continue
+                applicability = menu_choice_applicability(self._menu_type(), item)
                 choices.extend(
-                    MenuChoice(Keycode(hotkey), label)
+                    MenuChoice(Keycode(hotkey), label, applicability)
                     for hotkey in hotkeys
                     if isinstance(hotkey, int)
                 )

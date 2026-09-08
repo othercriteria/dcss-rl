@@ -178,6 +178,13 @@ def main() -> None:
     grid.add_argument("--columns", type=int, default=3)
     grid.add_argument("--frame-limit", type=int)
     grid.add_argument("--no-animate", action="store_true")
+    audit = commands.add_parser("audit-affordances")
+    audit.add_argument(
+        "transcripts",
+        type=Path,
+        nargs="+",
+        help="trajectory.jsonl/crawl.log files or roots searched recursively",
+    )
     activate = commands.add_parser("activate-champion-track")
     activate.add_argument("--candidate", type=Path, required=True)
     activate.add_argument("--champion", type=Path, required=True)
@@ -367,6 +374,11 @@ def main() -> None:
             else None,
             animate=not arguments.no_animate,
         )
+        return
+    if arguments.command == "audit-affordances":
+        from dcss_rl.audit import audit_affordances
+
+        print(audit_affordances(tuple(arguments.transcripts)).format())
         return
     if arguments.command == "activate-champion-track":
         suite = load_suite(arguments.suite)

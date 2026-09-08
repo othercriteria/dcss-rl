@@ -120,8 +120,10 @@ promotion. A validated track-activation command atomically archives the old cano
 manifest and cuts every heldout viewer over to a calibrated replacement track.
 
 The optional training stack provides a versioned semantic actor/value model with an
-ECHO next-state-delta head. Feature-spec-v3 adds explicit prompt/shop and blocking
-status signals while retaining feature-spec-v2 checkpoint compatibility. A
+ECHO next-state-delta head. Feature-spec-v5 adds exact active/cooldown Berserk state,
+visible ability-menu applicability, and player-visible outcome feedback while retaining
+older checkpoint compatibility. Inapplicable choices remain syntactically legal in the
+action mask; the policy must learn from their visible state and outcome. A
 behavior-cloning or scripted-relabel DAgger run is
 reproducible from explicit non-held-out trajectories:
 
@@ -150,6 +152,19 @@ improve the diagnostic track and then clear the checked-in held-out floor before
 promotion to the held-out champion track. Evaluation is non-promoting unless an
 explicit `--champion` manifest is supplied, preventing a diagnostic suite from being
 accidentally compared with the held-out track.
+
+Inspect full trajectory evidence and the lighter `crawl.log`/morgue records retained by
+online training with one discoverable command:
+
+```sh
+poe audit-affordances -- artifacts/t/bt56 artifacts/t/bh57
+poe audit-affordances -- /tmp/eval-v56-u3 /tmp/eval-v57-u3
+```
+
+The audit distinguishes applicable, inapplicable, and absent Berserk menu entries;
+success, active/cooldown rejection, stochastic failure, and ability loss; direct
+Renounce selections where trajectories exist; and renunciation prompts/completions and
+wrath deaths where only Crawl logs remain.
 
 Rank v5 orders wins, runes, depth-weighted newly discovered cells, levels visited,
 maximum depth, maximum XL, and reward. Repeated actions and already-seen backtracking
