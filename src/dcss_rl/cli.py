@@ -57,9 +57,7 @@ def main() -> None:
     evaluate.add_argument("--output", type=Path)
     evaluate.add_argument("--workers", type=int, default=5)
     evaluate.add_argument("--threshold", type=Path)
-    evaluate.add_argument(
-        "--champion", type=Path, default=Path("artifacts/champion.json")
-    )
+    evaluate.add_argument("--champion", type=Path)
     learned = commands.add_parser("evaluate-learned")
     learned.add_argument("--checkpoint", type=Path, required=True)
     learned.add_argument(
@@ -73,9 +71,7 @@ def main() -> None:
     learned.add_argument("--output", type=Path)
     learned.add_argument("--workers", type=int, default=5)
     learned.add_argument("--threshold", type=Path)
-    learned.add_argument(
-        "--champion", type=Path, default=Path("artifacts/champion.json")
-    )
+    learned.add_argument("--champion", type=Path)
     learned.add_argument("--device", default="cuda")
     learned.add_argument("--fallback-scripted", action="store_true")
     learned.add_argument("--confidence-threshold", type=float, default=0.95)
@@ -88,6 +84,7 @@ def main() -> None:
     train.add_argument("--learning-rate", type=float, default=3e-4)
     train.add_argument("--echo-weight", type=float, default=0.1)
     train.add_argument("--value-weight", type=float, default=0.1)
+    train.add_argument("--teacher-balance-exponent", type=float, default=0.5)
     train.add_argument("--seed", type=int, default=1)
     train.add_argument("--device", default="cuda")
     train.add_argument("--relabel-scripted", action="store_true")
@@ -114,6 +111,11 @@ def main() -> None:
     ppo.add_argument("--value-weight", type=float, default=0.5)
     ppo.add_argument("--entropy-weight", type=float, default=0.01)
     ppo.add_argument("--imitation-weight", type=float, default=0.1)
+    ppo.add_argument(
+        "--aggregate-imitation-replay",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     ppo.add_argument("--teacher-balance-exponent", type=float, default=0.5)
     ppo.add_argument("--epochs-per-update", type=int, default=4)
     ppo.add_argument("--clip-ratio", type=float, default=0.2)
@@ -198,6 +200,9 @@ def main() -> None:
                 learning_rate=LearningRate(arguments.learning_rate),
                 echo_weight=LossWeight(arguments.echo_weight),
                 value_weight=LossWeight(arguments.value_weight),
+                teacher_balance_exponent=Probability(
+                    arguments.teacher_balance_exponent
+                ),
                 device=arguments.device,
                 relabel_with_scripted=arguments.relabel_scripted,
             ),
@@ -248,6 +253,7 @@ def main() -> None:
                 value_weight=LossWeight(arguments.value_weight),
                 entropy_weight=LossWeight(arguments.entropy_weight),
                 imitation_weight=LossWeight(arguments.imitation_weight),
+                aggregate_imitation_replay=arguments.aggregate_imitation_replay,
                 teacher_balance_exponent=Probability(
                     arguments.teacher_balance_exponent
                 ),
@@ -319,7 +325,7 @@ def _evaluate_scripted(
     binary: Path,
     suite_path: Path,
     output: Path | None,
-    champion_path: Path,
+    champion_path: Path | None,
     workers: WorkerCount,
     threshold_path: Path | None,
 ) -> None:
@@ -340,7 +346,7 @@ def _evaluate(
     binary: Path,
     suite_path: Path,
     output: Path | None,
-    champion_path: Path,
+    champion_path: Path | None,
     workers: WorkerCount,
     threshold_path: Path | None,
 ) -> None:
@@ -360,9 +366,10 @@ def _evaluate(
         assert_meets_regression_threshold(
             summary, load_regression_threshold(threshold_path)
         )
-    promoted = promote_champion(summary, champion_path)
     print(f"evaluation: {output / 'summary.json'}")
-    print(f"champion: {champion_path} ({'promoted' if promoted else 'retained'})")
+    if champion_path is not None:
+        promoted = promote_champion(summary, champion_path)
+        print(f"champion: {champion_path} ({'promoted' if promoted else 'retained'})")
     print(f"rank: {summary.rank}")
     print(
         f"throughput: {summary.decision_rate:.2f} decisions/s "

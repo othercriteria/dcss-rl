@@ -35,6 +35,7 @@ class CheckpointTrainingMetadata:
     learning_rate: float
     echo_weight: float
     value_weight: float
+    teacher_balance_exponent: float
     validation_accuracy: float
 
 
@@ -52,6 +53,7 @@ class PpoCheckpointMetadata:
     policy_weight: float
     value_weight: float
     imitation_weight: float
+    aggregate_imitation_replay: bool
     teacher_balance_exponent: float
     explored_cell_reward: float
     depth_progress_reward: float

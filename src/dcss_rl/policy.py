@@ -56,23 +56,45 @@ _IGNORED_STATIONARY_MONSTERS = frozenset(
 class ScriptedMibePolicy:
     """Deterministic MiBe baseline using only the semantic player view."""
 
-    policy_id = "scripted-mibe-v3"
+    policy_id = "scripted-mibe-v4"
     checkpoint_id = None
 
     def decide(self, observation: ObservationData) -> PolicyDecision:
         menu = observation["menu"]
         if menu is not None:
             choices = menu["choices"]
-            if choices:
-                choice = next(
-                    (item for item in choices if "strength" in item["text"].casefold()),
-                    min(choices, key=lambda item: item["keycode"]),
-                )
+            strength = next(
+                (item for item in choices if "strength" in item["text"].casefold()),
+                None,
+            )
+            if strength is not None:
                 return PolicyDecision(
-                    Action.menu_select(Keycode(choice["keycode"])),
-                    "first visible menu choice",
+                    Action.menu_select(Keycode(strength["keycode"])),
+                    "increase strength",
                 )
-            return PolicyDecision(Action(ActionKind.CANCEL), "dismiss empty menu")
+            if menu["type"] == "more" and choices:
+                return PolicyDecision(
+                    Action.menu_select(Keycode(choices[0]["keycode"])),
+                    "continue message",
+                )
+            if menu["type"] == "prompt":
+                rejection = next(
+                    (
+                        item
+                        for item in choices
+                        if "no" in item["text"].casefold()
+                        or item["text"].casefold().startswith("n")
+                    ),
+                    None,
+                )
+                if rejection is not None:
+                    return PolicyDecision(
+                        Action.menu_select(Keycode(rejection["keycode"])),
+                        "reject confirmation prompt",
+                    )
+            return PolicyDecision(
+                Action(ActionKind.CANCEL), f"dismiss {menu['type']} menu"
+            )
 
         position = _player_position(observation)
         cells = _cells_by_position(observation["cells"])

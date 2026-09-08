@@ -127,9 +127,17 @@ dcss-rl train-imitation artifacts/eval/TRAIN/*/trajectory.jsonl \
 dcss-rl evaluate-learned --checkpoint checkpoints/candidate.pt
 ```
 
+Offline and online teacher balancing share `--teacher-balance-exponent`; zero is
+ordinary cross-entropy and one is full inverse-frequency weighting. Online imitation
+aggregates learner-visited labels across updates by default, as required by DAgger;
+`--no-aggregate-imitation-replay` exists for matched ablations. PPO, value, and ECHO
+objectives always use only the current on-policy rollout.
+
 Checkpoints and generated rollouts remain untracked. Learned candidates must first
 improve the diagnostic track and then clear the checked-in held-out floor before
-promotion to the held-out champion track.
+promotion to the held-out champion track. Evaluation is non-promoting unless an
+explicit `--champion` manifest is supplied, preventing a diagnostic suite from being
+accidentally compared with the held-out track.
 
 The current diagnostic track reuses five explicitly known development seeds for 500
 decisions, long enough to distinguish sustained navigation and survival from an early

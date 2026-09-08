@@ -214,3 +214,26 @@ this journal exists to keep research velocity and direction visible.
   stair actions everywhere, unlike live execution's player-visible underfoot stair
   affordance. Decision: restore the semantic domain type from trajectory dictionaries
   and route offline training through the same action-mask implementation as live play.
+- **2026-09-07 20:40–20:51 EDT — broad scripted curriculum and menu-loop repair.** A
+  64-seed/1,000-horizon scripted-v3 collection yielded 32,753 decisions, but 7,242
+  selected key `a`; several apparent survivors spent over 900 decisions repeatedly
+  selecting the first unaffordable shop item. Scripted-v4 now handles known menu
+  semantics explicitly and cancels shops/unknown menus. Recollection produced 28,224
+  clean decisions, 42 deaths, 22 truncations, aggregate max-depth 226, and only 190
+  menu selections. Early deaths remain useful deeper-state curriculum rather than a
+  reason to reward inert horizon survival.
+- **2026-09-07 20:55–21:02 EDT — clean broad behavior cloning.** Policy-only clones of
+  scripted-v4 reached 94.6% validation accuracy unweighted and 94.4% at balance
+  exponent 0.25. Diagnostic ranks were `(0, 0, 670, 1660, 11, 9, 38.0)` and
+  `(0, 0, 223, 1659, 10, 9, 35.0)`. Decision: teacher-state validation does not survive
+  rollout covariate shift; take only the stronger unweighted clone into DAgger.
+- **2026-09-07 21:10–21:24 EDT — true aggregated DAgger.** The existing online
+  imitation path discarded prior learner-state labels each update, contrary to DAgger's
+  aggregation contract. Retaining them and sampling cumulative imitation minibatches
+  eliminated rest/menu loops and made all five diagnostic cases survive, ranking
+  `(0, 0, 1420, 2500, 8, 8, 39.0)`. Increasing replay fitting from 4 to 16 epochs cost
+  only about 1.5 seconds/update and raised final current-state agreement from 60.8% to
+  74.3%, but shifted behavior toward one D:5 death and one D:3 survivor at rank
+  `(0, 0, 1167, 2152, 11, 8, 38.0)`. Decision: aggregation fixes forgetting, while
+  fitting strength exposes the survival/depth frontier; repeated opposing actions now
+  motivate explicit policy memory rather than more large scalar sweeps.

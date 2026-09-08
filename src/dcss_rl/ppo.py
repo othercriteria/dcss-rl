@@ -93,6 +93,7 @@ class PpoConfig:
     value_weight: LossWeight = _DEFAULT_VALUE_WEIGHT
     entropy_weight: LossWeight = _DEFAULT_ENTROPY_WEIGHT
     imitation_weight: LossWeight = _DEFAULT_IMITATION_WEIGHT
+    aggregate_imitation_replay: bool = True
     teacher_balance_exponent: Probability = _DEFAULT_TEACHER_BALANCE_EXPONENT
     clip_ratio: Probability = _DEFAULT_CLIP_RATIO
     discount: Probability = _DEFAULT_DISCOUNT
@@ -435,6 +436,7 @@ def train_ppo(
     completed_returns: list[float] = []
     losses = PpoLosses(0.0, 0.0, 0.0, 0.0)
     teacher_agreement = Probability(0.0)
+    imitation_replay: list[_Rollout] = []
     try:
         with ThreadPoolExecutor(max_workers=config.workers) as executor:
             for update_index in range(config.updates):
@@ -444,7 +446,16 @@ def train_ppo(
                 )
                 collection_finished = perf_counter()
                 completed_returns.extend(rollout.completed_returns)
-                losses = _ppo_update(model, optimizer, rollout, config=config)
+                imitation_replay.append(rollout)
+                losses = _ppo_update(
+                    model,
+                    optimizer,
+                    rollout,
+                    imitation_replay=tuple(imitation_replay)
+                    if config.aggregate_imitation_replay
+                    else (rollout,),
+                    config=config,
+                )
                 optimization_finished = perf_counter()
                 teacher_agreement = Probability(
                     float(np.mean(rollout.actions == rollout.teacher_actions))
@@ -524,6 +535,7 @@ def _checkpoint_metadata(
         policy_weight=config.policy_weight,
         value_weight=config.value_weight,
         imitation_weight=config.imitation_weight,
+        aggregate_imitation_replay=config.aggregate_imitation_replay,
         teacher_balance_exponent=config.teacher_balance_exponent,
         explored_cell_reward=config.explored_cell_reward,
         depth_progress_reward=config.depth_progress_reward,
@@ -680,6 +692,7 @@ def _ppo_update(
     optimizer: torch.optim.Optimizer,
     rollout: _Rollout,
     *,
+    imitation_replay: tuple[_Rollout, ...],
     config: PpoConfig,
 ) -> PpoLosses:
     device = torch.device(config.device)
@@ -693,15 +706,25 @@ def _ppo_update(
             rollout.advantages,
             rollout.returns,
             rollout.next_deltas,
-            rollout.teacher_actions,
         )
     )
-    features, masks, actions, old_logs, advantages, returns, deltas, teachers = tensors
+    features, masks, actions, old_logs, advantages, returns, deltas = tensors
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-    teacher_counts = torch.bincount(teachers, minlength=model.config.action_count)
+    replay_features = torch.from_numpy(
+        np.concatenate([item.features for item in imitation_replay])
+    ).to(device)
+    replay_masks = torch.from_numpy(
+        np.concatenate([item.masks for item in imitation_replay])
+    ).to(device)
+    replay_teachers = torch.from_numpy(
+        np.concatenate([item.teacher_actions for item in imitation_replay])
+    ).to(device)
+    teacher_counts = torch.bincount(
+        replay_teachers, minlength=model.config.action_count
+    )
     teacher_weights = torch.zeros_like(teacher_counts, dtype=torch.float32)
     present_teacher_actions = teacher_counts > 0
-    inverse_frequency = len(teachers) / (
+    inverse_frequency = len(replay_teachers) / (
         present_teacher_actions.sum() * teacher_counts[present_teacher_actions]
     )
     teacher_weights[present_teacher_actions] = inverse_frequency.pow(
@@ -725,8 +748,17 @@ def _ppo_update(
             policy_loss = -torch.minimum(unclipped, clipped).mean()
             value_loss = F.mse_loss(values, returns[indices])
             echo_loss = F.smooth_l1_loss(predicted_deltas, deltas[indices])
+            replay_indices = torch.randint(
+                len(replay_teachers), (len(indices),), device=device
+            )
+            replay_logits, _, _ = model(replay_features[replay_indices])
+            replay_logits = replay_logits.masked_fill(
+                ~replay_masks[replay_indices], -torch.inf
+            )
             imitation_loss = F.cross_entropy(
-                logits, teachers[indices], weight=teacher_weights
+                replay_logits,
+                replay_teachers[replay_indices],
+                weight=teacher_weights,
             )
             loss = (
                 config.policy_weight * policy_loss

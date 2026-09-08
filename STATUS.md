@@ -220,6 +220,18 @@ not the current bottleneck.
   including stair commands without a visible under-player stair affordance. Semantic
   observations now round-trip from trajectory dictionaries and both paths use the same
   action-mask implementation.
+- Scripted-v4 handles level-up, more, confirmation, shop, and unknown menus explicitly.
+  This removed 7,242 repeated first-item shop selections from a 64-seed expert
+  curriculum; the clean recollection contains 28,224 decisions, 42 deaths, 22
+  truncations, and aggregate max-depth 226. Death trajectories are retained as useful
+  deeper-state feedback rather than teaching horizon survival as a dominant objective.
+- Online teacher imitation now implements actual DAgger aggregation: PPO/value/ECHO
+  remain on-policy, while imitation samples all learner-visited labels accumulated in
+  the run. At four fit epochs this removed rest/menu collapse, survived all diagnostic
+  horizons, and ranked `(0, 0, 1420, 2500, 8, 8, 39.0)`. Sixteen epochs raised agreement
+  to 74.3% and reached D:5/D:3 in two cases but incurred one death, ranking
+  `(0, 0, 1167, 2152, 11, 8, 38.0)`. Explicit action/history memory is now a stronger
+  hypothesis than further coarse imitation-weight sweeps.
 
 Next:
 

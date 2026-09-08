@@ -167,7 +167,9 @@ for later ablation.
 
 Training begins with behavior cloning and scripted-relabel DAgger. The latter labels
 learner-visited states with the transparent expert, directly addressing compounding
-errors without using held-out games. Checkpoints store a schema version, feature-spec
+errors without using held-out games. Online DAgger aggregates learner-state labels
+across updates; only its imitation minibatches use replay, while PPO/value/ECHO losses
+remain on the current on-policy rollout. Checkpoints store a schema version, feature-spec
 version, model configuration, plain state dictionary, policy identity, training
 method/hyperparameters, source counts, and validation accuracy. Feature changes bump
 the feature-spec version and fail closed when loading older checkpoints.

@@ -26,13 +26,14 @@ from dcss_rl.learned import (
 from dcss_rl.policy import Policy, ScriptedMibePolicy
 from dcss_rl.schema import ObservationData, ObservationDeltaData
 from dcss_rl.trajectory import apply_observation_delta
-from dcss_rl.units import BatchSize, EpochCount, LearningRate, LossWeight
+from dcss_rl.units import BatchSize, EpochCount, LearningRate, LossWeight, Probability
 
 _DEFAULT_EPOCHS = EpochCount(20)
 _DEFAULT_BATCH_SIZE = BatchSize(256)
 _DEFAULT_LEARNING_RATE = LearningRate(3e-4)
 _DEFAULT_ECHO_WEIGHT = LossWeight(0.1)
 _DEFAULT_VALUE_WEIGHT = LossWeight(0.1)
+_DEFAULT_TEACHER_BALANCE_EXPONENT = Probability(0.5)
 type ActionVector = NDArray[np.int64]
 type ActionMaskVector = NDArray[np.bool_]
 
@@ -45,10 +46,15 @@ class TrainingConfig:
     learning_rate: LearningRate = _DEFAULT_LEARNING_RATE
     echo_weight: LossWeight = _DEFAULT_ECHO_WEIGHT
     value_weight: LossWeight = _DEFAULT_VALUE_WEIGHT
+    teacher_balance_exponent: Probability = _DEFAULT_TEACHER_BALANCE_EXPONENT
     discount: float = 0.99
     hidden_size: int = 256
     device: str = "cuda"
     relabel_with_scripted: bool = False
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.teacher_balance_exponent <= 1:
+            raise ValueError("teacher balance exponent must be a probability")
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +119,9 @@ def train_imitation(
         torch.from_numpy(deltas[validation_indices]),
         torch.from_numpy(returns[validation_indices]),
     )
-    class_weights = _class_weights(actions[train_indices]).to(config.device)
+    class_weights = _class_weights(
+        actions[train_indices], exponent=config.teacher_balance_exponent
+    ).to(config.device)
     generator = torch.Generator().manual_seed(config.seed)
     loader = DataLoader(
         train,
@@ -154,6 +162,7 @@ def train_imitation(
         learning_rate=config.learning_rate,
         echo_weight=config.echo_weight,
         value_weight=config.value_weight,
+        teacher_balance_exponent=config.teacher_balance_exponent,
         validation_accuracy=accuracy,
     )
     save_checkpoint(
@@ -258,11 +267,11 @@ def _stratified_split(
     return np.asarray(training, dtype=np.int64), np.asarray(validation, dtype=np.int64)
 
 
-def _class_weights(actions: ActionVector) -> Tensor:
+def _class_weights(actions: ActionVector, *, exponent: Probability) -> Tensor:
     counts = np.bincount(actions, minlength=ACTION_COUNT)
     weights = np.zeros(ACTION_COUNT, dtype=np.float32)
     present = counts > 0
-    weights[present] = np.sqrt(len(actions) / counts[present])
+    weights[present] = np.power(len(actions) / counts[present], exponent)
     weights[present] /= weights[present].mean()
     return torch.from_numpy(weights)
 

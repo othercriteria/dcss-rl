@@ -24,6 +24,43 @@ def observation(
     }
 
 
+def menu_observation(
+    menu_type: str, choices: list[tuple[int, str]], *, prompt: str | None = None
+) -> ObservationData:
+    state = observation()
+    state["menu"] = {
+        "type": menu_type,
+        "prompt": prompt,
+        "choices": [{"keycode": keycode, "text": text} for keycode, text in choices],
+    }
+    state["input_mode"] = 8
+    return state
+
+
+def test_selects_strength_but_dismisses_shop() -> None:
+    policy = ScriptedMibePolicy()
+    level_up = menu_observation(
+        "prompt",
+        [(ord("S"), "Strength"), (ord("I"), "Intelligence")],
+    )
+    shop = menu_observation("shop", [(ord("a"), "a potion of attraction")])
+
+    assert policy.decide(level_up).action == Action.menu_select(Keycode(ord("S")))
+    assert policy.decide(shop).action == Action(ActionKind.CANCEL)
+
+
+def test_rejects_rest_confirmation() -> None:
+    state = menu_observation(
+        "prompt",
+        [(ord("Y"), "Y - Yes"), (ord("N"), "N - No")],
+        prompt="Really rest while Zot is near?",
+    )
+
+    assert ScriptedMibePolicy().decide(state).action == Action.menu_select(
+        Keycode(ord("N"))
+    )
+
+
 def test_attacks_adjacent_monster_before_resting() -> None:
     policy = ScriptedMibePolicy()
     state = observation(
