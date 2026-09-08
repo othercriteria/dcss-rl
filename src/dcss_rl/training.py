@@ -192,6 +192,7 @@ def load_imitation_episode(
     actions: list[int] = []
     deltas: list[FeatureVector] = []
     rewards: list[float] = []
+    current_features = encode_observation(observation)
     for line in lines[1:]:
         record = _object(line)
         action = record.get("action_index")
@@ -208,7 +209,6 @@ def load_imitation_episode(
             )
         else:
             raise ValueError(f"transition has no next observation: {path}")
-        current_features = encode_observation(observation)
         next_features = encode_observation(next_observation)
         mask = _training_action_mask(observation)
         features.append(current_features)
@@ -219,6 +219,7 @@ def load_imitation_episode(
         deltas.append(next_features - current_features)
         rewards.append(float(reward))
         observation = next_observation
+        current_features = next_features
     return ImitationEpisode(
         tuple(features),
         tuple(masks),

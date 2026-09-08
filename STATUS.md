@@ -11,9 +11,10 @@ DCSS checkout was validated at commit `96832895d0253f9d7290d370efe32bf0614679a8`
 (`0.35-a0-999-g96832895d0`) with a WebTiles build.
 
 Canonical evaluation uses `mibe-heldout-v4` and rank v5. The fallback-free
-`stateless-dagger-v29` champion ranks
-`(0 wins, 0 runes, 16,853 depth-weighted discovered cells, 15 levels,
-max-depth sum 15, XL sum 14, 120.0 reward)`, above the locked pre-intervention v23
+`continuing-decision-v51` update-2 champion ranks
+`(0 wins, 0 runes, 17,613 depth-weighted discovered cells, 19 levels,
+max-depth sum 19, XL sum 12, 112.0 reward)`, above v29's 16,853 and the locked
+pre-intervention v23
 floor of `(0, 0, 8,822, 13, 13, 9, 64.0)`. v21 first earned promotion on heldout-v2 at
 `(0, 0, 2744, 2091, 12, 7, 31.0)`, exceeding that track's scripted-v3 incumbent and
 the retired depth-11 learned milestone. Heldout-v2 was then retired because its traces
@@ -21,7 +22,8 @@ informed the next feature design; v3 was locked before that design was evaluated
 
 Development evaluation uses `mibe-diagnostic-v2`, extending the same known five seeds
 from 200 to 500 decisions. Under rank v5, v23 scores 17,121, history-aware v26 scores
-26,857, and stateless v29 scores 34,118 depth-weighted discovered cells.
+26,857, stateless v29 scores 34,118, and continuing-decision v51 update 2 scores
+39,956 depth-weighted discovered cells.
 
 Completed:
 
@@ -316,16 +318,34 @@ not the current bottleneck.
   thresholds. Padding alone left one divergent transition; assigning each worker a
   stable row made matched 768-decision collections identical (104 cycles and 68.0%
   teacher agreement) while retaining asynchronous coalescing.
+- Three anchored, continuing-reset PPO arms each consumed 49,152 decisions on the
+  128-seed/2,000-horizon training curriculum. Exhaustive diagnostic snapshot selection
+  found best ranks 35,140 with no cost, 39,956 with decision cost `0.01`, and 31,991
+  with semantic cycle cost `0.1`; all curves regressed sharply after early updates.
+  The selected decision-cost snapshot cut exact semantic recurrence from v29's 56.1%
+  to 28.6% and rest from 281 to 4 diagnostic actions. Its single heldout-v4 attempt
+  scored 17,613 across 19 levels versus v29's 16,853 across 15, so v51 update 2 is the
+  new canonical fallback-free champion. Four heldout games died on D:3–5 and one
+  survived the horizon on D:2; it has not reproduced the retired true D:11 event.
+- The isolated harness-performance subagent produced commit `143b2af7` without merging.
+  Its evidence-backed changes were manually ported onto current return semantics:
+  disabled shaping avoids full-map scans, Gym snapshots are materialized once, and
+  online/offline training carry already encoded next features. The PPO path keeps
+  terminal ECHO targets distinct from freshly reset continuing-task features. A
+  current-main 48-worker sanity run collected 6,144 decisions at 149.45 decisions/s;
+  unlike the controlled 2.4–3.8% samples, asynchronous trajectory divergence makes
+  that single end-to-end rate unsuitable as a precise before/after estimate. The host
+  gate passes 94 fast tests in 1.73 seconds and three live tests in 8.63 seconds.
 
 Next:
 
-1. Run matched continuing-reset PPO from v29 with no cost, per-decision cost, and
-   semantic short-cycle cost; select checkpoints diagnostically before any heldout use.
-2. Retain v29 as champion while using anchored pretraining for new multi-step
-   affordances; revisit failed knobs when representation, initialization, curriculum,
-   or reward semantics materially changes.
-3. Resume matched ECHO/PPO and broader/longer scaling after the objective can learn
-   from recurrent failures, then extend toward branch/rune acquisition.
+1. Lock and calibrate the successor held-out suite before using v51's heldout-v4 death
+   pattern to design survival changes, then build toward the retired true D:11 event.
+2. Run matched ECHO-off/on continuation from the promoted decision-cost objective and
+   characterize whether broader seeds, longer horizons, or recurrent policy state best
+   improve survival without restoring rest/movement cycles.
+3. Revisit anchored Berserk acquisition in the stronger objective context; then extend
+   the curriculum toward branch and rune acquisition while keeping heldout-v4 locked.
 
 ## Verified commands
 

@@ -368,3 +368,26 @@ this journal exists to keep research velocity and direction visible.
   collections identical at 104 cycles and 68.0% teacher agreement. Decision: retain
   stable rows and re-establish representative throughput while running the full arms;
   treat the earlier v41–v43 ranks as safety pilots, not a clean causal comparison.
+- **2026-09-08 09:23–10:02 EDT — continuing-cost ablation and v51 promotion.** Three
+  arms restored v29, preloaded the same 25,733 v19/v20 anchors, disabled ECHO, and each
+  consumed 49,152 decisions (eight 48×128 updates) on online-train-v3; only cost differed.
+  Exhaustive diagnostic curves peaked at update 1/no-cost 35,140, update 2/decision
+  `0.01` 39,956, and update 2/cycle `0.1` 31,991, then regressed to 12,362–15,894 in
+  several late snapshots. v51 update 2 reduced rest from v29's 281/1,431 actions to
+  4/1,150 and exact 8-decision semantic recurrence from 803 (56.1%) to 329 (28.6%);
+  the no-cost best still rested 278 times. Its single locked heldout-v4 evaluation
+  scored `(0, 0, 17613, 19, 19, 12, 112.0)` versus v29's
+  `(0, 0, 16853, 15, 15, 14, 120.0)`, promoting v51 update 2. Four cases died on D:3–5
+  and one survived 500 decisions on D:2. Decision: the general decision cost is locally
+  better than exact cycle punishment and advances the canonical metric/level frontier,
+  but survival and the true D:11 milestone remain open; retain every early snapshot and
+  revisit the cycle arm when state/memory/objective context changes.
+- **2026-09-08 10:03 EDT — isolated harness-performance handoff.** A first subagent in
+  `/tmp/dcss-rl-harness-performance` committed `143b2af7` without merge authority. CPU
+  evidence found duplicate online/offline encodes cost about 1.07 seconds per 2,472
+  real observations; representative directional samples improved 2.4–3.8%. Decision:
+  manually port the changes after the ablation, preserving distinct terminal-ECHO and
+  reset-policy features, then remeasure on current main. The ported 48-worker sanity
+  run collected 6,144 decisions at 149.45 decisions/s. Because its asynchronous policy
+  path diverged from prior runs, retain the controlled samples as the comparative
+  evidence and treat the end-to-end result only as a regression check.

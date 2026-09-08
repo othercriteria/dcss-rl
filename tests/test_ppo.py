@@ -1,4 +1,5 @@
 from concurrent.futures import Future
+from typing import cast
 
 import numpy as np
 import pytest
@@ -8,25 +9,113 @@ from dcss_rl.actions import Action
 from dcss_rl.env import ACTION_COUNT, action_to_index
 from dcss_rl.features import feature_count
 from dcss_rl.learned import ModelConfig, SemanticActorCritic, align_feature_spec
+from dcss_rl.policy import ScriptedMibePolicy
 from dcss_rl.ppo import (
+    PpoConfig,
+    _collect_worker_rollout,
     _fixed_inference_inputs,
+    _InferenceBatcher,
     _InferenceRequest,
+    _InferenceResult,
     _restrict_warmup_gradients,
     _uses_reset_bootstrap,
     _warmup_action_indices,
+    _Worker,
     _WorkerStep,
 )
 from dcss_rl.returns import ReturnBoundaryMode, generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
+from dcss_rl.schema import ObservationData
 from dcss_rl.units import (
     ActionIndex,
     CaseCount,
     EpisodeIndex,
     Keycode,
+    RolloutLength,
     TerminalOutcome,
     WorkerCount,
     WorkerIndex,
 )
+
+
+def _rollout_observation(turn: int) -> ObservationData:
+    return {
+        "player": {"pos": {"x": 0, "y": 0}, "turn": turn},
+        "cells": [{"x": 0, "y": 0, "g": "@"}],
+        "messages": [],
+        "menu": None,
+        "input_mode": 1,
+    }
+
+
+class _FakeWorker:
+    def __init__(self) -> None:
+        self.worker_index = WorkerIndex(0)
+        self.observation = _rollout_observation(0)
+        self.mask = np.ones(int(ACTION_COUNT), dtype=np.bool_)
+        self.rng = np.random.default_rng(1)
+
+    def ready(self) -> tuple[ObservationData, np.ndarray]:
+        return self.observation, self.mask
+
+    def history(self) -> tuple[ActionIndex, ...]:
+        return ()
+
+    def step(self, _action: ActionIndex) -> _WorkerStep:
+        turn = int(self.observation["player"].get("turn", 0)) + 1
+        self.observation = _rollout_observation(turn)
+        return _WorkerStep(
+            self.observation,
+            self.mask,
+            0.0,
+            False,
+            False,
+            None,
+            (),
+            None,
+            False,
+        )
+
+
+class _FakeBatcher:
+    feature_spec_version = 4
+    model_config = ModelConfig(action_count=int(ACTION_COUNT))
+
+    def infer(
+        self,
+        _slot: WorkerIndex,
+        _feature: np.ndarray,
+        _history: np.ndarray,
+        _mask: np.ndarray,
+    ) -> _InferenceResult:
+        probabilities = np.zeros(int(ACTION_COUNT), dtype=np.float32)
+        probabilities[0] = 1.0
+        return _InferenceResult(probabilities, 0.0)
+
+
+def test_rollout_reuses_next_feature_at_following_decision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    encode_calls = 0
+
+    def counting_encode(
+        _observation: ObservationData, *, spec_version: int
+    ) -> np.ndarray:
+        nonlocal encode_calls
+        encode_calls += 1
+        return np.full(feature_count(spec_version), encode_calls, dtype=np.float32)
+
+    monkeypatch.setattr("dcss_rl.ppo.encode_observation", counting_encode)
+    rollout = _collect_worker_rollout(
+        cast(_Worker, _FakeWorker()),
+        ScriptedMibePolicy(),
+        batcher=cast(_InferenceBatcher, _FakeBatcher()),
+        config=PpoConfig(rollout_length=RolloutLength(3), device="cpu"),
+    )
+
+    assert encode_calls == 4
+    assert rollout.features[:, 0].tolist() == [1.0, 2.0, 3.0]
+    assert rollout.next_deltas[:, 0].tolist() == [1.0, 1.0, 1.0]
 
 
 def test_inference_requests_are_padded_to_reproducible_fixed_shape() -> None:

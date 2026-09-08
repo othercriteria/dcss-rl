@@ -862,11 +862,14 @@ def _collect_worker_rollout(
     teacher_actions: list[int] = []
     completed_returns: list[float] = []
     short_cycles = 0
+    ready_feature: FloatArray | None = None
     for _ in range(config.rollout_length):
         observation, mask = worker.ready()
-        feature = encode_observation(
-            observation, spec_version=batcher.feature_spec_version
-        )
+        feature = ready_feature
+        if feature is None:
+            feature = encode_observation(
+                observation, spec_version=batcher.feature_spec_version
+            )
         action_history = encode_action_history(
             worker.history(),
             action_count=batcher.model_config.action_count,
@@ -882,6 +885,7 @@ def _collect_worker_rollout(
             next_observation, spec_version=batcher.feature_spec_version
         )
         boundary_bootstrap = 0.0
+        following_feature = None if step.terminated or step.truncated else next_feature
         if step.truncated and not step.terminated:
             next_history = encode_action_history(
                 step.action_history,
@@ -904,6 +908,7 @@ def _collect_worker_rollout(
             boundary_bootstrap = batcher.infer(
                 worker.worker_index, reset_feature, reset_history, reset_mask
             ).value
+            following_feature = reset_feature
         features.append(feature)
         action_histories.append(action_history)
         masks.append(mask)
@@ -925,20 +930,20 @@ def _collect_worker_rollout(
         teacher_actions.append(int(teacher.select(observation, mask)))
         if step.completed_return is not None:
             completed_returns.append(step.completed_return)
+        ready_feature = following_feature
 
     final_value = 0.0
     if not dones[-1]:
-        final_observation, final_mask = worker.ready()
-        final_feature = encode_observation(
-            final_observation, spec_version=batcher.feature_spec_version
-        )
+        _, final_mask = worker.ready()
+        if ready_feature is None:
+            raise RuntimeError("online worker lost its final encoded observation")
         final_history = encode_action_history(
             worker.history(),
             action_count=batcher.model_config.action_count,
             length=batcher.model_config.action_history_length,
         )
         final_value = batcher.infer(
-            worker.worker_index, final_feature, final_history, final_mask
+            worker.worker_index, ready_feature, final_history, final_mask
         ).value
     reward_array = np.asarray(rewards, dtype=np.float32)[:, None]
     value_array = np.asarray(values, dtype=np.float32)[:, None]

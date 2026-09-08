@@ -103,6 +103,8 @@ def test_dense_reward_is_zero_by_default() -> None:
     }
 
     assert shaped_reward(observation, observation, shaping=RewardShaping()) == 0.0
+    assert not RewardShaping().enabled
+    assert RewardShaping(explored_cell=RewardWeight(0.1)).enabled
 
 
 @pytest.mark.integration

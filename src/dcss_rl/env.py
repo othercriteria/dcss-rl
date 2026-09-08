@@ -50,6 +50,19 @@ class RewardShaping:
         ):
             raise ValueError("reward-shaping weights cannot be negative")
 
+    @property
+    def enabled(self) -> bool:
+        """Report whether computing player-visible shaping can affect reward."""
+        return any(
+            weight != _ZERO_REWARD_WEIGHT
+            for weight in (
+                self.explored_cell,
+                self.depth_progress,
+                self.experience_progress,
+                self.hp_fraction,
+            )
+        )
+
 
 class SemanticObservationSpace(gym.Space[ObservationData]):
     """Validation space for the variable-sized semantic observation schema."""
@@ -188,7 +201,9 @@ class DcssEnv(gym.Env[ObservationData, int]):
             raise RuntimeError("reset must be called before step")
         structured_action = index_to_action(ActionIndex(action))
         keycode = encode_action(structured_action, self.current)
-        previous_observation = self.current.to_dict()
+        previous_observation = (
+            self.current.to_dict() if self.reward_shaping.enabled else None
+        )
         previous_depth = self._max_depth
         previous_xl = self._max_xl
 
@@ -196,6 +211,7 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.last_exchange = (self.last_batch,)
         self.last_keycodes = (ord(keycode) if isinstance(keycode, str) else keycode,)
         self.current = self.reducer.apply(self.last_batch)
+        current_observation = self.current.to_dict()
         self.steps += 1
         terminated, outcome = self._terminal_outcome(self.last_batch)
         self._update_maxima(self.current)
@@ -206,14 +222,15 @@ class DcssEnv(gym.Env[ObservationData, int]):
             self._max_xl,
             outcome,
         )
-        reward += shaped_reward(
-            previous_observation,
-            self.current.to_dict(),
-            shaping=self.reward_shaping,
-        )
+        if previous_observation is not None:
+            reward += shaped_reward(
+                previous_observation,
+                current_observation,
+                shaping=self.reward_shaping,
+            )
         truncated = self.max_steps is not None and self.steps >= self.max_steps
         return (
-            self.current.to_dict(),
+            current_observation,
             reward,
             terminated,
             truncated,

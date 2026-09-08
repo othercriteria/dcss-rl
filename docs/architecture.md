@@ -253,6 +253,13 @@ sampling independence; fixed-suite repeats must remain tensor-identical despite
 request scheduling. Checkpoint metadata records the inference batch bound and wait,
 while update telemetry separates collection, optimization, and persistence time.
 
+Feature encoding is carried across adjacent rollout decisions and offline trajectory
+transitions rather than recomputed from the same immutable semantic observation. At a
+continuing death boundary, the terminal encoding remains the ECHO next-environment
+target while the separately encoded reset state is cached for the next policy decision
+and value bootstrap. Default-disabled reward shaping bypasses its full-map potential
+scan, and Gym materializes the returned current observation only once.
+
 On a fixed five-case, 50-decision learned-policy workload, throughput scales from
 2.96 decisions/s with one worker to 5.55 with two and 12.13 with five. All worker
 counts produce the identical metric vector and learned-action fraction. This makes
