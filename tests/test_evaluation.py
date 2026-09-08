@@ -64,9 +64,16 @@ def test_broad_training_suite_is_unique_and_disjoint_from_evaluation() -> None:
     diagnostic = load_suite(Path("configs/diagnostic-v2.json"))
     heldout = load_suite(Path("configs/heldout-v2.json"))
     next_heldout = load_suite(Path("configs/heldout-v3.json"))
+    future_heldout = load_suite(Path("configs/heldout-v4.json"))
     training_seeds = {case.seed for case in training.cases}
     evaluation_seeds = {
-        case.seed for case in (*diagnostic.cases, *heldout.cases, *next_heldout.cases)
+        case.seed
+        for case in (
+            *diagnostic.cases,
+            *heldout.cases,
+            *next_heldout.cases,
+            *future_heldout.cases,
+        )
     }
 
     assert training.suite_id == "online-train-v2"
@@ -76,6 +83,9 @@ def test_broad_training_suite_is_unique_and_disjoint_from_evaluation() -> None:
     assert training_seeds.isdisjoint(evaluation_seeds)
     assert {case.seed for case in heldout.cases}.isdisjoint(
         case.seed for case in next_heldout.cases
+    )
+    assert {case.seed for case in (*heldout.cases, *next_heldout.cases)}.isdisjoint(
+        case.seed for case in future_heldout.cases
     )
 
 

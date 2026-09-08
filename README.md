@@ -107,7 +107,7 @@ showcase seed. Grid panels remain on their final frame and visibly distinguish d
 (`☠`), horizon truncation (`◇`), and eventual ascension (`★`). The older `watch-best`
 and `watch-dev-best` Poe names remain temporary aliases.
 
-Champion promotion is gated by the checked-in heldout-v3 regression floor. The
+Champion promotion is gated by the checked-in heldout-v4 regression floor. The
 canonical champion is a fallback-free learned policy; Native WebTiles spectating can
 later complement the deterministic completed replay.
 

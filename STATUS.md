@@ -10,18 +10,18 @@ The Nix/Python environment and upstream trunk build are working. The current loc
 DCSS checkout was validated at commit `96832895d0253f9d7290d370efe32bf0614679a8`
 (`0.35-a0-999-g96832895d0`) with a WebTiles build.
 
-Canonical evaluation uses `mibe-heldout-v3` and rank v5. The fallback-free
-`semantic-v3-dagger-v23` champion ranks
-`(0 wins, 0 runes, 16,202 depth-weighted discovered cells, 12 levels,
-max-depth sum 12, XL sum 10, 71.0 reward)`, above the locked v21 floor of
-`(0, 0, 15,677, 13, 13, 12, 94.0)`. v21 first earned promotion on heldout-v2 at
+Canonical evaluation uses `mibe-heldout-v4` and rank v5. The fallback-free
+`stateless-dagger-v29` champion ranks
+`(0 wins, 0 runes, 16,853 depth-weighted discovered cells, 15 levels,
+max-depth sum 15, XL sum 14, 120.0 reward)`, above the locked pre-intervention v23
+floor of `(0, 0, 8,822, 13, 13, 9, 64.0)`. v21 first earned promotion on heldout-v2 at
 `(0, 0, 2744, 2091, 12, 7, 31.0)`, exceeding that track's scripted-v3 incumbent and
 the retired depth-11 learned milestone. Heldout-v2 was then retired because its traces
 informed the next feature design; v3 was locked before that design was evaluated.
 
 Development evaluation uses `mibe-diagnostic-v2`, extending the same known five seeds
-from 200 to 500 decisions. Under rank v5, v21 scores 11,483 depth-weighted discovered
-cells and v23 scores 17,121.
+from 200 to 500 decisions. Under rank v5, v23 scores 17,121, history-aware v26 scores
+26,857, and stateless v29 scores 34,118 depth-weighted discovered cells.
 
 Completed:
 
@@ -266,15 +266,25 @@ not the current bottleneck.
   Evaluation and rollout workers maintain isolated per-episode histories; ECHO targets
   remain environment-only. `--action-history-length` expands a stateless checkpoint
   with zero history columns so online DAgger/PPO can learn loop-sensitive behavior.
+- Heldout-v3 was retired after its v24 traces motivated action history; v26's apparent
+  promotion there is not treated as headline evidence. Untouched heldout-v4 was first
+  calibrated with pre-intervention v23 at 8,822. The already-frozen history v26 and
+  stateless control v29 then scored 12,910 and 16,853 respectively; v29 became the
+  canonical champion. This preserves the locked-suite boundary and shows additional
+  DAgger, not history alone, drove the strongest general improvement.
+- The history-aware matched PPO repeat again promoted neither arm. ECHO-on learned its
+  target and scored 21,009 diagnostic versus ECHO-off's 18,302, but both regressed from
+  their v26 initialization at 26,857 and received no heldout access.
 
 Next:
 
-1. Run matched masked PPO/ECHO-on/off experiments from the v23 learned champion, then
-   expand toward longer horizons and rune curricula. Explicit action/history memory is
-   a subsequent ablation for oscillation and repeated-prompt failures.
-2. Improve survival and XL while retaining v23's non-stalling exploration frontier.
-3. Add explicit one-step action/history state, then repeat the matched PPO/ECHO test
-   against the movement-oscillation failure mode.
+1. Improve survival and XL while retaining v29's non-stalling exploration frontier;
+   distinguish tactical repeated attacks from genuine rest/prompt and movement loops.
+2. Scale beyond the current 49,152-decision update budget and 1,000-step curriculum,
+   checkpointing intermediate policies so PPO regressions are not judged only at the
+   final update.
+3. Extend curriculum and evaluation toward branch/rune acquisition once survival at
+   the current depth frontier is reliable.
 
 ## Verified commands
 

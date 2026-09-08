@@ -295,3 +295,20 @@ this journal exists to keep research velocity and direction visible.
   `1eebc1a2892e`, and stable 0.33.1 `9cb173b281c1`. Decision: the reward, return, and
   rank changes preserve the three-version integration contract; proceed to explicit
   action/history state.
+- **2026-09-07 22:44–23:09 EDT — action-history candidate and PPO repeat.** Two
+  newest-first policy-action slots were added outside semantic observations, isolated
+  per episode/worker and excluded from ECHO targets. An eight-update history-aware
+  DAgger run scored 26,857 diagnostic. From it, matched 49,152-decision PPO arms scored
+  18,302 ECHO-off and 21,009 ECHO-on; neither earned heldout access. Decision: retain
+  the general history capability, but PPO at these weights regresses the initializer
+  and ECHO's direction is not stable across starting policies.
+- **2026-09-07 23:10–23:25 EDT — causal history control and heldout repair.** The
+  matched stateless DAgger control scored 34,118 diagnostic, above history v26's
+  26,857; one 500-step rest/prompt-heavy case took 76.8 seconds. Its first clean
+  heldout-v3 attempt scored only 10,907 versus history v26's 21,981, suggesting history
+  traded known-seed fit for generalization. However, v24 heldout-v3 traces had motivated
+  the history design, invalidating v26 promotion on that track. Heldout-v3 was retired.
+  Untouched v4 was calibrated with pre-intervention v23 at 8,822, then the already
+  frozen v26 and v29 candidates scored 12,910 and 16,853. Decision: promote stateless
+  v29 on v4; additional aggregate DAgger is the strongest supported cause, while
+  history infrastructure remains available for more targeted outcome-aware context.

@@ -1,0 +1,5 @@
+{
+  "suite_id": "mibe-heldout-v4",
+  "baseline_policy_id": "semantic-v3-dagger-v23",
+  "minimum_rank": [0, 0, 8822, 13, 13, 9, 64.0]
+}
