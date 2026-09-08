@@ -351,3 +351,11 @@ this journal exists to keep research velocity and direction visible.
   reward/returns capable of opposing recurrent no-progress behavior. All conclusions
   here are conditional on this checkpoint, representation, curriculum, weighting, and
   budget; changed surrounding conditions are explicit revisit triggers.
+- **2026-09-08 09:07 EDT — loop-resistant return/cost contract.** Online PPO can now
+  treat death as a boundary within a continuing reset process: it bootstraps from the
+  freshly scheduled reset value but cuts GAE before the next episode's sampled rewards.
+  Wins remain terminal. Independent typed decision and exact semantic short-cycle costs
+  leave reported environment return and evaluation unchanged; cycle telemetry is
+  explicit. The host gate passed 92 fast tests in 1.95 seconds and three live tests in
+  8.72 seconds. Decision: pilot matched no-cost, decision-cost, and cycle-cost arms from
+  frozen v29 before committing the full training budget or consulting heldout-v4.

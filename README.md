@@ -186,6 +186,12 @@ inverse balancing. Setting `--policy-weight 0 --value-weight 0 --echo-weight 0
 --entropy-weight 0` isolates online DAgger imitation while retaining autonomous,
 legality-masked policy collection:
 
+`--return-boundary continuing-reset` values death as a reset into the ongoing training
+task while keeping wins terminal. Typed `--decision-cost` and `--short-cycle-cost`
+settings are training-only; the latter detects recurrence of the same stable semantic
+state within `--short-cycle-window` decisions. Reported episode returns and held-out
+ranking retain the unmodified environment rewards.
+
 ```sh
 dcss-rl train-ppo \
   --initial-checkpoint checkpoints/semantic-dagger-echo-v4.pt \

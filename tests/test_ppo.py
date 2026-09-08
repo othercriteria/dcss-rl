@@ -6,14 +6,20 @@ from dcss_rl.actions import Action
 from dcss_rl.env import ACTION_COUNT, action_to_index
 from dcss_rl.features import feature_count
 from dcss_rl.learned import ModelConfig, SemanticActorCritic, align_feature_spec
-from dcss_rl.ppo import _restrict_warmup_gradients, _warmup_action_indices
-from dcss_rl.returns import generalized_advantage_estimate
+from dcss_rl.ppo import (
+    _restrict_warmup_gradients,
+    _uses_reset_bootstrap,
+    _warmup_action_indices,
+    _WorkerStep,
+)
+from dcss_rl.returns import ReturnBoundaryMode, generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.units import (
     ActionIndex,
     CaseCount,
     EpisodeIndex,
     Keycode,
+    TerminalOutcome,
     WorkerCount,
     WorkerIndex,
 )
@@ -45,13 +51,13 @@ def test_gae_bootstraps_time_limit_without_crossing_episode_boundary() -> None:
     rewards = np.asarray([[0.0], [0.0], [100.0]], dtype=np.float32)
     values = np.asarray([[2.0], [3.0], [50.0]], dtype=np.float32)
     episode_ends = np.asarray([[False], [True], [False]], dtype=np.bool_)
-    time_limit_bootstraps = np.asarray([[0.0], [7.0], [0.0]], dtype=np.float32)
+    boundary_bootstraps = np.asarray([[0.0], [7.0], [0.0]], dtype=np.float32)
 
     _, returns = generalized_advantage_estimate(
         rewards,
         values,
         episode_ends,
-        time_limit_bootstraps,
+        boundary_bootstraps,
         np.asarray([60.0], dtype=np.float32),
         discount=1.0,
         gae_lambda=1.0,
@@ -60,6 +66,56 @@ def test_gae_bootstraps_time_limit_without_crossing_episode_boundary() -> None:
     # The time-limited episode bootstraps V=7, while the next episode's reward 100
     # cannot leak backward across the reset boundary.
     np.testing.assert_array_equal(returns[:, 0], np.asarray([7.0, 7.0, 160.0]))
+
+
+def test_gae_can_bootstrap_reset_value_without_crossing_death_boundary() -> None:
+    rewards = np.asarray([[1.0], [0.0], [100.0]], dtype=np.float32)
+    values = np.asarray([[2.0], [3.0], [50.0]], dtype=np.float32)
+    episode_ends = np.asarray([[False], [True], [False]], dtype=np.bool_)
+    boundary_bootstraps = np.asarray([[0.0], [-4.0], [0.0]], dtype=np.float32)
+
+    _, returns = generalized_advantage_estimate(
+        rewards,
+        values,
+        episode_ends,
+        boundary_bootstraps,
+        np.asarray([60.0], dtype=np.float32),
+        discount=1.0,
+        gae_lambda=1.0,
+    )
+
+    # Death inherits the fresh-reset value -4, while the next rollout reward 100
+    # cannot leak backward across the reset boundary.
+    np.testing.assert_array_equal(returns[:, 0], np.asarray([-3.0, -4.0, 160.0]))
+
+
+def test_continuing_reset_bootstraps_death_but_not_win() -> None:
+    def terminal_step(outcome: str) -> _WorkerStep:
+        return _WorkerStep(
+            observation={
+                "player": {},
+                "cells": [],
+                "messages": [],
+                "menu": None,
+                "input_mode": 1,
+            },
+            action_mask=np.ones(1, dtype=np.bool_),
+            reward=0.0,
+            terminated=True,
+            truncated=False,
+            completed_return=0.0,
+            action_history=(),
+            terminal_outcome=TerminalOutcome(outcome),
+            short_cycle=False,
+        )
+
+    assert _uses_reset_bootstrap(
+        terminal_step("dead"), ReturnBoundaryMode.CONTINUING_RESET
+    )
+    assert not _uses_reset_bootstrap(
+        terminal_step("won"), ReturnBoundaryMode.CONTINUING_RESET
+    )
+    assert not _uses_reset_bootstrap(terminal_step("dead"), ReturnBoundaryMode.EPISODIC)
 
 
 def test_action_warmup_includes_appended_and_companion_menu_rows() -> None:

@@ -70,6 +70,10 @@ class PpoCheckpointMetadata:
     new_action_warmup_updates: int = 0
     new_action_warmup_menu_keycodes: tuple[int, ...] = ()
     imitation_trajectories: tuple[str, ...] = ()
+    return_boundary: str = "episodic"
+    decision_cost: float = 0.0
+    short_cycle_cost: float = 0.0
+    short_cycle_window: int = 8
 
 
 @dataclass(frozen=True, slots=True)

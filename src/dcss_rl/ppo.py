@@ -20,6 +20,7 @@ from torch.nn import functional as F
 
 from dcss_rl.actions import Action
 from dcss_rl.checkpointing import update_checkpoint_path
+from dcss_rl.costs import SemanticCycleTracker, training_reward
 from dcss_rl.env import ACTION_COUNT, DcssEnv, RewardShaping, action_to_index
 from dcss_rl.evaluation import EvaluationSuite
 from dcss_rl.features import FEATURE_SPEC_VERSION, encode_observation, feature_count
@@ -35,7 +36,7 @@ from dcss_rl.learned import (
     save_checkpoint,
 )
 from dcss_rl.policy import ActionHistory, ScriptedMibePolicy
-from dcss_rl.returns import generalized_advantage_estimate
+from dcss_rl.returns import ReturnBoundaryMode, generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.schema import ObservationData
 from dcss_rl.training import load_imitation_episode
@@ -44,7 +45,9 @@ from dcss_rl.units import (
     ActionIndex,
     BatchSize,
     CaseCount,
+    DecisionCost,
     DecisionsPerSecond,
+    DecisionWindow,
     EpisodeIndex,
     EpochCount,
     GameSeed,
@@ -58,7 +61,9 @@ from dcss_rl.units import (
     RewardWeight,
     RolloutLength,
     Seconds,
+    ShortCycleCost,
     StepLimit,
+    TerminalOutcome,
     UpdateCount,
     WorkerCount,
     WorkerIndex,
@@ -88,7 +93,11 @@ _DEFAULT_GAE_LAMBDA = Probability(0.95)
 _DEFAULT_EPOCHS_PER_UPDATE = EpochCount(4)
 _ZERO_UPDATES = UpdateCount(0)
 _ZERO_REWARD_WEIGHT = RewardWeight(0.0)
+_ZERO_DECISION_COST = DecisionCost(0.0)
+_ZERO_SHORT_CYCLE_COST = ShortCycleCost(0.0)
+_DEFAULT_SHORT_CYCLE_WINDOW = DecisionWindow(8)
 _GAME_START_ATTEMPTS = 3
+_WIN_OUTCOME = TerminalOutcome("won")
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +125,10 @@ class PpoConfig:
     depth_progress_reward: RewardWeight = _ZERO_REWARD_WEIGHT
     experience_progress_reward: RewardWeight = _ZERO_REWARD_WEIGHT
     hp_fraction_reward: RewardWeight = _ZERO_REWARD_WEIGHT
+    return_boundary: ReturnBoundaryMode = ReturnBoundaryMode.EPISODIC
+    decision_cost: DecisionCost = _ZERO_DECISION_COST
+    short_cycle_cost: ShortCycleCost = _ZERO_SHORT_CYCLE_COST
+    short_cycle_window: DecisionWindow = _DEFAULT_SHORT_CYCLE_WINDOW
     action_history_length: ActionHistoryLength | None = None
     new_action_warmup_updates: UpdateCount = _ZERO_UPDATES
     new_action_warmup_menu_keycodes: tuple[Keycode, ...] = ()
@@ -137,6 +150,8 @@ class PpoConfig:
             raise ValueError("action history length cannot be negative")
         if self.new_action_warmup_updates < 0:
             raise ValueError("new-action warmup updates cannot be negative")
+        if self.short_cycle_window < 1:
+            raise ValueError("short-cycle window must be positive")
         if self.learning_rate <= 0:
             raise ValueError("PPO learning rate must be positive")
         if self.inference_batch_wait < 0:
@@ -159,9 +174,11 @@ class PpoConfig:
                 self.depth_progress_reward,
                 self.experience_progress_reward,
                 self.hp_fraction_reward,
+                self.decision_cost,
+                self.short_cycle_cost,
             )
         ):
-            raise ValueError("PPO loss weights cannot be negative")
+            raise ValueError("PPO weights and costs cannot be negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +192,7 @@ class PpoReport:
     echo_loss: float
     imitation_loss: float
     teacher_agreement: Probability
+    short_cycles: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +212,7 @@ class PpoUpdateReport:
     echo_loss: float
     imitation_loss: float
     teacher_agreement: Probability
+    short_cycles: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,6 +240,8 @@ class _WorkerStep:
     truncated: bool
     completed_return: float | None
     action_history: ActionHistory
+    terminal_outcome: TerminalOutcome | None
+    short_cycle: bool
 
 
 @dataclass(slots=True)
@@ -238,6 +259,7 @@ class _Worker:
     action_mask: BoolArray | None = None
     episode_return: float = 0.0
     action_history: list[ActionIndex] = field(default_factory=list)
+    cycle_tracker: SemanticCycleTracker | None = None
 
     def ready(self) -> tuple[ObservationData, BoolArray]:
         if self.observation is None:
@@ -259,6 +281,15 @@ class _Worker:
             raise RuntimeError("environment returned an invalid action mask")
         self.episode_return += reward
         completed_return = self.episode_return if done else None
+        raw_outcome = info.get("outcome")
+        terminal_outcome = (
+            TerminalOutcome(raw_outcome) if isinstance(raw_outcome, str) else None
+        )
+        short_cycle = (
+            self.cycle_tracker.observe(observation)
+            if self.cycle_tracker is not None
+            else False
+        )
         self.action_history.append(action)
         next_history = tuple(self.action_history)
         if done:
@@ -279,6 +310,8 @@ class _Worker:
             truncated,
             completed_return,
             next_history,
+            terminal_outcome,
+            short_cycle,
         )
 
     def close(self) -> None:
@@ -323,6 +356,8 @@ class _Worker:
             raise RuntimeError("environment returned an invalid action mask")
         self.observation = observation
         self.action_mask = mask
+        if self.cycle_tracker is not None:
+            self.cycle_tracker.reset(observation)
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,6 +373,7 @@ class _Rollout:
     next_deltas: FloatArray
     teacher_actions: IntArray
     completed_returns: tuple[float, ...]
+    short_cycles: int
     inference_batches: InferenceBatchCount
     mean_inference_batch_size: MeanInferenceBatchSize
 
@@ -355,6 +391,7 @@ class _WorkerRollout:
     next_deltas: FloatArray
     teacher_actions: IntArray
     completed_returns: tuple[float, ...]
+    short_cycles: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -508,10 +545,12 @@ def train_ppo(
                 hp_fraction=config.hp_fraction_reward,
             ),
             np.random.default_rng(config.seed + index),
+            cycle_tracker=SemanticCycleTracker(config.short_cycle_window),
         )
         for index in range(config.workers)
     )
     completed_returns: list[float] = []
+    short_cycle_count = 0
     losses = PpoLosses(0.0, 0.0, 0.0, 0.0)
     teacher_agreement = Probability(0.0)
     imitation_replay = list(
@@ -531,6 +570,7 @@ def train_ppo(
                 )
                 collection_finished = perf_counter()
                 completed_returns.extend(rollout.completed_returns)
+                short_cycle_count += rollout.short_cycles
                 imitation_replay.append(_rollout_imitation_replay(rollout))
                 losses = _ppo_update(
                     model,
@@ -612,6 +652,7 @@ def train_ppo(
                             losses.echo,
                             losses.imitation,
                             teacher_agreement,
+                            rollout.short_cycles,
                         )
                     )
     finally:
@@ -628,6 +669,7 @@ def train_ppo(
         losses.echo,
         losses.imitation,
         teacher_agreement,
+        short_cycle_count,
     )
 
 
@@ -663,6 +705,10 @@ def _checkpoint_metadata(
         new_action_warmup_updates=config.new_action_warmup_updates,
         new_action_warmup_menu_keycodes=tuple(config.new_action_warmup_menu_keycodes),
         imitation_trajectories=tuple(map(str, config.imitation_trajectories)),
+        return_boundary=config.return_boundary.value,
+        decision_cost=config.decision_cost,
+        short_cycle_cost=config.short_cycle_cost,
+        short_cycle_window=config.short_cycle_window,
     )
 
 
@@ -752,6 +798,7 @@ def _collect_rollout(
         tuple(
             value for rollout in worker_rollouts for value in rollout.completed_returns
         ),
+        sum(rollout.short_cycles for rollout in worker_rollouts),
         inference_batches,
         mean_inference_batch_size,
     )
@@ -772,10 +819,11 @@ def _collect_worker_rollout(
     values: list[float] = []
     rewards: list[float] = []
     dones: list[bool] = []
-    time_limit_bootstraps: list[float] = []
+    boundary_bootstraps: list[float] = []
     next_deltas: list[FloatArray] = []
     teacher_actions: list[int] = []
     completed_returns: list[float] = []
+    short_cycles = 0
     for _ in range(config.rollout_length):
         observation, mask = worker.ready()
         feature = encode_observation(
@@ -795,15 +843,28 @@ def _collect_worker_rollout(
         next_feature = encode_observation(
             next_observation, spec_version=batcher.feature_spec_version
         )
-        time_limit_bootstrap = 0.0
+        boundary_bootstrap = 0.0
         if step.truncated and not step.terminated:
             next_history = encode_action_history(
                 step.action_history,
                 action_count=batcher.model_config.action_count,
                 length=batcher.model_config.action_history_length,
             )
-            time_limit_bootstrap = batcher.infer(
+            boundary_bootstrap = batcher.infer(
                 next_feature, next_history, step.action_mask
+            ).value
+        elif _uses_reset_bootstrap(step, config.return_boundary):
+            reset_observation, reset_mask = worker.ready()
+            reset_feature = encode_observation(
+                reset_observation, spec_version=batcher.feature_spec_version
+            )
+            reset_history = encode_action_history(
+                worker.history(),
+                action_count=batcher.model_config.action_count,
+                length=batcher.model_config.action_history_length,
+            )
+            boundary_bootstrap = batcher.infer(
+                reset_feature, reset_history, reset_mask
             ).value
         features.append(feature)
         action_histories.append(action_history)
@@ -811,9 +872,17 @@ def _collect_worker_rollout(
         actions.append(action)
         log_probabilities.append(float(np.log(probabilities[action])))
         values.append(value)
-        rewards.append(step.reward)
+        rewards.append(
+            training_reward(
+                step.reward,
+                decision_cost=config.decision_cost,
+                short_cycle_cost=config.short_cycle_cost,
+                repeated_state=step.short_cycle,
+            )
+        )
+        short_cycles += int(step.short_cycle)
         dones.append(step.terminated or step.truncated)
-        time_limit_bootstraps.append(time_limit_bootstrap)
+        boundary_bootstraps.append(boundary_bootstrap)
         next_deltas.append(next_feature - feature)
         teacher_actions.append(int(teacher.select(observation, mask)))
         if step.completed_return is not None:
@@ -838,7 +907,7 @@ def _collect_worker_rollout(
         reward_array,
         value_array,
         done_array,
-        np.asarray(time_limit_bootstraps, dtype=np.float32)[:, None],
+        np.asarray(boundary_bootstraps, dtype=np.float32)[:, None],
         np.asarray([final_value], dtype=np.float32),
         discount=config.discount,
         gae_lambda=config.gae_lambda,
@@ -855,6 +924,18 @@ def _collect_worker_rollout(
         np.stack(next_deltas),
         np.asarray(teacher_actions, dtype=np.int64),
         tuple(completed_returns),
+        short_cycles,
+    )
+
+
+def _uses_reset_bootstrap(
+    step: _WorkerStep, return_boundary: ReturnBoundaryMode
+) -> bool:
+    """Keep wins episodic while making other terminal resets continuing."""
+    return (
+        step.terminated
+        and step.terminal_outcome != _WIN_OUTCOME
+        and return_boundary is ReturnBoundaryMode.CONTINUING_RESET
     )
 
 

@@ -19,9 +19,12 @@ from dcss_rl.evaluation import (
 )
 from dcss_rl.policy import Policy, ScriptedMibePolicy
 from dcss_rl.replay import champion_trajectory, watch_grid, watch_replay
+from dcss_rl.returns import ReturnBoundaryMode
 from dcss_rl.units import (
     ActionHistoryLength,
     BatchSize,
+    DecisionCost,
+    DecisionWindow,
     EpochCount,
     FrameLimit,
     GameSeed,
@@ -33,6 +36,7 @@ from dcss_rl.units import (
     RewardWeight,
     RolloutLength,
     Seconds,
+    ShortCycleCost,
     UpdateCount,
     ViewRadius,
     WorkerCount,
@@ -142,6 +146,15 @@ def main() -> None:
     ppo.add_argument("--depth-progress-reward", type=float, default=0.0)
     ppo.add_argument("--experience-progress-reward", type=float, default=0.0)
     ppo.add_argument("--hp-fraction-reward", type=float, default=0.0)
+    ppo.add_argument(
+        "--return-boundary",
+        choices=tuple(ReturnBoundaryMode),
+        type=ReturnBoundaryMode,
+        default=ReturnBoundaryMode.EPISODIC,
+    )
+    ppo.add_argument("--decision-cost", type=float, default=0.0)
+    ppo.add_argument("--short-cycle-cost", type=float, default=0.0)
+    ppo.add_argument("--short-cycle-window", type=int, default=8)
     ppo.add_argument("--seed", type=int, default=1)
     ppo.add_argument("--device", default="cuda")
     watch = commands.add_parser("watch-best")
@@ -248,7 +261,8 @@ def main() -> None:
                 f"mean_return={update.mean_completed_return:.3f}; "
                 f"losses={update.policy_loss:.3f}/{update.value_loss:.3f}/"
                 f"{update.echo_loss:.3f}/{update.imitation_loss:.3f}; "
-                f"teacher_agreement={update.teacher_agreement:.3f}",
+                f"teacher_agreement={update.teacher_agreement:.3f}; "
+                f"short_cycles={update.short_cycles}",
                 flush=True,
             )
 
@@ -300,6 +314,10 @@ def main() -> None:
                     arguments.experience_progress_reward
                 ),
                 hp_fraction_reward=RewardWeight(arguments.hp_fraction_reward),
+                return_boundary=arguments.return_boundary,
+                decision_cost=DecisionCost(arguments.decision_cost),
+                short_cycle_cost=ShortCycleCost(arguments.short_cycle_cost),
+                short_cycle_window=DecisionWindow(arguments.short_cycle_window),
                 device=arguments.device,
             ),
             policy_id=arguments.policy_id,
@@ -313,7 +331,8 @@ def main() -> None:
             f"policy_loss={report.policy_loss:.3f}; "
             f"value_loss={report.value_loss:.3f}; echo_loss={report.echo_loss:.3f}; "
             f"imitation_loss={report.imitation_loss:.3f}; "
-            f"teacher_agreement={report.teacher_agreement:.3f}"
+            f"teacher_agreement={report.teacher_agreement:.3f}; "
+            f"short_cycles={report.short_cycles}"
         )
         return
     if arguments.command == "watch-best":

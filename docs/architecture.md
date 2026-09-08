@@ -206,11 +206,21 @@ Diagnostic and held-out champion manifests are separate monotonic tracks. A cand
 can replace a track only when its metric vector strictly outranks the existing
 same-suite manifest; cross-suite promotion is rejected.
 
-PPO return estimation distinguishes true terminal states from administrative episode
-limits. A time limit bootstraps the value of its final player-visible observation but
-cuts GAE recursion before the reset episode; death uses zero terminal value. There is
-no explicit negative death reward: discounting such a cost would pay the policy to
-postpone unavoidable death and a finite limit could erase it entirely.
+PPO return estimation distinguishes scored episode boundaries from the continuing
+training task. A time limit bootstraps the value of its final player-visible
+observation. In optional `continuing-reset` mode, death instead bootstraps the value of
+a freshly reset, independently scheduled training game; ascension remains terminal.
+Both boundaries cut GAE recursion, so rewards from the next rollout slot cannot leak
+backward. This makes death neither an explicit penalty nor a way to erase future
+decision costs. Episodic zero-terminal behavior remains available as a matched control.
+
+Training can charge independent typed costs for every policy decision and for returning
+to an exact player-visible semantic state within a bounded decision window. The cycle
+fingerprint retains absolute position, player statistics/status, visible map, menu, and
+input mode while excluding transient messages and DCSS turn/time clocks. Thus ordinary
+repeated action labels are not presumed unsafe, and evaluation rewards/ranks remain
+unchanged. Cycle incidence and all cost settings are recorded with update telemetry and
+checkpoint metadata.
 
 Experimental conclusions are conditional on checkpoint, representation, curriculum,
 objective weights, and budget. A failed arm controls the next local decision; it is

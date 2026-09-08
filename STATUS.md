@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## Current state
 
@@ -305,12 +305,17 @@ not the current bottleneck.
 - The history-aware matched PPO repeat again promoted neither arm. ECHO-on learned its
   target and scored 21,009 diagnostic versus ECHO-off's 18,302, but both regressed from
   their v26 initialization at 26,857 and received no heldout access.
+- PPO now supports continuing-reset death returns: death bootstraps a fresh training
+  reset while cutting GAE across the episode boundary, administrative limits bootstrap
+  their final visible state, and wins remain terminal. Independent typed per-decision
+  and exact semantic short-cycle costs affect training returns only. Checkpoints record
+  the boundary/cost contract and update logs report detected cycle incidence. The host
+  gate passes 92 fast tests in 1.95 seconds and three live tests in 8.72 seconds.
 
 Next:
 
-1. Add a loop-resistant online objective with continuing-reset return semantics, then
-   compare typed decision/cycle costs against no-cost controls without making death an
-   escape from future cost.
+1. Run matched continuing-reset PPO from v29 with no cost, per-decision cost, and
+   semantic short-cycle cost; select checkpoints diagnostically before any heldout use.
 2. Retain v29 as champion while using anchored pretraining for new multi-step
    affordances; revisit failed knobs when representation, initialization, curriculum,
    or reward semantics materially changes.
