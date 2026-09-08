@@ -61,11 +61,13 @@ def test_loads_checked_in_heldout_suite() -> None:
 
 def test_broad_training_suite_is_unique_and_disjoint_from_evaluation() -> None:
     training = load_suite(Path("configs/online-train-v2.json"))
+    broader_training = load_suite(Path("configs/online-train-v3.json"))
     diagnostic = load_suite(Path("configs/diagnostic-v2.json"))
     heldout = load_suite(Path("configs/heldout-v2.json"))
     next_heldout = load_suite(Path("configs/heldout-v3.json"))
     future_heldout = load_suite(Path("configs/heldout-v4.json"))
     training_seeds = {case.seed for case in training.cases}
+    broader_training_seeds = {case.seed for case in broader_training.cases}
     evaluation_seeds = {
         case.seed
         for case in (
@@ -81,6 +83,10 @@ def test_broad_training_suite_is_unique_and_disjoint_from_evaluation() -> None:
     assert len(training.cases) == 64
     assert len(training_seeds) == len(training.cases)
     assert training_seeds.isdisjoint(evaluation_seeds)
+    assert broader_training.suite_id == "online-train-v3"
+    assert broader_training.step_limit == 2000
+    assert len(broader_training_seeds) == len(broader_training.cases) == 128
+    assert broader_training_seeds.isdisjoint(training_seeds | evaluation_seeds)
     assert {case.seed for case in heldout.cases}.isdisjoint(
         case.seed for case in next_heldout.cases
     )

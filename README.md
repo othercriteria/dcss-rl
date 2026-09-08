@@ -137,6 +137,10 @@ objectives always use only the current on-policy rollout.
 `--action-history-length N` expands a stateless initial checkpoint with `N`
 newest-first action slots. History remains policy-side context: it is reset per game,
 kept separate across concurrent workers, and excluded from ECHO environment targets.
+Pass `--update-checkpoint-directory DIR` to retain immutable, naturally sorted
+`update-NNNN.pt` snapshots in addition to the rolling final checkpoint. The broader
+`configs/online-train-v3.json` curriculum uses 128 training-only seeds and 2,000-step
+episodes.
 
 Checkpoints and generated rollouts remain untracked. Learned candidates must first
 improve the diagnostic track and then clear the checked-in held-out floor before

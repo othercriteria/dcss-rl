@@ -17,6 +17,7 @@ from numpy.typing import NDArray
 from torch.distributions import Categorical
 from torch.nn import functional as F
 
+from dcss_rl.checkpointing import update_checkpoint_path
 from dcss_rl.env import DcssEnv, RewardShaping
 from dcss_rl.evaluation import EvaluationSuite
 from dcss_rl.features import encode_observation
@@ -454,6 +455,7 @@ def train_ppo(
     *,
     config: PpoConfig,
     policy_id: str,
+    update_checkpoint_directory: Path | None = None,
     progress: Callable[[PpoUpdateReport], None] | None = None,
 ) -> PpoReport:
     """Fine-tune an imitation checkpoint with concurrent on-policy PPO updates."""
@@ -513,17 +515,28 @@ def train_ppo(
                 mean_return = (
                     float(np.mean(completed_returns)) if completed_returns else 0.0
                 )
+                completed_update = UpdateCount(update_index + 1)
+                metadata = _checkpoint_metadata(
+                    config,
+                    updates=completed_update,
+                    mean_episode_return=mean_return,
+                    action_history_length=model.config.action_history_length,
+                )
                 save_checkpoint(
                     output_checkpoint,
                     model=model,
                     policy_id=policy_id,
-                    training_metadata=_checkpoint_metadata(
-                        config,
-                        updates=UpdateCount(update_index + 1),
-                        mean_episode_return=mean_return,
-                        action_history_length=model.config.action_history_length,
-                    ),
+                    training_metadata=metadata,
                 )
+                if update_checkpoint_directory is not None:
+                    save_checkpoint(
+                        update_checkpoint_path(
+                            update_checkpoint_directory, completed_update
+                        ),
+                        model=model,
+                        policy_id=policy_id,
+                        training_metadata=metadata,
+                    )
                 checkpoint_finished = perf_counter()
                 if progress is not None:
                     update_decisions = int(config.rollout_length * config.workers)

@@ -92,6 +92,7 @@ def main() -> None:
     ppo = commands.add_parser("train-ppo")
     ppo.add_argument("--initial-checkpoint", type=Path, required=True)
     ppo.add_argument("--checkpoint", type=Path, required=True)
+    ppo.add_argument("--update-checkpoint-directory", type=Path)
     ppo.add_argument("--policy-id", required=True)
     ppo.add_argument(
         "--binary",
@@ -275,6 +276,7 @@ def main() -> None:
                 device=arguments.device,
             ),
             policy_id=arguments.policy_id,
+            update_checkpoint_directory=arguments.update_checkpoint_directory,
             progress=report_progress,
         )
         print(

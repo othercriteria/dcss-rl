@@ -190,6 +190,12 @@ cuts GAE recursion before the reset episode; death uses zero terminal value. The
 no explicit negative death reward: discounting such a cost would pay the policy to
 postpone unavoidable death and a finite limit could erase it entirely.
 
+Long online runs may retain an immutable checkpoint after every completed update in
+addition to the atomically replaced final checkpoint. Intermediate policy selection
+uses only the known diagnostic suite; heldout access remains a single final promotion
+gate. Naturally sorted update names make the training curve reproducible without
+inferring state from modification times.
+
 The first promoted agent uses a confidence gate calibrated only on diagnostic expert
 states. At threshold 0.98, neural decisions covered 23.7% of diagnostic actions with
 100% agreement on the calibration set; the transparent expert handles lower-confidence

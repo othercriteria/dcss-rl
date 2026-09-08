@@ -266,6 +266,9 @@ not the current bottleneck.
   Evaluation and rollout workers maintain isolated per-episode histories; ECHO targets
   remain environment-only. `--action-history-length` expands a stateless checkpoint
   with zero history columns so online DAgger/PPO can learn loop-sensitive behavior.
+- Online training can retain immutable `update-NNNN.pt` snapshots alongside its rolling
+  checkpoint, enabling diagnostic learning curves and recovery from non-monotonic PPO.
+  The disjoint `online-train-v3` curriculum expands to 128 seeds and 2,000-step games.
 - Heldout-v3 was retired after its v24 traces motivated action history; v26's apparent
   promotion there is not treated as headline evidence. Untouched heldout-v4 was first
   calibrated with pre-intervention v23 at 8,822. The already-frozen history v26 and
