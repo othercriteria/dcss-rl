@@ -188,10 +188,19 @@ changing established indices. This permits adding player-visible multi-step UI f
 such as opening Trog's ability menu and selecting Berserk, without invalidating prior
 policies or encoding a privileged macro.
 
-An optional staged warmup fits only appended policy-head rows. Established encoder and
-action parameters are restored after each optimizer step (including AdamW decay), so
-the old policy cannot catastrophically forget while a cold action class learns a
-useful separator. Later updates may deliberately unfreeze the full network.
+An optional staged warmup fits appended policy-head rows, declared dependent menu-key
+rows, and newly appended semantic input columns. All established input columns,
+hidden/value layers, and unrelated heads are restored after each optimizer step
+(including AdamW decay), and their gradients are zeroed so optimizer moments cannot
+accumulate invisibly. This supports multi-decision affordances without treating them
+as privileged macros. Online DAgger may also preload replayable, current-teacher-
+relabeled training trajectories; exact paths are checkpoint metadata. Later updates
+may deliberately unfreeze the full network.
+
+Feature v4 appends explicit player-visible Berserk and exhaustion indicators. Migration
+zero-initializes their input and ECHO coordinates while preserving every legacy
+policy/value output and legacy ECHO coordinate. Old checkpoints continue to evaluate
+under their recorded feature version; online training upgrades them explicitly.
 
 Diagnostic and held-out champion manifests are separate monotonic tracks. A candidate
 can replace a track only when its metric vector strictly outranks the existing
@@ -202,6 +211,11 @@ limits. A time limit bootstraps the value of its final player-visible observatio
 cuts GAE recursion before the reset episode; death uses zero terminal value. There is
 no explicit negative death reward: discounting such a cost would pay the policy to
 postpone unavoidable death and a finite limit could erase it entirely.
+
+Experimental conclusions are conditional on checkpoint, representation, curriculum,
+objective weights, and budget. A failed arm controls the next local decision; it is
+not evidence that its knob is permanently useless after those surrounding conditions
+change.
 
 Long online runs may retain an immutable checkpoint after every completed update in
 addition to the atomically replaced final checkpoint. Intermediate policy selection

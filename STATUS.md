@@ -284,6 +284,18 @@ not the current bottleneck.
   more behavior (best 35,249) but selected Berserk zero times and failed heldout at
   13,348 versus champion v29's 16,853. New-action warmup can now train only appended
   head rows while preserving the established encoder and logits.
+- Berserk acquisition experiments isolate two recurrent failures. Appended-row-only
+  warmup learned to open abilities but selected Renounce Religion; adding the dependent
+  menu-`a` row learned the real two-decision Berserk flow, then retried while Berserk.
+  Feature v4 now exposes visible Berserk/exhaustion, and selective warmup can train only
+  those new inputs plus declared action rows. Replay preloading relabels 25,733
+  transitions from 128 non-heldout v19/v20 trajectories and records their paths.
+- Selective v39 learned a non-repeating Berserk invocation while leaving v29 behavior
+  exactly unchanged through update 4. Its update-8 invocation was tactically premature
+  and ranked 7,035 diagnostic. Anchored `1e-6` joint v40 recovered one D:7 episode but
+  peaked at 11,115, below v29's 34,118; neither received heldout access. These results
+  are local to the current representation/data/objective regime, not permanent verdicts
+  on pretraining, class balance, status features, or joint DAgger.
 - Heldout-v3 was retired after its v24 traces motivated action history; v26's apparent
   promotion there is not treated as headline evidence. Untouched heldout-v4 was first
   calibrated with pre-intervention v23 at 8,822. The already-frozen history v26 and
@@ -296,13 +308,14 @@ not the current bottleneck.
 
 Next:
 
-1. Improve survival and XL while retaining v29's non-stalling exploration frontier;
-   distinguish tactical repeated attacks from genuine rest/prompt and movement loops.
-2. Scale beyond the current 49,152-decision update budget and 1,000-step curriculum,
-   checkpointing intermediate policies so PPO regressions are not judged only at the
-   final update.
-3. Extend curriculum and evaluation toward branch/rune acquisition once survival at
-   the current depth frontier is reliable.
+1. Add a loop-resistant online objective with continuing-reset return semantics, then
+   compare typed decision/cycle costs against no-cost controls without making death an
+   escape from future cost.
+2. Retain v29 as champion while using anchored pretraining for new multi-step
+   affordances; revisit failed knobs when representation, initialization, curriculum,
+   or reward semantics materially changes.
+3. Resume matched ECHO/PPO and broader/longer scaling after the objective can learn
+   from recurrent failures, then extend toward branch/rune acquisition.
 
 ## Verified commands
 

@@ -333,3 +333,21 @@ this journal exists to keep research velocity and direction visible.
   times and its one heldout attempt scored 13,348 below v29's 16,853. Decision: the
   appended class needs a head-only acquisition stage; preserve all old parameters
   until the new action has a useful logit, then unfreeze jointly.
+- **2026-09-08 00:15–08:45 EDT — staged Berserk acquisition and anchored correction.**
+  Appended-row warmup preserved v29 exactly through four updates, then opened the
+  ability menu but chose Renounce Religion and rejected its prompt. Training companion
+  menu-`a` learned the genuine two-policy-decision Berserk flow but retried it while
+  already Berserk. Feature v4 appended visible Berserk/exhaustion bits with lossless
+  checkpoint migration. A boolean-indexing test also caught frozen-gradient writes to
+  a temporary tensor: weights had been restored, but Adam moments could accumulate;
+  indexed assignment now zeros them at the source. Online DAgger can preload and
+  relabel replay anchors; v38 used 25,733 transitions from 128 non-heldout v19/v20
+  trajectories. Selective v39 trained only the two flow rows and new status columns,
+  retained v29 exactly through update 4, and by update 8 invoked Berserk once without
+  retrying, but did so without a visible threat and ranked only 7,035. Anchored,
+  unweighted joint v40 at `1e-6` recovered one D:7 episode and peaked at 11,115, still
+  below v29's 34,118. Decision: pretraining machinery is reusable and the UI flow is
+  learnable, but do not promote or tune further on these five seeds. Next make online
+  reward/returns capable of opposing recurrent no-progress behavior. All conclusions
+  here are conditional on this checkpoint, representation, curriculum, weighting, and
+  budget; changed surrounding conditions are explicit revisit triggers.

@@ -35,7 +35,7 @@ def test_feature_encoding_is_fixed_width_and_translation_invariant() -> None:
     first = encode_observation(state())
     translated = encode_observation(state(offset=17))
 
-    assert FEATURE_SPEC_VERSION == 3
+    assert FEATURE_SPEC_VERSION == 4
     assert first.shape == (FEATURE_COUNT,)
     assert first.dtype == np.float32
     np.testing.assert_array_equal(first, translated)
@@ -45,11 +45,25 @@ def test_feature_v3_extends_v2_without_changing_legacy_values() -> None:
     observation = state()
     observation["messages"] = ["Done waiting."]
     legacy = encode_observation(observation, spec_version=2)
-    current = encode_observation(observation)
+    current = encode_observation(observation, spec_version=3)
 
     assert legacy.shape == (feature_count(2),)
     np.testing.assert_array_equal(current[: len(legacy)], legacy)
     assert current[-5] == 1.0
+
+
+def test_feature_v4_distinguishes_berserk_and_exhaustion() -> None:
+    observation = state()
+    observation["player"]["status"] = [
+        {"light": "Berserk", "text": "berserking"},
+        {"light": "Exhausted", "text": "recovering"},
+    ]
+
+    legacy = encode_observation(observation, spec_version=3)
+    current = encode_observation(observation)
+
+    np.testing.assert_array_equal(current[: len(legacy)], legacy)
+    np.testing.assert_array_equal(current[-2:], np.asarray([1.0, 1.0]))
 
 
 def test_global_navigation_summary_distinguishes_known_downstairs() -> None:

@@ -18,10 +18,11 @@ from torch import Tensor
 from torch.distributions import Categorical
 from torch.nn import functional as F
 
+from dcss_rl.actions import Action
 from dcss_rl.checkpointing import update_checkpoint_path
-from dcss_rl.env import ACTION_COUNT, DcssEnv, RewardShaping
+from dcss_rl.env import ACTION_COUNT, DcssEnv, RewardShaping, action_to_index
 from dcss_rl.evaluation import EvaluationSuite
-from dcss_rl.features import encode_observation
+from dcss_rl.features import FEATURE_SPEC_VERSION, encode_observation, feature_count
 from dcss_rl.history import encode_action_history
 from dcss_rl.learned import (
     LearnedPolicy,
@@ -30,12 +31,14 @@ from dcss_rl.learned import (
     SemanticActorCritic,
     add_action_history,
     align_action_count,
+    align_feature_spec,
     save_checkpoint,
 )
 from dcss_rl.policy import ActionHistory, ScriptedMibePolicy
 from dcss_rl.returns import generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.schema import ObservationData
+from dcss_rl.training import load_imitation_episode
 from dcss_rl.units import (
     ActionHistoryLength,
     ActionIndex,
@@ -47,6 +50,7 @@ from dcss_rl.units import (
     GameSeed,
     InferenceBatchCount,
     InferenceBatchSize,
+    Keycode,
     LearningRate,
     LossWeight,
     MeanInferenceBatchSize,
@@ -114,6 +118,8 @@ class PpoConfig:
     hp_fraction_reward: RewardWeight = _ZERO_REWARD_WEIGHT
     action_history_length: ActionHistoryLength | None = None
     new_action_warmup_updates: UpdateCount = _ZERO_UPDATES
+    new_action_warmup_menu_keycodes: tuple[Keycode, ...] = ()
+    imitation_trajectories: tuple[Path, ...] = ()
     device: str = "cuda"
 
     def __post_init__(self) -> None:
@@ -196,6 +202,14 @@ class PpoLosses:
     value: float
     echo: float
     imitation: float
+
+
+@dataclass(frozen=True, slots=True)
+class _ImitationReplay:
+    features: FloatArray
+    action_histories: FloatArray
+    masks: BoolArray
+    teacher_actions: IntArray
 
 
 @dataclass(frozen=True, slots=True)
@@ -469,6 +483,10 @@ def train_ppo(
     restored = LearnedPolicy(initial_checkpoint, device=config.device)
     model = restored.model
     established_action_count = restored.checkpoint_action_count
+    established_feature_count = int(
+        feature_count(restored.checkpoint_feature_spec_version)
+    )
+    model = align_feature_spec(model, FEATURE_SPEC_VERSION)
     model = align_action_count(model, int(ACTION_COUNT))
     if config.action_history_length is not None:
         model = add_action_history(model, config.action_history_length)
@@ -496,7 +514,14 @@ def train_ppo(
     completed_returns: list[float] = []
     losses = PpoLosses(0.0, 0.0, 0.0, 0.0)
     teacher_agreement = Probability(0.0)
-    imitation_replay: list[_Rollout] = []
+    imitation_replay = list(
+        _preloaded_imitation_replay(
+            config.imitation_trajectories,
+            model=model,
+            teacher=teacher,
+            discount=config.discount,
+        )
+    )
     try:
         with ThreadPoolExecutor(max_workers=config.workers) as executor:
             for update_index in range(config.updates):
@@ -506,18 +531,32 @@ def train_ppo(
                 )
                 collection_finished = perf_counter()
                 completed_returns.extend(rollout.completed_returns)
-                imitation_replay.append(rollout)
+                imitation_replay.append(_rollout_imitation_replay(rollout))
                 losses = _ppo_update(
                     model,
                     optimizer,
                     rollout,
                     imitation_replay=tuple(imitation_replay)
                     if config.aggregate_imitation_replay
-                    else (rollout,),
+                    else (_rollout_imitation_replay(rollout),),
                     config=config,
-                    trainable_action_start=established_action_count
+                    trainable_action_indices=_warmup_action_indices(
+                        established_action_count,
+                        model.config.action_count,
+                        config.new_action_warmup_menu_keycodes,
+                    )
                     if update_index < config.new_action_warmup_updates
                     and established_action_count < model.config.action_count
+                    else None,
+                    trainable_feature_indices=tuple(
+                        range(
+                            established_feature_count,
+                            int(feature_count(model.config.feature_spec_version)),
+                        )
+                    )
+                    if update_index < config.new_action_warmup_updates
+                    and established_feature_count
+                    < feature_count(model.config.feature_spec_version)
                     else None,
                 )
                 optimization_finished = perf_counter()
@@ -622,6 +661,48 @@ def _checkpoint_metadata(
         mean_episode_return=mean_episode_return,
         action_history_length=action_history_length,
         new_action_warmup_updates=config.new_action_warmup_updates,
+        new_action_warmup_menu_keycodes=tuple(config.new_action_warmup_menu_keycodes),
+        imitation_trajectories=tuple(map(str, config.imitation_trajectories)),
+    )
+
+
+def _preloaded_imitation_replay(
+    trajectories: tuple[Path, ...],
+    *,
+    model: SemanticActorCritic,
+    teacher: ScriptedMibePolicy,
+    discount: Probability,
+) -> tuple[_ImitationReplay, ...]:
+    if not trajectories:
+        return ()
+    episodes = tuple(
+        load_imitation_episode(path, discount=discount, teacher=teacher)
+        for path in trajectories
+    )
+    features = np.concatenate(
+        [np.stack(episode.features) for episode in episodes]
+    ).astype(np.float32, copy=False)
+    masks = np.concatenate([np.stack(episode.masks) for episode in episodes])
+    teacher_actions = np.concatenate(
+        [np.asarray(episode.actions, dtype=np.int64) for episode in episodes]
+    )
+    history_width = model.config.action_count * model.config.action_history_length
+    return (
+        _ImitationReplay(
+            features,
+            np.zeros((len(features), history_width), dtype=np.float32),
+            masks,
+            teacher_actions,
+        ),
+    )
+
+
+def _rollout_imitation_replay(rollout: _Rollout) -> _ImitationReplay:
+    return _ImitationReplay(
+        rollout.features,
+        rollout.action_histories,
+        rollout.masks,
+        rollout.teacher_actions,
     )
 
 
@@ -782,9 +863,10 @@ def _ppo_update(
     optimizer: torch.optim.Optimizer,
     rollout: _Rollout,
     *,
-    imitation_replay: tuple[_Rollout, ...],
+    imitation_replay: tuple[_ImitationReplay, ...],
     config: PpoConfig,
-    trainable_action_start: int | None = None,
+    trainable_action_indices: tuple[ActionIndex, ...] | None = None,
+    trainable_feature_indices: tuple[int, ...] | None = None,
 ) -> PpoLosses:
     device = torch.device(config.device)
     tensors = tuple(
@@ -868,26 +950,40 @@ def _ppo_update(
             )
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
-            established_weight: Tensor | None = None
-            established_bias: Tensor | None = None
-            if trainable_action_start is not None:
-                _restrict_gradients_to_new_actions(model, trainable_action_start)
-                established_weight = (
-                    model.policy_head.weight[:trainable_action_start].detach().clone()
+            frozen_weight: Tensor | None = None
+            frozen_bias: Tensor | None = None
+            frozen_rows: Tensor | None = None
+            frozen_encoder_weight: Tensor | None = None
+            frozen_feature_columns: Tensor | None = None
+            if trainable_action_indices is not None:
+                frozen_rows, frozen_feature_columns = _restrict_warmup_gradients(
+                    model,
+                    trainable_action_indices,
+                    trainable_feature_indices=trainable_feature_indices,
                 )
-                established_bias = (
-                    model.policy_head.bias[:trainable_action_start].detach().clone()
-                )
+                frozen_weight = model.policy_head.weight.detach().clone()
+                frozen_bias = model.policy_head.bias.detach().clone()
+                if frozen_feature_columns is not None:
+                    frozen_encoder_weight = model.input_layer.weight.detach().clone()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
             optimizer.step()
-            if established_weight is not None and established_bias is not None:
+            if (
+                frozen_weight is not None
+                and frozen_bias is not None
+                and frozen_rows is not None
+            ):
                 with torch.no_grad():
-                    model.policy_head.weight[:trainable_action_start].copy_(
-                        established_weight
+                    model.policy_head.weight[frozen_rows].copy_(
+                        frozen_weight[frozen_rows]
                     )
-                    model.policy_head.bias[:trainable_action_start].copy_(
-                        established_bias
-                    )
+                    model.policy_head.bias[frozen_rows].copy_(frozen_bias[frozen_rows])
+                    if (
+                        frozen_encoder_weight is not None
+                        and frozen_feature_columns is not None
+                    ):
+                        model.input_layer.weight[:, frozen_feature_columns].copy_(
+                            frozen_encoder_weight[:, frozen_feature_columns]
+                        )
             last_losses = PpoLosses(
                 float(policy_loss.item()),
                 float(value_loss.item()),
@@ -897,20 +993,64 @@ def _ppo_update(
     return last_losses
 
 
-def _restrict_gradients_to_new_actions(
-    model: SemanticActorCritic, action_start: int
-) -> None:
-    """Preserve the established policy while fitting appended action rows."""
+def _warmup_action_indices(
+    established_action_count: int,
+    action_count: int,
+    menu_keycodes: tuple[Keycode, ...],
+) -> tuple[ActionIndex, ...]:
+    """Return appended actions and declared rows in their dependent UI flows."""
+    return tuple(
+        {
+            *(
+                ActionIndex(index)
+                for index in range(established_action_count, action_count)
+            ),
+            *(
+                action_to_index(Action.menu_select(keycode))
+                for keycode in menu_keycodes
+            ),
+        }
+    )
+
+
+def _restrict_warmup_gradients(
+    model: SemanticActorCritic,
+    action_indices: tuple[ActionIndex, ...],
+    *,
+    trainable_feature_indices: tuple[int, ...] | None = None,
+) -> tuple[Tensor, Tensor | None]:
+    """Restrict warmup to declared policy rows and newly appended inputs."""
     for parameter in model.parameters():
         if (
             parameter is not model.policy_head.weight
             and parameter is not model.policy_head.bias
+            and not (
+                trainable_feature_indices is not None
+                and parameter is model.input_layer.weight
+            )
         ):
             parameter.grad = None
+    frozen_rows = torch.ones(
+        model.config.action_count,
+        dtype=torch.bool,
+        device=model.policy_head.weight.device,
+    )
+    frozen_rows[list(action_indices)] = False
     if model.policy_head.weight.grad is not None:
-        model.policy_head.weight.grad[:action_start].zero_()
+        model.policy_head.weight.grad[frozen_rows] = 0
     if model.policy_head.bias.grad is not None:
-        model.policy_head.bias.grad[:action_start].zero_()
+        model.policy_head.bias.grad[frozen_rows] = 0
+    frozen_feature_columns: Tensor | None = None
+    if trainable_feature_indices is not None:
+        frozen_feature_columns = torch.ones(
+            model.input_layer.weight.shape[1],
+            dtype=torch.bool,
+            device=model.input_layer.weight.device,
+        )
+        frozen_feature_columns[list(trainable_feature_indices)] = False
+        if model.input_layer.weight.grad is not None:
+            model.input_layer.weight.grad[:, frozen_feature_columns] = 0
+    return frozen_rows, frozen_feature_columns
 
 
 def _seed_everything(seed: int) -> None:

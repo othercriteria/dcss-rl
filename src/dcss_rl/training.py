@@ -67,7 +67,7 @@ class TrainingReport:
 
 
 @dataclass(frozen=True, slots=True)
-class _EpisodeArrays:
+class ImitationEpisode:
     features: tuple[FeatureVector, ...]
     masks: tuple[ActionMaskVector, ...]
     actions: tuple[int, ...]
@@ -90,7 +90,7 @@ def train_imitation(
         ScriptedMibePolicy() if config.relabel_with_scripted else None
     )
     episodes = tuple(
-        _load_episode(path, discount=config.discount, teacher=teacher)
+        load_imitation_episode(path, discount=config.discount, teacher=teacher)
         for path in trajectories
     )
     features = np.stack([item for episode in episodes for item in episode.features])
@@ -173,9 +173,9 @@ def train_imitation(
     )
 
 
-def _load_episode(
+def load_imitation_episode(
     path: Path, *, discount: float, teacher: Policy | None = None
-) -> _EpisodeArrays:
+) -> ImitationEpisode:
     lines = Path(path).read_text().splitlines()
     if len(lines) < 2:
         raise ValueError(f"trajectory has no transitions: {path}")
@@ -219,7 +219,7 @@ def _load_episode(
         deltas.append(next_features - current_features)
         rewards.append(float(reward))
         observation = next_observation
-    return _EpisodeArrays(
+    return ImitationEpisode(
         tuple(features),
         tuple(masks),
         tuple(actions),

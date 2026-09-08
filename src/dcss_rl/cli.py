@@ -26,6 +26,7 @@ from dcss_rl.units import (
     FrameLimit,
     GameSeed,
     InferenceBatchSize,
+    Keycode,
     LearningRate,
     LossWeight,
     Probability,
@@ -105,6 +106,20 @@ def main() -> None:
     ppo.add_argument("--rollout-length", type=int, default=128)
     ppo.add_argument("--action-history-length", type=int)
     ppo.add_argument("--new-action-warmup-updates", type=int, default=0)
+    ppo.add_argument(
+        "--imitation-trajectory-root",
+        action="append",
+        type=Path,
+        default=None,
+        help="recursively preload and relabel trajectory.jsonl files for DAgger replay",
+    )
+    ppo.add_argument(
+        "--new-action-warmup-menu-key",
+        action="append",
+        type=_menu_keycode,
+        default=None,
+        help="menu key whose policy row joins appended-action warmup",
+    )
     ppo.add_argument("--workers", type=int, default=5)
     ppo.add_argument("--inference-batch-size", type=int, default=64)
     ppo.add_argument("--inference-batch-wait-seconds", type=float, default=0.001)
@@ -255,6 +270,14 @@ def main() -> None:
                 new_action_warmup_updates=UpdateCount(
                     arguments.new_action_warmup_updates
                 ),
+                new_action_warmup_menu_keycodes=tuple(
+                    arguments.new_action_warmup_menu_key or ()
+                ),
+                imitation_trajectories=tuple(
+                    trajectory
+                    for root in (arguments.imitation_trajectory_root or ())
+                    for trajectory in sorted(root.rglob("trajectory.jsonl"))
+                ),
                 workers=WorkerCount(arguments.workers),
                 inference_batch_size=InferenceBatchSize(arguments.inference_batch_size),
                 inference_batch_wait=Seconds(arguments.inference_batch_wait_seconds),
@@ -388,6 +411,12 @@ def _evaluate(
         f"throughput: {summary.decision_rate:.2f} decisions/s "
         f"over {summary.wall_seconds:.2f}s"
     )
+
+
+def _menu_keycode(value: str) -> Keycode:
+    if len(value) != 1:
+        raise argparse.ArgumentTypeError("menu key must be exactly one character")
+    return Keycode(ord(value))
 
 
 def _unreachable(value: object) -> NoReturn:

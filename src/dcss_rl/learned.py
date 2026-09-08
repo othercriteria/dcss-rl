@@ -68,6 +68,8 @@ class PpoCheckpointMetadata:
     mean_episode_return: float
     action_history_length: int = 0
     new_action_warmup_updates: int = 0
+    new_action_warmup_menu_keycodes: tuple[int, ...] = ()
+    imitation_trajectories: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +99,14 @@ class SemanticActorCritic(nn.Module):
         self.echo_head = nn.Linear(
             config.hidden_size, feature_count(config.feature_spec_version)
         )
+
+    @property
+    def input_layer(self) -> nn.Linear:
+        """Return the typed semantic/history projection at the model boundary."""
+        layer = self.encoder[0]
+        if not isinstance(layer, nn.Linear):
+            raise TypeError("actor-critic encoder must begin with a linear layer")
+        return layer
 
     def forward(
         self, features: Tensor, action_history: Tensor | None = None
@@ -139,6 +149,7 @@ class LearnedPolicy:
             ),
         )
         self.checkpoint_action_count = config.action_count
+        self.checkpoint_feature_spec_version = config.feature_spec_version
         self.model = SemanticActorCritic(config).to(device)
         self.model.load_state_dict(payload["model_state"])
         self.model = align_action_count(self.model, int(ACTION_COUNT))
@@ -253,6 +264,47 @@ def add_action_history(
         else:
             new_state[name] = value
     expanded.load_state_dict(new_state)
+    return expanded
+
+
+def align_feature_spec(
+    model: SemanticActorCritic, feature_spec_version: int
+) -> SemanticActorCritic:
+    """Append semantic inputs while preserving the checkpoint's exact policy."""
+    if model.config.feature_spec_version == feature_spec_version:
+        return model
+    old_semantic_width = feature_count(model.config.feature_spec_version)
+    new_semantic_width = feature_count(feature_spec_version)
+    if old_semantic_width > new_semantic_width:
+        raise ValueError("cannot shrink a checkpoint feature specification")
+    expanded = SemanticActorCritic(
+        ModelConfig(
+            action_count=model.config.action_count,
+            hidden_size=model.config.hidden_size,
+            feature_spec_version=feature_spec_version,
+            action_history_length=model.config.action_history_length,
+        )
+    ).to(next(model.parameters()).device)
+    old = model.state_dict()
+    new = expanded.state_dict()
+    new["encoder.0.weight"].zero_()
+    new["encoder.0.weight"][:, :old_semantic_width] = old["encoder.0.weight"][
+        :, :old_semantic_width
+    ]
+    old_history_start = old_semantic_width
+    new_history_start = new_semantic_width
+    new["encoder.0.weight"][:, new_history_start:] = old["encoder.0.weight"][
+        :, old_history_start:
+    ]
+    for name, value in old.items():
+        if name == "encoder.0.weight":
+            continue
+        if name in {"echo_head.weight", "echo_head.bias"}:
+            new[name].zero_()
+            new[name][:old_semantic_width] = value
+        else:
+            new[name] = value
+    expanded.load_state_dict(new)
     return expanded
 
 

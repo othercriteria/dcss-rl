@@ -1,9 +1,22 @@
 import numpy as np
 import pytest
+import torch
 
+from dcss_rl.actions import Action
+from dcss_rl.env import ACTION_COUNT, action_to_index
+from dcss_rl.features import feature_count
+from dcss_rl.learned import ModelConfig, SemanticActorCritic, align_feature_spec
+from dcss_rl.ppo import _restrict_warmup_gradients, _warmup_action_indices
 from dcss_rl.returns import generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
-from dcss_rl.units import CaseCount, EpisodeIndex, WorkerCount, WorkerIndex
+from dcss_rl.units import (
+    ActionIndex,
+    CaseCount,
+    EpisodeIndex,
+    Keycode,
+    WorkerCount,
+    WorkerIndex,
+)
 
 
 def test_training_seed_schedule_allocates_disjoint_worker_blocks() -> None:
@@ -47,3 +60,64 @@ def test_gae_bootstraps_time_limit_without_crossing_episode_boundary() -> None:
     # The time-limited episode bootstraps V=7, while the next episode's reward 100
     # cannot leak backward across the reset boundary.
     np.testing.assert_array_equal(returns[:, 0], np.asarray([7.0, 7.0, 160.0]))
+
+
+def test_action_warmup_includes_appended_and_companion_menu_rows() -> None:
+    menu_a = action_to_index(Action.menu_select(Keycode(ord("a"))))
+
+    indices = _warmup_action_indices(270, int(ACTION_COUNT), (Keycode(ord("a")),))
+
+    assert set(indices) == {ActionIndex(270), menu_a}
+
+
+def test_action_warmup_zeros_every_unrelated_gradient() -> None:
+    model = SemanticActorCritic(ModelConfig(action_count=4, hidden_size=2))
+    for parameter in model.parameters():
+        parameter.grad = torch.ones_like(parameter)
+
+    frozen_rows, frozen_features = _restrict_warmup_gradients(
+        model, (ActionIndex(1), ActionIndex(3))
+    )
+
+    assert frozen_rows.tolist() == [True, False, True, False]
+    assert frozen_features is None
+    assert model.policy_head.weight.grad is not None
+    assert model.policy_head.bias.grad is not None
+    assert model.policy_head.weight.grad[:, 0].tolist() == [0.0, 1.0, 0.0, 1.0]
+    assert model.policy_head.bias.grad.tolist() == [0.0, 1.0, 0.0, 1.0]
+    assert model.input_layer.weight.grad is None
+
+
+def test_action_warmup_can_train_only_new_semantic_columns() -> None:
+    model = SemanticActorCritic(ModelConfig(action_count=4, hidden_size=2))
+    for parameter in model.parameters():
+        parameter.grad = torch.ones_like(parameter)
+
+    _, frozen_features = _restrict_warmup_gradients(
+        model,
+        (ActionIndex(3),),
+        trainable_feature_indices=(model.input_layer.weight.shape[1] - 1,),
+    )
+
+    assert frozen_features is not None
+    assert frozen_features[-2:].tolist() == [True, False]
+    assert model.input_layer.weight.grad is not None
+    assert model.input_layer.weight.grad[0, -2:].tolist() == [0.0, 1.0]
+    assert model.input_layer.bias.grad is None
+
+
+def test_feature_migration_preserves_outputs_before_new_inputs_are_trained() -> None:
+    model = SemanticActorCritic(
+        ModelConfig(action_count=4, hidden_size=2, feature_spec_version=3)
+    )
+    old_features = torch.randn(3, feature_count(3))
+    old_outputs = model(old_features)
+
+    migrated = align_feature_spec(model, 4)
+    new_features = torch.cat((old_features, torch.zeros(3, 2)), dim=1)
+    new_outputs = migrated(new_features)
+
+    torch.testing.assert_close(old_outputs[0], new_outputs[0])
+    torch.testing.assert_close(old_outputs[1], new_outputs[1])
+    torch.testing.assert_close(old_outputs[2], new_outputs[2][:, : feature_count(3)])
+    torch.testing.assert_close(new_outputs[2][:, feature_count(3) :], torch.zeros(3, 2))

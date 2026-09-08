@@ -12,13 +12,15 @@ from numpy.typing import NDArray
 from dcss_rl.schema import CellView, ObservationData
 from dcss_rl.units import Coordinate, FeatureCount
 
-FEATURE_SPEC_VERSION = 3
-_LEGACY_FEATURE_SPEC_VERSION = 2
+FEATURE_SPEC_VERSION = 4
+_V2_FEATURE_SPEC_VERSION = 2
+_V3_FEATURE_SPEC_VERSION = 3
 LOCAL_RADIUS = 5
 _SIDE = 2 * LOCAL_RADIUS + 1
 _MAP_CHANNELS = 9
-_LEGACY_SCALAR_FEATURES = 56
-_SCALAR_FEATURES = 64
+_V2_SCALAR_FEATURES = 56
+_V3_SCALAR_FEATURES = 64
+_SCALAR_FEATURES = 66
 FEATURE_COUNT = FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _SCALAR_FEATURES)
 
 type FeatureVector = NDArray[np.float32]
@@ -29,8 +31,10 @@ _WALL_GLYPHS = frozenset({" ", "#", "≈", "♣"})
 
 def feature_count(spec_version: int) -> FeatureCount:
     """Return the fixed width for a supported versioned feature contract."""
-    if spec_version == _LEGACY_FEATURE_SPEC_VERSION:
-        return FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _LEGACY_SCALAR_FEATURES)
+    if spec_version == _V2_FEATURE_SPEC_VERSION:
+        return FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _V2_SCALAR_FEATURES)
+    if spec_version == _V3_FEATURE_SPEC_VERSION:
+        return FeatureCount(_MAP_CHANNELS * _SIDE * _SIDE + _V3_SCALAR_FEATURES)
     if spec_version == FEATURE_SPEC_VERSION:
         return FEATURE_COUNT
     raise ValueError(f"unsupported feature specification {spec_version}")
@@ -131,6 +135,17 @@ def encode_observation(
             float("lethal amount of poison" in messages),
             float("you are on fire" in messages),
             float("nearby" in messages),
+        )
+    if spec_version >= 4:
+        statuses = " ".join(
+            str(value).casefold()
+            for status in player.get("status", [])
+            for value in status.values()
+        )
+        scalar = (
+            *scalar,
+            float("berserk" in statuses),
+            float("exhaust" in statuses),
         )
     result[offset:] = scalar
     return result
