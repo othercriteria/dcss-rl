@@ -10,12 +10,12 @@ The Nix/Python environment and upstream trunk build are working. The current loc
 DCSS checkout was validated at commit `96832895d0253f9d7290d370efe32bf0614679a8`
 (`0.35-a0-999-g96832895d0`) with a WebTiles build.
 
-Canonical evaluation uses `mibe-heldout-v4` and rank v5. The fallback-free
+Canonical evaluation uses `mibe-heldout-v5` and rank v5. The fallback-free
 `continuing-decision-v51` update-2 champion ranks
-`(0 wins, 0 runes, 17,613 depth-weighted discovered cells, 19 levels,
-max-depth sum 19, XL sum 12, 112.0 reward)`, above v29's 16,853 and the locked
-pre-intervention v23
-floor of `(0, 0, 8,822, 13, 13, 9, 64.0)`. v21 first earned promotion on heldout-v2 at
+`(0 wins, 0 runes, 16,234 depth-weighted discovered cells, 18 levels,
+max-depth sum 18, XL sum 14, 129.0 reward)`. This is the freshly calibrated v5 floor;
+on now-retired v4 it scored 17,613, above v29's 16,853 and the locked pre-intervention
+v23 floor of `(0, 0, 8,822, 13, 13, 9, 64.0)`. v21 first earned promotion on heldout-v2 at
 `(0, 0, 2744, 2091, 12, 7, 31.0)`, exceeding that track's scripted-v3 incumbent and
 the retired depth-11 learned milestone. Heldout-v2 was then retired because its traces
 informed the next feature design; v3 was locked before that design was evaluated.
@@ -336,16 +336,20 @@ not the current bottleneck.
   unlike the controlled 2.4–3.8% samples, asynchronous trajectory divergence makes
   that single end-to-end rate unsuitable as a precise before/after estimate. The host
   gate passes 94 fast tests in 1.73 seconds and three live tests in 8.63 seconds.
+- Before survival work could use v51's heldout-v4 failure pattern, disjoint heldout-v5
+  was locked and calibrated exactly once. v51 scored `(0, 0, 16234, 18, 18, 14,
+  129.0)` with one 500-decision survivor and four deaths; this became the checked-in
+  floor and canonical track, while the v4 champion manifest was archived.
 
 Next:
 
-1. Lock and calibrate the successor held-out suite before using v51's heldout-v4 death
-   pattern to design survival changes, then build toward the retired true D:11 event.
+1. Build from v51 update 2 toward the retired true D:11 event, using heldout-v4 only as
+   historical evidence and preserving untouched heldout-v5 for promotion.
 2. Run matched ECHO-off/on continuation from the promoted decision-cost objective and
    characterize whether broader seeds, longer horizons, or recurrent policy state best
    improve survival without restoring rest/movement cycles.
 3. Revisit anchored Berserk acquisition in the stronger objective context; then extend
-   the curriculum toward branch and rune acquisition while keeping heldout-v4 locked.
+   the curriculum toward branch and rune acquisition while keeping heldout-v5 locked.
 
 ## Verified commands
 

@@ -391,3 +391,9 @@ this journal exists to keep research velocity and direction visible.
   run collected 6,144 decisions at 149.45 decisions/s. Because its asynchronous policy
   path diverged from prior runs, retain the controlled samples as the comparative
   evidence and treat the end-to-end result only as a regression check.
+- **2026-09-08 10:17 EDT — heldout-v5 firewall.** Detailed v51 outcomes made v4
+  historical evidence before survival-objective design began. A disjoint five-seed v5
+  suite was therefore locked and calibrated exactly once with the promoted checkpoint:
+  rank `(0, 0, 16234, 18, 18, 14, 129.0)`, four deaths, and one 500-decision survivor.
+  Decision: install that result as the v5 floor/canonical champion, archive v4, and do
+  not inspect v5 again until a candidate passes diagnostic selection.

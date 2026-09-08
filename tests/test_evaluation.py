@@ -66,6 +66,7 @@ def test_broad_training_suite_is_unique_and_disjoint_from_evaluation() -> None:
     heldout = load_suite(Path("configs/heldout-v2.json"))
     next_heldout = load_suite(Path("configs/heldout-v3.json"))
     future_heldout = load_suite(Path("configs/heldout-v4.json"))
+    successor_heldout = load_suite(Path("configs/heldout-v5.json"))
     training_seeds = {case.seed for case in training.cases}
     broader_training_seeds = {case.seed for case in broader_training.cases}
     evaluation_seeds = {
@@ -75,6 +76,7 @@ def test_broad_training_suite_is_unique_and_disjoint_from_evaluation() -> None:
             *heldout.cases,
             *next_heldout.cases,
             *future_heldout.cases,
+            *successor_heldout.cases,
         )
     }
 

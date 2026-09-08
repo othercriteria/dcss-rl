@@ -1,0 +1,11 @@
+{
+  "suite_id": "mibe-heldout-v5",
+  "step_limit": 500,
+  "cases": [
+    {"case_id": "heldout-v5-57017", "seed": 57017},
+    {"case_id": "heldout-v5-57037", "seed": 57037},
+    {"case_id": "heldout-v5-57059", "seed": 57059},
+    {"case_id": "heldout-v5-57077", "seed": 57077},
+    {"case_id": "heldout-v5-57097", "seed": 57097}
+  ]
+}

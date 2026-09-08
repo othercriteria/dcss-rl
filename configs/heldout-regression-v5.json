@@ -1,0 +1,5 @@
+{
+  "suite_id": "mibe-heldout-v5",
+  "baseline_policy_id": "continuing-decision-v51",
+  "minimum_rank": [0, 0, 16234, 18, 18, 14, 129.0]
+}
