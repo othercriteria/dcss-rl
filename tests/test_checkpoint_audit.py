@@ -20,6 +20,8 @@ def _checkpoint(path: Path, *, change: str = "none") -> None:
             model.policy_head.bias[ability] += 0.1
         elif change == "hidden":
             model.input_layer.weight[0, 0] += 0.1
+        elif change == "value":
+            model.value_head.weight[0, 0] += 0.1
         elif change == "cancel":
             model.policy_head.weight[action_to_index(Action(ActionKind.CANCEL)), 0] += (
                 0.1
@@ -46,7 +48,8 @@ def _checkpoint(path: Path, *, change: str = "none") -> None:
 
 
 @pytest.mark.parametrize(
-    "change,passes", [("ability", True), ("hidden", False), ("cancel", False)]
+    "change,passes",
+    [("ability", True), ("hidden", False), ("cancel", False), ("value", False)],
 )
 def test_ownership_allows_only_declared_policy_rows(
     tmp_path: Path,
@@ -68,6 +71,21 @@ def test_ownership_allows_only_declared_policy_rows(
     informative = audit_checkpoint(current, baseline)
     assert informative.comparison is not None
     assert informative.comparison.ownership_passed is None
+
+
+@pytest.mark.parametrize("change", ["value", "hidden", "cancel"])
+def test_value_head_permission_does_not_allow_encoder_or_policy_changes(
+    tmp_path: Path, change: str
+) -> None:
+    baseline, current = tmp_path / "baseline.pt", tmp_path / "current.pt"
+    _checkpoint(baseline)
+    _checkpoint(current, change=change)
+    report = audit_checkpoint(current, baseline, allow_value_head=True)
+    assert report.comparison is not None
+    assert report.comparison.allowed_value_head
+    assert report.comparison.ownership_passed is (change == "value")
+    with pytest.raises(ValueError, match="requires --reference"):
+        audit_checkpoint(current, allow_value_head=True)
 
 
 def test_shapes_and_configuration_are_not_silently_migrated(tmp_path: Path) -> None:

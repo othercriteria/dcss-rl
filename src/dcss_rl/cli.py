@@ -133,6 +133,11 @@ def main() -> None:
     ppo.add_argument("--action-history-length", type=int)
     ppo.add_argument("--new-action-warmup-updates", type=int, default=0)
     ppo.add_argument(
+        "--warmup-train-value",
+        action="store_true",
+        help="also train the value head during selective policy-row warmup",
+    )
+    ppo.add_argument(
         "--imitation-cache-directory",
         type=Path,
         default=Path(".cache/imitation-replay"),
@@ -367,6 +372,7 @@ def main() -> None:
                     arguments.new_action_warmup_menu_key or ()
                 ),
                 warmup_action_kinds=tuple(arguments.warmup_action_kind or ()),
+                warmup_train_value=arguments.warmup_train_value,
                 imitation_trajectories=tuple(
                     trajectory
                     for root in (arguments.imitation_trajectory_root or ())

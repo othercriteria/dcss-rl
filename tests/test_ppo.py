@@ -142,8 +142,12 @@ def test_worker_run_root_does_not_include_unbounded_case_label() -> None:
     assert root == Path("/tmp/run/worker-47/episode-123-attempt-2")
 
 
-def test_checkpoint_metadata_records_ui_budget_and_cumulative_overflows() -> None:
+@pytest.mark.parametrize("train_value", [False, True])
+def test_checkpoint_metadata_records_ui_budget_and_cumulative_overflows(
+    train_value: bool,
+) -> None:
     config = PpoConfig(
+        warmup_train_value=train_value,
         ui_interaction_budget=UiInteractionBudgetConfig(
             capacity=UiInteractionTokenCapacity(3.0),
             refill_per_turn=UiInteractionRefillPerTurn(0.5),
@@ -164,6 +168,7 @@ def test_checkpoint_metadata_records_ui_budget_and_cumulative_overflows() -> Non
     assert metadata.ui_interaction_refill_per_turn == 0.5
     assert metadata.ui_interaction_cost == 0.125
     assert metadata.ui_interaction_overflows == 7
+    assert metadata.warmup_train_value is train_value
 
 
 def test_inference_requests_are_padded_to_reproducible_fixed_shape() -> None:
@@ -327,6 +332,47 @@ def test_action_warmup_zeros_every_unrelated_gradient() -> None:
     assert model.policy_head.weight.grad[:, 0].tolist() == [0.0, 1.0, 0.0, 1.0]
     assert model.policy_head.bias.grad.tolist() == [0.0, 1.0, 0.0, 1.0]
     assert model.input_layer.weight.grad is None
+    assert model.value_head.weight.grad is None
+    assert model.value_head.bias.grad is None
+
+
+@pytest.mark.parametrize("train_value", [False, True])
+def test_selective_value_learning_preserves_every_unowned_parameter(
+    train_value: bool,
+) -> None:
+    model = SemanticActorCritic(ModelConfig(action_count=4, hidden_size=2))
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.fill_(0.1)
+    before = {
+        name: value.detach().clone() for name, value in model.state_dict().items()
+    }
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.1)
+    features = torch.full((2, model.input_layer.weight.shape[1]), 0.01)
+    logits, values, _ = model(features)
+    loss = logits[:, 1].mean() + (values - 3).square().mean()
+    loss.backward()
+    frozen_rows, frozen_features = _restrict_warmup_gradients(
+        model, (ActionIndex(1),), train_value=train_value
+    )
+    optimizer.step()
+    _restore_warmup_parameters(
+        model,
+        frozen_rows=frozen_rows,
+        frozen_policy_weight=before["policy_head.weight"],
+        frozen_policy_bias=before["policy_head.bias"],
+        frozen_feature_columns=frozen_features,
+        frozen_encoder_weight=None,
+    )
+    for name, value in model.state_dict().items():
+        if name.startswith("policy_head."):
+            assert torch.equal(value[frozen_rows], before[name][frozen_rows])
+            assert not torch.equal(value[1], before[name][1])
+        elif name.startswith("value_head.") and train_value:
+            assert not torch.equal(value, before[name])
+        else:
+            assert torch.equal(value, before[name]), name
+    assert PpoConfig().warmup_train_value is False
 
 
 def test_action_warmup_can_train_only_new_semantic_columns() -> None:

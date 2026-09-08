@@ -65,6 +65,7 @@ class TensorComparison:
     incompatibilities: tuple[str, ...]
     allowed_policy_rows: tuple[ActionIndex, ...] | None
     ownership_passed: bool | None
+    allowed_value_head: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,6 +199,8 @@ def compare_checkpoints(
     current: CheckpointContents,
     reference: CheckpointContents,
     allowed_rows: tuple[ActionIndex, ...] | None = None,
+    *,
+    allow_value_head: bool = False,
 ) -> TensorComparison:
     incompatible: list[str] = []
     if current.config != reference.config:
@@ -231,7 +234,9 @@ def compare_checkpoints(
         if allowed_rows is None
         else (
             not incompatible
-            and not changed_non_policy
+            and set(changed_non_policy).issubset(
+                {"value_head.weight", "value_head.bias"} if allow_value_head else set()
+            )
             and changed_rows.issubset(allowed_rows)
         )
     )
@@ -243,6 +248,7 @@ def compare_checkpoints(
         tuple(incompatible),
         allowed_rows,
         passed,
+        allow_value_head,
     )
 
 
@@ -251,7 +257,10 @@ def audit_checkpoint(
     reference: Path | None = None,
     *,
     allowed_rows: tuple[ActionIndex, ...] | None = None,
+    allow_value_head: bool = False,
 ) -> CheckpointAudit:
+    if allow_value_head and allowed_rows is None:
+        allowed_rows = ()
     if allowed_rows is not None and reference is None:
         raise ValueError("an allowed-row ownership contract requires --reference")
     current = load_checkpoint_contents(checkpoint)
@@ -262,7 +271,9 @@ def audit_checkpoint(
         current.config,
         current.coverage,
         baseline.sha256 if baseline is not None else None,
-        compare_checkpoints(current, baseline, allowed_rows)
+        compare_checkpoints(
+            current, baseline, allowed_rows, allow_value_head=allow_value_head
+        )
         if baseline is not None
         else None,
     )
@@ -279,6 +290,7 @@ def main() -> None:
         choices=[kind for kind in ActionKind if kind is not ActionKind.MENU_SELECT],
     )
     parser.add_argument("--allow-menu-key", action="append")
+    parser.add_argument("--allow-value-head", action="store_true")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     allowed: tuple[ActionIndex, ...] | None = None
@@ -300,7 +312,12 @@ def main() -> None:
             )
         )
     try:
-        report = audit_checkpoint(args.checkpoint, args.reference, allowed_rows=allowed)
+        report = audit_checkpoint(
+            args.checkpoint,
+            args.reference,
+            allowed_rows=allowed,
+            allow_value_head=args.allow_value_head,
+        )
     except ValueError as error:
         parser.error(str(error))
     result = json.dumps(asdict(report), indent=2) + "\n"

@@ -154,6 +154,7 @@ class PpoConfig:
     new_action_warmup_updates: UpdateCount = _ZERO_UPDATES
     new_action_warmup_menu_keycodes: tuple[Keycode, ...] = ()
     warmup_action_kinds: tuple[ActionKind, ...] = ()
+    warmup_train_value: bool = False
     imitation_trajectories: tuple[Path, ...] = ()
     device: str = "cuda"
 
@@ -852,6 +853,7 @@ def _checkpoint_metadata(
         new_action_warmup_updates=config.new_action_warmup_updates,
         new_action_warmup_menu_keycodes=tuple(config.new_action_warmup_menu_keycodes),
         warmup_action_kinds=tuple(kind.value for kind in config.warmup_action_kinds),
+        warmup_train_value=config.warmup_train_value,
         imitation_trajectories=tuple(map(str, config.imitation_trajectories)),
         return_boundary=config.return_boundary.value,
         decision_cost=config.decision_cost,
@@ -1192,6 +1194,7 @@ def _ppo_update(
                     model,
                     trainable_action_indices,
                     trainable_feature_indices=trainable_feature_indices,
+                    train_value=config.warmup_train_value,
                 )
                 frozen_weight = model.policy_head.weight.detach().clone()
                 frozen_bias = model.policy_head.bias.detach().clone()
@@ -1248,12 +1251,20 @@ def _restrict_warmup_gradients(
     action_indices: tuple[ActionIndex, ...],
     *,
     trainable_feature_indices: tuple[int, ...] | None = None,
+    train_value: bool = False,
 ) -> tuple[Tensor, Tensor | None]:
-    """Restrict warmup to declared policy rows and newly appended inputs."""
+    """Restrict warmup ownership, optionally permitting the separate value head."""
     for parameter in model.parameters():
         if (
             parameter is not model.policy_head.weight
             and parameter is not model.policy_head.bias
+            and not (
+                train_value
+                and (
+                    parameter is model.value_head.weight
+                    or parameter is model.value_head.bias
+                )
+            )
             and not (
                 trainable_feature_indices is not None
                 and parameter is model.input_layer.weight

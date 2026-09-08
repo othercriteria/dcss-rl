@@ -624,3 +624,22 @@ this journal exists to keep research velocity and direction visible.
   and verification reports under `artifacts/p/static-cache/`. Decision: retain
   explicit opt-in caching and remeasure representative rollout scaling before
   changing the worker default; no player saves or shared writable caches are reused.
+- **2026-09-08 15:16 EDT — predeclared matched UI-return pilot.** Start both arms
+  from immutable v65 update 2 migrated explicitly to feature6 as
+  `checkpoints/ui-cost-v67-start.pt`; evaluate this zero-update diagnostic control
+  separately from terrain-v66. Train only the abilities row and value head; encoder,
+  conditional menu rows, and ECHO head remain exact. The new critic opt-in defaults
+  off and has actual optimizer preservation tests. Each arm uses two 48×128 updates,
+  seed1, online-train-v3, four epochs/update, learning rate1e-4, clipped PPO1/value0.5,
+  entropy0.01, imitation0.1 with full-inverse class balancing and the same v19/v20/ac1
+  anchors, ECHO0, continuing-reset returns, and decision cost0.01. Only UI overflow
+  cost differs:0 versus0.1, with capacity2/refill0.25. Both use validated static data
+  caching. Total budget24,576 decisions, no automatic extension.
+  Check exact selective ownership and inspect the two scheduled diagnostic snapshots
+  per arm. Require real activations, no Renounce/state-rejected selections, and lower
+  inapplicable open/cancel incidence per ordinary decision in the cost arm. Broader
+  development is allowed only for a snapshot retaining v66 discovery (42,853) and
+  improving XL or combat survival without replacing activity with UI loops. Otherwise
+  stop; fewer menus alone does not meet the goal. First-update collection should match
+  across arms; subsequent divergence is expected from the different objectives.
+  Heldout-v5 stays untouched. Representative cache timing runs finish before this pair.
