@@ -9,6 +9,7 @@ from typing import NoReturn
 
 from dcss_rl.actions import ActionKind
 from dcss_rl.compatibility import run_compatibility_smoke
+from dcss_rl.costs import UiInteractionBudgetConfig
 from dcss_rl.evaluation import (
     EvaluationProgress,
     activate_champion_track,
@@ -45,6 +46,9 @@ from dcss_rl.units import (
     RolloutLength,
     Seconds,
     ShortCycleCost,
+    UiInteractionCost,
+    UiInteractionRefillPerTurn,
+    UiInteractionTokenCapacity,
     UpdateCount,
     ViewRadius,
     WorkerCount,
@@ -173,6 +177,9 @@ def main() -> None:
     ppo.add_argument("--decision-cost", type=float, default=0.0)
     ppo.add_argument("--short-cycle-cost", type=float, default=0.0)
     ppo.add_argument("--short-cycle-window", type=int, default=8)
+    ppo.add_argument("--ui-interaction-capacity", type=float, default=2.0)
+    ppo.add_argument("--ui-interaction-refill-per-turn", type=float, default=0.25)
+    ppo.add_argument("--ui-interaction-cost", type=float, default=0.0)
     ppo.add_argument("--seed", type=int, default=1)
     ppo.add_argument("--device", default="cuda")
     watch = commands.add_parser("watch-best")
@@ -287,7 +294,12 @@ def main() -> None:
                 f"losses={update.policy_loss:.3f}/{update.value_loss:.3f}/"
                 f"{update.echo_loss:.3f}/{update.imitation_loss:.3f}; "
                 f"teacher_agreement={update.teacher_agreement:.3f}; "
-                f"short_cycles={update.short_cycles}",
+                f"short_cycles={update.short_cycles}; "
+                f"ui_interaction_overflows={update.ui_interaction_overflows}; "
+                f"ui_interaction_budget="
+                f"{update.ui_interaction_budget.capacity:.2f}/"
+                f"{update.ui_interaction_budget.refill_per_turn:.3f}/"
+                f"{update.ui_interaction_budget.overflow_cost:.3f}",
                 flush=True,
             )
 
@@ -344,6 +356,15 @@ def main() -> None:
                 decision_cost=DecisionCost(arguments.decision_cost),
                 short_cycle_cost=ShortCycleCost(arguments.short_cycle_cost),
                 short_cycle_window=DecisionWindow(arguments.short_cycle_window),
+                ui_interaction_budget=UiInteractionBudgetConfig(
+                    capacity=UiInteractionTokenCapacity(
+                        arguments.ui_interaction_capacity
+                    ),
+                    refill_per_turn=UiInteractionRefillPerTurn(
+                        arguments.ui_interaction_refill_per_turn
+                    ),
+                    overflow_cost=UiInteractionCost(arguments.ui_interaction_cost),
+                ),
                 device=arguments.device,
             ),
             policy_id=arguments.policy_id,
@@ -358,7 +379,11 @@ def main() -> None:
             f"value_loss={report.value_loss:.3f}; echo_loss={report.echo_loss:.3f}; "
             f"imitation_loss={report.imitation_loss:.3f}; "
             f"teacher_agreement={report.teacher_agreement:.3f}; "
-            f"short_cycles={report.short_cycles}"
+            f"short_cycles={report.short_cycles}; "
+            f"ui_interaction_overflows={report.ui_interaction_overflows}; "
+            f"ui_interaction_budget={report.ui_interaction_budget.capacity:.2f}/"
+            f"{report.ui_interaction_budget.refill_per_turn:.3f}/"
+            f"{report.ui_interaction_budget.overflow_cost:.3f}"
         )
         return
     if arguments.command == "watch-best":

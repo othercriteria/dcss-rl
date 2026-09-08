@@ -20,8 +20,19 @@ from torch.nn import functional as F
 
 from dcss_rl.actions import Action, ActionKind
 from dcss_rl.checkpointing import update_checkpoint_path
-from dcss_rl.costs import SemanticCycleTracker, training_reward
-from dcss_rl.env import ACTION_COUNT, DcssEnv, RewardShaping, action_to_index
+from dcss_rl.costs import (
+    SemanticCycleTracker,
+    UiInteractionBudget,
+    UiInteractionBudgetConfig,
+    training_reward,
+)
+from dcss_rl.env import (
+    ACTION_COUNT,
+    DcssEnv,
+    RewardShaping,
+    action_to_index,
+    index_to_action,
+)
 from dcss_rl.evaluation import EvaluationSuite
 from dcss_rl.features import FEATURE_SPEC_VERSION, encode_observation, feature_count
 from dcss_rl.history import encode_action_history
@@ -67,6 +78,7 @@ from dcss_rl.units import (
     StartupAttemptIndex,
     StepLimit,
     TerminalOutcome,
+    UiInteractionOverflowCount,
     UpdateCount,
     WorkerCount,
     WorkerIndex,
@@ -101,6 +113,7 @@ _ZERO_SHORT_CYCLE_COST = ShortCycleCost(0.0)
 _DEFAULT_SHORT_CYCLE_WINDOW = DecisionWindow(8)
 _GAME_START_ATTEMPTS = StartupAttemptCount(3)
 _WIN_OUTCOME = TerminalOutcome("won")
+_DEFAULT_UI_INTERACTION_BUDGET = UiInteractionBudgetConfig()
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +145,7 @@ class PpoConfig:
     decision_cost: DecisionCost = _ZERO_DECISION_COST
     short_cycle_cost: ShortCycleCost = _ZERO_SHORT_CYCLE_COST
     short_cycle_window: DecisionWindow = _DEFAULT_SHORT_CYCLE_WINDOW
+    ui_interaction_budget: UiInteractionBudgetConfig = _DEFAULT_UI_INTERACTION_BUDGET
     action_history_length: ActionHistoryLength | None = None
     new_action_warmup_updates: UpdateCount = _ZERO_UPDATES
     new_action_warmup_menu_keycodes: tuple[Keycode, ...] = ()
@@ -197,6 +211,8 @@ class PpoReport:
     imitation_loss: float
     teacher_agreement: Probability
     short_cycles: int
+    ui_interaction_budget: UiInteractionBudgetConfig
+    ui_interaction_overflows: UiInteractionOverflowCount
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,6 +233,8 @@ class PpoUpdateReport:
     imitation_loss: float
     teacher_agreement: Probability
     short_cycles: int
+    ui_interaction_budget: UiInteractionBudgetConfig
+    ui_interaction_overflows: UiInteractionOverflowCount
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +264,7 @@ class _WorkerStep:
     action_history: ActionHistory
     terminal_outcome: TerminalOutcome | None
     short_cycle: bool
+    ui_interaction_overflow: bool = False
 
 
 @dataclass(slots=True)
@@ -264,6 +283,7 @@ class _Worker:
     episode_return: float = 0.0
     action_history: list[ActionIndex] = field(default_factory=list)
     cycle_tracker: SemanticCycleTracker | None = None
+    ui_interaction_budget: UiInteractionBudget | None = None
 
     def ready(self) -> tuple[ObservationData, BoolArray]:
         if self.observation is None:
@@ -294,6 +314,11 @@ class _Worker:
             if self.cycle_tracker is not None
             else False
         )
+        ui_interaction_overflow = (
+            self.ui_interaction_budget.observe(index_to_action(action), observation)
+            if self.ui_interaction_budget is not None
+            else False
+        )
         self.action_history.append(action)
         next_history = tuple(self.action_history)
         if done:
@@ -316,6 +341,7 @@ class _Worker:
             next_history,
             terminal_outcome,
             short_cycle,
+            ui_interaction_overflow,
         )
 
     def close(self) -> None:
@@ -361,6 +387,8 @@ class _Worker:
         self.action_mask = mask
         if self.cycle_tracker is not None:
             self.cycle_tracker.reset(observation)
+        if self.ui_interaction_budget is not None:
+            self.ui_interaction_budget.reset(observation)
 
 
 def _worker_run_root(
@@ -391,6 +419,7 @@ class _Rollout:
     teacher_actions: IntArray
     completed_returns: tuple[float, ...]
     short_cycles: int
+    ui_interaction_overflows: UiInteractionOverflowCount
     inference_batches: InferenceBatchCount
     mean_inference_batch_size: MeanInferenceBatchSize
 
@@ -409,6 +438,7 @@ class _WorkerRollout:
     teacher_actions: IntArray
     completed_returns: tuple[float, ...]
     short_cycles: int
+    ui_interaction_overflows: UiInteractionOverflowCount
 
 
 @dataclass(frozen=True, slots=True)
@@ -600,11 +630,13 @@ def train_ppo(
             ),
             np.random.default_rng(config.seed + index),
             cycle_tracker=SemanticCycleTracker(config.short_cycle_window),
+            ui_interaction_budget=UiInteractionBudget(config.ui_interaction_budget),
         )
         for index in range(config.workers)
     )
     completed_returns: list[float] = []
     short_cycle_count = 0
+    ui_interaction_overflow_count = UiInteractionOverflowCount(0)
     losses = PpoLosses(0.0, 0.0, 0.0, 0.0)
     teacher_agreement = Probability(0.0)
     imitation_replay = list(
@@ -625,6 +657,9 @@ def train_ppo(
                 collection_finished = perf_counter()
                 completed_returns.extend(rollout.completed_returns)
                 short_cycle_count += rollout.short_cycles
+                ui_interaction_overflow_count = UiInteractionOverflowCount(
+                    ui_interaction_overflow_count + rollout.ui_interaction_overflows
+                )
                 imitation_replay.append(_rollout_imitation_replay(rollout))
                 losses = _ppo_update(
                     model,
@@ -666,6 +701,7 @@ def train_ppo(
                     updates=completed_update,
                     mean_episode_return=mean_return,
                     action_history_length=model.config.action_history_length,
+                    ui_interaction_overflows=ui_interaction_overflow_count,
                 )
                 save_checkpoint(
                     output_checkpoint,
@@ -707,6 +743,8 @@ def train_ppo(
                             losses.imitation,
                             teacher_agreement,
                             rollout.short_cycles,
+                            config.ui_interaction_budget,
+                            rollout.ui_interaction_overflows,
                         )
                     )
     finally:
@@ -724,6 +762,8 @@ def train_ppo(
         losses.imitation,
         teacher_agreement,
         short_cycle_count,
+        config.ui_interaction_budget,
+        ui_interaction_overflow_count,
     )
 
 
@@ -733,6 +773,7 @@ def _checkpoint_metadata(
     updates: UpdateCount,
     mean_episode_return: float,
     action_history_length: ActionHistoryLength,
+    ui_interaction_overflows: UiInteractionOverflowCount,
 ) -> PpoCheckpointMetadata:
     return PpoCheckpointMetadata(
         training_method="masked-ppo",
@@ -764,6 +805,10 @@ def _checkpoint_metadata(
         decision_cost=config.decision_cost,
         short_cycle_cost=config.short_cycle_cost,
         short_cycle_window=config.short_cycle_window,
+        ui_interaction_capacity=config.ui_interaction_budget.capacity,
+        ui_interaction_refill_per_turn=(config.ui_interaction_budget.refill_per_turn),
+        ui_interaction_cost=config.ui_interaction_budget.overflow_cost,
+        ui_interaction_overflows=ui_interaction_overflows,
     )
 
 
@@ -855,6 +900,9 @@ def _collect_rollout(
             value for rollout in worker_rollouts for value in rollout.completed_returns
         ),
         sum(rollout.short_cycles for rollout in worker_rollouts),
+        UiInteractionOverflowCount(
+            sum(rollout.ui_interaction_overflows for rollout in worker_rollouts)
+        ),
         inference_batches,
         mean_inference_batch_size,
     )
@@ -880,6 +928,7 @@ def _collect_worker_rollout(
     teacher_actions: list[int] = []
     completed_returns: list[float] = []
     short_cycles = 0
+    ui_interaction_overflows = UiInteractionOverflowCount(0)
     ready_feature: FloatArray | None = None
     for _ in range(config.rollout_length):
         observation, mask = worker.ready()
@@ -939,9 +988,14 @@ def _collect_worker_rollout(
                 decision_cost=config.decision_cost,
                 short_cycle_cost=config.short_cycle_cost,
                 repeated_state=step.short_cycle,
+                ui_interaction_cost=config.ui_interaction_budget.overflow_cost,
+                ui_interaction_overflow=step.ui_interaction_overflow,
             )
         )
         short_cycles += int(step.short_cycle)
+        ui_interaction_overflows = UiInteractionOverflowCount(
+            ui_interaction_overflows + int(step.ui_interaction_overflow)
+        )
         dones.append(step.terminated or step.truncated)
         boundary_bootstraps.append(boundary_bootstrap)
         next_deltas.append(next_feature - feature)
@@ -988,6 +1042,7 @@ def _collect_worker_rollout(
         np.asarray(teacher_actions, dtype=np.int64),
         tuple(completed_returns),
         short_cycles,
+        ui_interaction_overflows,
     )
 
 

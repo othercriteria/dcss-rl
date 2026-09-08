@@ -7,12 +7,14 @@ import pytest
 import torch
 
 from dcss_rl.actions import Action, ActionKind
+from dcss_rl.costs import UiInteractionBudgetConfig
 from dcss_rl.env import ACTION_COUNT, action_to_index
 from dcss_rl.features import feature_count
 from dcss_rl.learned import ModelConfig, SemanticActorCritic, align_feature_spec
 from dcss_rl.policy import ScriptedMibePolicy
 from dcss_rl.ppo import (
     PpoConfig,
+    _checkpoint_metadata,
     _collect_worker_rollout,
     _fixed_inference_inputs,
     _InferenceBatcher,
@@ -29,6 +31,7 @@ from dcss_rl.returns import ReturnBoundaryMode, generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.schema import ObservationData
 from dcss_rl.units import (
+    ActionHistoryLength,
     ActionIndex,
     CaseCount,
     EpisodeIndex,
@@ -37,6 +40,11 @@ from dcss_rl.units import (
     RolloutLength,
     StartupAttemptIndex,
     TerminalOutcome,
+    UiInteractionCost,
+    UiInteractionOverflowCount,
+    UiInteractionRefillPerTurn,
+    UiInteractionTokenCapacity,
+    UpdateCount,
     WorkerCount,
     WorkerIndex,
 )
@@ -131,6 +139,30 @@ def test_worker_run_root_does_not_include_unbounded_case_label() -> None:
     )
 
     assert root == Path("/tmp/run/worker-47/episode-123-attempt-2")
+
+
+def test_checkpoint_metadata_records_ui_budget_and_cumulative_overflows() -> None:
+    config = PpoConfig(
+        ui_interaction_budget=UiInteractionBudgetConfig(
+            capacity=UiInteractionTokenCapacity(3.0),
+            refill_per_turn=UiInteractionRefillPerTurn(0.5),
+            overflow_cost=UiInteractionCost(0.125),
+        ),
+        device="cpu",
+    )
+
+    metadata = _checkpoint_metadata(
+        config,
+        updates=UpdateCount(2),
+        mean_episode_return=4.0,
+        action_history_length=ActionHistoryLength(1),
+        ui_interaction_overflows=UiInteractionOverflowCount(7),
+    )
+
+    assert metadata.ui_interaction_capacity == 3.0
+    assert metadata.ui_interaction_refill_per_turn == 0.5
+    assert metadata.ui_interaction_cost == 0.125
+    assert metadata.ui_interaction_overflows == 7
 
 
 def test_inference_requests_are_padded_to_reproducible_fixed_shape() -> None:

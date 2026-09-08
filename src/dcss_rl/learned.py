@@ -81,6 +81,10 @@ class PpoCheckpointMetadata:
     decision_cost: float = 0.0
     short_cycle_cost: float = 0.0
     short_cycle_window: int = 8
+    ui_interaction_capacity: float = 2.0
+    ui_interaction_refill_per_turn: float = 0.25
+    ui_interaction_cost: float = 0.0
+    ui_interaction_overflows: int = 0
 
 
 @dataclass(frozen=True, slots=True)

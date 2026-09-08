@@ -1,4 +1,4 @@
-"""Training-only costs for decisions and short semantic state cycles."""
+"""Training-only costs for decisions, state cycles, and UI interaction bursts."""
 
 from __future__ import annotations
 
@@ -7,13 +7,85 @@ import json
 from collections import deque
 from dataclasses import dataclass, field
 
+from dcss_rl.actions import Action, ActionKind
 from dcss_rl.schema import ObservationData, PlayerView
 from dcss_rl.units import (
     CycleStateDigest,
     DecisionCost,
     DecisionWindow,
+    GameTurn,
     ShortCycleCost,
+    UiInteractionCost,
+    UiInteractionRefillPerTurn,
+    UiInteractionTokenCapacity,
 )
+
+_DEFAULT_UI_INTERACTION_CAPACITY = UiInteractionTokenCapacity(2.0)
+_DEFAULT_UI_INTERACTION_REFILL = UiInteractionRefillPerTurn(0.25)
+_ZERO_UI_INTERACTION_COST = UiInteractionCost(0.0)
+
+# Keep the policy explicit and extensible: future player-visible inspection commands
+# can join this set without changing token-bucket accounting or action masks.
+UI_INTERACTION_ACTION_KINDS = frozenset(
+    {ActionKind.ABILITIES, ActionKind.MENU_SELECT, ActionKind.CANCEL}
+)
+
+
+@dataclass(frozen=True, slots=True)
+class UiInteractionBudgetConfig:
+    """A small free UI burst, replenished by actual player game turns."""
+
+    capacity: UiInteractionTokenCapacity = _DEFAULT_UI_INTERACTION_CAPACITY
+    refill_per_turn: UiInteractionRefillPerTurn = _DEFAULT_UI_INTERACTION_REFILL
+    overflow_cost: UiInteractionCost = _ZERO_UI_INTERACTION_COST
+
+    def __post_init__(self) -> None:
+        if self.capacity < 0:
+            raise ValueError("UI-interaction capacity cannot be negative")
+        if self.refill_per_turn < 0:
+            raise ValueError("UI-interaction refill cannot be negative")
+        if self.overflow_cost < 0:
+            raise ValueError("UI-interaction overflow cost cannot be negative")
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether overflow can affect the training objective."""
+        return self.overflow_cost > 0
+
+
+@dataclass(slots=True)
+class UiInteractionBudget:
+    """Track free UI interactions independently for one worker episode."""
+
+    config: UiInteractionBudgetConfig
+    _tokens: float = field(init=False, default=0.0)
+    _last_turn: GameTurn = field(init=False, default=GameTurn(0))
+
+    def reset(self, observation: ObservationData) -> None:
+        self._tokens = float(self.config.capacity)
+        self._last_turn = _player_turn(observation)
+
+    def observe(self, action: Action, observation: ObservationData) -> bool:
+        """Consume a token and report a cost-bearing zero-turn overflow."""
+        current_turn = _player_turn(observation)
+        turn_advance = max(0, int(current_turn - self._last_turn))
+        self._last_turn = current_turn
+        self._tokens = min(
+            float(self.config.capacity),
+            self._tokens + turn_advance * float(self.config.refill_per_turn),
+        )
+        if not self.config.enabled or action.kind not in UI_INTERACTION_ACTION_KINDS:
+            return False
+
+        has_free_token = self._tokens >= 1.0
+        if has_free_token:
+            self._tokens -= 1.0
+        return turn_advance == 0 and not has_free_token
+
+
+def _player_turn(observation: ObservationData) -> GameTurn:
+    turn = observation["player"].get("turn", 0)
+    return GameTurn(turn if isinstance(turn, int) else 0)
 
 
 def training_reward(
@@ -22,12 +94,15 @@ def training_reward(
     decision_cost: DecisionCost,
     short_cycle_cost: ShortCycleCost,
     repeated_state: bool,
+    ui_interaction_cost: UiInteractionCost,
+    ui_interaction_overflow: bool,
 ) -> float:
     """Apply training-only costs without changing reported environment returns."""
     return float(
         environment_reward
         - decision_cost
         - (short_cycle_cost if repeated_state else 0.0)
+        - (ui_interaction_cost if ui_interaction_overflow else 0.0)
     )
 
 
