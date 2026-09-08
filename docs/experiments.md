@@ -270,3 +270,23 @@ this journal exists to keep research velocity and direction visible.
   and three passive survivors yielded rank `(0, 0, 1193, 1692, 15, 14, 100.0)`, below
   v21's depth-area lead. Decision: reject without heldout-v3 access; the result further
   demonstrates why depth-area and useful risky exploration need separating.
+- **2026-09-07 22:14–22:23 EDT — rank v5 recalibration and v23 promotion.** Rank v5
+  replaces horizon-sensitive depth area and policy steps with depth-weighted newly
+  discovered cells and distinct branch levels. Repeated actions and already-seen
+  backtracking add nothing; useful exploration after retreat still counts. Unchanged
+  v21 calibrated at 11,483 diagnostic and 15,677 heldout. Under the metric selected
+  without heldout-v3 feedback, v23 scored 17,121 diagnostic and then 16,202 on its one
+  heldout attempt, clearing the locked floor and becoming canonical despite three
+  deaths. Decision: promote; optimize the demonstrated exploration while improving
+  survival as a separate frontier rather than conflating it with unused horizon.
+- **2026-09-07 22:25–22:38 EDT — matched PPO/ECHO ablation.** From identical v23
+  initialization, both arms consumed 49,152 autonomous decisions over the same
+  64-seed/1,000-step curriculum with policy/value/entropy/imitation weights
+  `1/.5/.01/.1`; only ECHO differed (`0` versus `.1`). ECHO-on reduced its auxiliary
+  loss to .026 but diagnostic rank was 14,413 discovered cells, below v23. ECHO-off
+  reached 36,377 cells across 21 levels and earned heldout access, but generalized to
+  only 13,371 cells across 10 levels and failed the 15,677 floor. Its diagnostic action
+  mix was movement-heavy; heldout shifted to 578 explores and 549 opposing NW/SE
+  moves. ECHO-on instead selected wait 443 times diagnostically. Decision: neither
+  promotes; ECHO is not helping at this weight/budget, and one-step action/history
+  memory is a better-targeted next intervention than another scalar sweep.

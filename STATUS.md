@@ -10,17 +10,18 @@ The Nix/Python environment and upstream trunk build are working. The current loc
 DCSS checkout was validated at commit `96832895d0253f9d7290d370efe32bf0614679a8`
 (`0.35-a0-999-g96832895d0`) with a WebTiles build.
 
-Canonical evaluation now uses `mibe-heldout-v3`. The fallback-free
-`scripted-v6-dagger-v21` checkpoint calibrated the untouched suite at
-`(0, 0, 2416 depth-progress, 2120 decisions, max-depth sum 13, XL sum 12,
-84.0 reward)`. It first earned promotion on heldout-v2 at
+Canonical evaluation uses `mibe-heldout-v3` and rank v5. The fallback-free
+`semantic-v3-dagger-v23` champion ranks
+`(0 wins, 0 runes, 16,202 depth-weighted discovered cells, 12 levels,
+max-depth sum 12, XL sum 10, 71.0 reward)`, above the locked v21 floor of
+`(0, 0, 15,677, 13, 13, 12, 94.0)`. v21 first earned promotion on heldout-v2 at
 `(0, 0, 2744, 2091, 12, 7, 31.0)`, exceeding that track's scripted-v3 incumbent and
 the retired depth-11 learned milestone. Heldout-v2 was then retired because its traces
 informed the next feature design; v3 was locked before that design was evaluated.
 
-Development evaluation now uses `mibe-diagnostic-v2`, extending the same known five
-seeds from 200 to 500 decisions. Scripted-v3 calibrates rank
-`(0, 0, 2380, 1194, 20, 16, 115.0)` on this track.
+Development evaluation uses `mibe-diagnostic-v2`, extending the same known five seeds
+from 200 to 500 decisions. Under rank v5, v21 scores 11,483 depth-weighted discovered
+cells and v23 scores 17,121.
 
 Completed:
 

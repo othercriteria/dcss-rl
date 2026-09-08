@@ -141,6 +141,12 @@ promotion to the held-out champion track. Evaluation is non-promoting unless an
 explicit `--champion` manifest is supplied, preventing a diagnostic suite from being
 accidentally compared with the held-out track.
 
+Rank v5 orders wins, runes, depth-weighted newly discovered cells, levels visited,
+maximum depth, maximum XL, and reward. Repeated actions and already-seen backtracking
+cannot inflate it, while exploration after a useful retreat still receives credit.
+Deaths retain progress earned before reset instead of losing an artificial remainder
+of the evaluation horizon.
+
 The current diagnostic track reuses five explicitly known development seeds for 500
 decisions, long enough to distinguish sustained navigation and survival from an early
 descent. It is not a headline or promotion suite.
