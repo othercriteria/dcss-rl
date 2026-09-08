@@ -449,11 +449,26 @@ Next:
 - Pending integration now passes 414 unit tests and three live trunk tests, plus
   lint, formatting, and typing. Structured more acknowledgments (including Escape)
   wait for a fresh input boundary after busy mode, closing the captured shaft race;
-  ordinary raw keys retain their existing behavior. Stable-release and matched
-  rollout verification of this extension remain pending. The residual probe now
+  ordinary raw keys retain their existing behavior. Both selected stable-release
+  reset/WAIT/replay smokes pass; a matched rollout verification of this extension
+  remains pending. The residual probe now
   offers the predeclared worst-margin objective and `poe audit-residual-gates` binds
   confidence evidence to saved checkpoint metadata and exact parameter ownership.
-  V73's fixed 256-step experiment is preregistered; no outcome yet.
+  V73's fixed 256-step experiment completes in 21.789 seconds. All validation gates
+  pass and all nonability outputs remain exact, but training missing-choice
+  Renounce probability reaches 1.0283e-5, above the locked 1e-5 cap. No snapshot
+  qualifies; stop without extra steps or live candidate games. Solver convergence
+  on the remaining finite training constraint is the next offline question.
+  Independent inspection reduces 1,783 training competitor inequalities to nine
+  distinct directions; a bounded minimum-norm linear program is proposed in
+  `docs/research-residual73-confidence.md`, not yet implemented or run.
+- Opt-in external static-data identity validation now has a library-only interface
+  with bounded helper concurrency/deadlines, fresh full hashes per request, and
+  separate helper timing. No launcher or PPO caller activates it. Forty-two focused
+  tests cover mutation detection, private copying, invalid replies, and timeout
+  cleanup. No performance claim follows before a bounded measurement; see
+  `docs/research-cache-validation-options.md`. The next readiness control is
+  separately proposed in `docs/research-more-readiness.md` and remains unlaunched.
 
 - User direction: current-policy progress first, bounded local pilots before justified
   hour-scale runs, thin immediate research goals, Poe workflows, and continuing

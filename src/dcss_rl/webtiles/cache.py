@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import NewType, cast
+from typing import NewType, Protocol, cast
 
 from dcss_rl.units import Seconds
 
@@ -43,6 +43,21 @@ class StaticCacheStageTiming:
 
 
 @dataclass(frozen=True, slots=True)
+class ExternalIdentityTiming:
+    """Offloaded work, separate from waiting parent thread CPU.
+
+    Request includes semaphore wait, interpreter startup and IPC. Helper validation
+    excludes startup; helper process CPU includes startup but excludes final exit.
+    """
+
+    queue_wall_seconds: Seconds
+    request_wall_seconds: Seconds
+    validation_wall_seconds: Seconds
+    validation_cpu_seconds: Seconds
+    helper_process_cpu_seconds: Seconds
+
+
+@dataclass(frozen=True, slots=True)
 class StaticCachePreparationTiming:
     """One successful populate call; stage spans exclude setup/rename overhead.
 
@@ -55,6 +70,7 @@ class StaticCachePreparationTiming:
     members: CacheMemberCount
     total: StaticCacheTiming
     stages: tuple[StaticCacheStageTiming, ...]
+    external_identity_validation: ExternalIdentityTiming | None = None
 
 
 @dataclass(slots=True)
@@ -64,6 +80,7 @@ class _PreparationTimer:
     stages: dict[StaticCachePreparationStage, StaticCacheTiming] = field(
         default_factory=dict
     )
+    external_identity_validation: ExternalIdentityTiming | None = None
 
     def finish(self, destination: Path, members: int) -> StaticCachePreparationTiming:
         return StaticCachePreparationTiming(
@@ -77,6 +94,7 @@ class _PreparationTimer:
                 StaticCacheStageTiming(stage, self.stages[stage])
                 for stage in StaticCachePreparationStage
             ),
+            self.external_identity_validation,
         )
 
 
@@ -103,6 +121,18 @@ def _measure(
 class StaticDataIdentity:
     binary: CacheDigest
     data: CacheDigest
+
+
+@dataclass(frozen=True, slots=True)
+class StaticIdentityValidation:
+    identity: StaticDataIdentity
+    external_timing: ExternalIdentityTiming
+
+
+class StaticIdentityValidator(Protocol):
+    def validate(self, binary: Path) -> StaticIdentityValidation:
+        """Compute a fresh full identity for this request; never reuse a result."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,13 +245,28 @@ class StaticDataCache:
         cache.validate(binary=binary)
         return cache
 
-    def validate(self, *, binary: Path) -> None:
-        self._validate(binary=binary, timer=None)
+    def validate(
+        self, *, binary: Path, identity_validator: StaticIdentityValidator | None = None
+    ) -> None:
+        self._validate(binary=binary, timer=None, identity_validator=identity_validator)
 
-    def _validate(self, *, binary: Path, timer: _PreparationTimer | None) -> None:
+    def _validate(
+        self,
+        *,
+        binary: Path,
+        timer: _PreparationTimer | None,
+        identity_validator: StaticIdentityValidator | None = None,
+    ) -> None:
         _validate_members(self.members)
         with _measure(timer, StaticCachePreparationStage.IDENTITY_VALIDATION):
-            if static_data_identity(binary) != self.identity:
+            if identity_validator is None:
+                identity = static_data_identity(binary)
+            else:
+                result = identity_validator.validate(binary)
+                identity = result.identity
+                if timer is not None:
+                    timer.external_identity_validation = result.external_timing
+            if identity != self.identity:
                 raise ValueError("static cache does not match DCSS binary/data")
         with _measure(timer, StaticCachePreparationStage.MEMBER_VERIFICATION):
             for member in self.members:
@@ -235,11 +280,18 @@ class StaticDataCache:
                     raise ValueError(f"corrupt static cache member: {member.name}")
 
     def populate(
-        self, save_directory: Path, *, binary: Path, collect_timing: bool = False
+        self,
+        save_directory: Path,
+        *,
+        binary: Path,
+        collect_timing: bool = False,
+        identity_validator: StaticIdentityValidator | None = None,
     ) -> StaticCachePreparationTiming | None:
         """Copy into new private db/des directories; never overwrite or link files."""
         timer = _PreparationTimer() if collect_timing else None
-        self._validate(binary=binary, timer=timer)
+        self._validate(
+            binary=binary, timer=timer, identity_validator=identity_validator
+        )
         for folder in _SUFFIXES:
             if (save_directory / folder).exists() or (
                 save_directory / folder

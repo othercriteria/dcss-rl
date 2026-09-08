@@ -376,6 +376,15 @@ and model-expansion helpers preserve the version/tensors or reject incompatibili
 Residual-only audits require an explicit allowance and a same-configuration,
 zero-enabled reference; they do not silently treat a version-0 checkpoint as version 1.
 
+The residual probe supports mean cross-entropy and context-balanced worst-example
+squared margin violations, with competitor margins derived from probability caps.
+Both use a fixed training split and frozen base, retaining coverage and objective in
+checkpoint metadata. The residual gate verifies source/start identity, saved hashes,
+metadata agreement, actual tensor ownership, confidence tails, and empirical
+nonability preservation. It does not independently recompute all recorded metrics
+or establish unseen-state safety; successful candidates still need independent
+replay auditing and bounded gameplay evaluation.
+
 PPO's opt-in raw rollout recording uses the existing trajectory writer after successful
 reset and before terminal cleanup. Before each collection, an immutable versioned
 checkpoint is saved under the run's exclusive `collector-checkpoints` directory.
@@ -404,6 +413,15 @@ times out closed. UI stack replacement/closure and text-input closure are tracke
 within the exchange; a progress-bar overlay is not a blocking input request. Ordinary
 and automatic-command paths remain unchanged. Raw exchanges retain the intermediate
 flushes so the boundary decision can be audited.
+
+Structured selection/cancellation of a current `more` prompt (input mode 5) uses a
+UI-continuation boundary. Once that exchange sees mode 0, it applies the same fresh
+input/blocking-UI requirements as stairs: a more acknowledgment can itself release
+shaft generation. Without that busy prefix it retains ordinary quiescence/probing.
+Raw key sends are unchanged; this is structured-action routing, not shaft-text or
+physical-key matching. Adversarial tests delay the fresh input beyond ordinary
+quiescence, split progress and menu closure across flushes, and cover Escape,
+blocking UI, terminal exit, silent probing, and fail-closed timeouts.
 
 Training worker directories use only typed worker, episode, and startup-attempt indices;
 human-controlled suite case labels never contribute to the Unix socket path. Evaluation

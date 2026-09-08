@@ -145,6 +145,11 @@ Audit snapshots against that same-configuration start with `poe checkpoint-audit
 --checkpoint SNAPSHOT --reference NEW_RUN/start.pt --allow-ability-residual`.
 The source policy's ordinary decisions and ability-opening timing are not trained
 by this protocol; confidence and later policy-quality gates still apply.
+Add `--objective worst-margin` to fit worst-example legal-competitor margins instead
+of mean cross-entropy. Run `poe audit-residual-gates --report NEW_RUN/report.json
+--output NEW_RUN/gate.json --require-pass` to check the locked confidence thresholds,
+checkpoint hashes/metadata, and residual-only tensor ownership. A passing offline
+gate is not a live policy-quality or promotion result.
 
 The terminal viewer identifies the resolved suite, policy, checkpoint, manifest, case,
 and recorded outcome before reconstructing either legacy full-snapshot trajectories or

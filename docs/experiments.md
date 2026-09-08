@@ -933,3 +933,17 @@ this journal exists to keep research velocity and direction visible.
   separately bounded diagnostic evaluation, never immediate promotion. Output:
   `artifacts/c/ability-residual-v73`. This is a new bounded hypothesis, not an
   extension of v71; heldout-v5 remains untouched.
+- **2026-09-08 — v73 outcome, source `a87c158`: one tail gate still fails.**
+  The fixed run completes in 21.789 seconds including preparation. At step 256,
+  every training and validation context has perfect accuracy. Applicable target
+  mean/minimum are 0.999556/0.994989 training and 0.999508/0.997036 validation.
+  All validation gates pass; inapplicable Berserk maxima are 0.0001481/0.0004259.
+  The sole remaining failure is training missing-choice Renounce maximum
+  1.028255883e-5 versus the locked 1e-5 cap. All base tensors and 8,388 nonmenu plus
+  four other-menu outputs remain exact. The saved-checkpoint gate chooses no
+  snapshot (`artifacts/c/ability-residual-v73/gate.json`). Stop without more steps,
+  ac1 candidate auditing, or live candidate games. This strongly improves finite
+  context confidence but is neither a gate pass nor autonomous gameplay progress.
+  Investigate a bounded solver for the remaining convex training constraints rather
+  than relaxing the threshold; no next optimizer experiment is authorized by this
+  outcome alone.
