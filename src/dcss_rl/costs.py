@@ -14,9 +14,11 @@ from dcss_rl.units import (
     DecisionCost,
     DecisionWindow,
     GameTurn,
+    GameTurnDelta,
     ShortCycleCost,
     UiInteractionCost,
     UiInteractionRefillPerTurn,
+    UiInteractionTokenBalance,
     UiInteractionTokenCapacity,
 )
 
@@ -58,28 +60,32 @@ class UiInteractionBudget:
     """Track free UI interactions independently for one worker episode."""
 
     config: UiInteractionBudgetConfig
-    _tokens: float = field(init=False, default=0.0)
+    _tokens: UiInteractionTokenBalance = field(
+        init=False, default=UiInteractionTokenBalance(0.0)
+    )
     _last_turn: GameTurn = field(init=False, default=GameTurn(0))
 
     def reset(self, observation: ObservationData) -> None:
-        self._tokens = float(self.config.capacity)
+        self._tokens = UiInteractionTokenBalance(self.config.capacity)
         self._last_turn = _player_turn(observation)
 
     def observe(self, action: Action, observation: ObservationData) -> bool:
         """Consume a token and report a cost-bearing zero-turn overflow."""
         current_turn = _player_turn(observation)
-        turn_advance = max(0, int(current_turn - self._last_turn))
+        turn_advance = GameTurnDelta(max(0, current_turn - self._last_turn))
         self._last_turn = current_turn
-        self._tokens = min(
-            float(self.config.capacity),
-            self._tokens + turn_advance * float(self.config.refill_per_turn),
+        self._tokens = UiInteractionTokenBalance(
+            min(
+                self.config.capacity,
+                self._tokens + turn_advance * self.config.refill_per_turn,
+            )
         )
         if not self.config.enabled or action.kind not in UI_INTERACTION_ACTION_KINDS:
             return False
 
         has_free_token = self._tokens >= 1.0
         if has_free_token:
-            self._tokens -= 1.0
+            self._tokens = UiInteractionTokenBalance(self._tokens - 1.0)
         return turn_advance == 0 and not has_free_token
 
 
