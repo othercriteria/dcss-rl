@@ -250,7 +250,11 @@ class DcssEnv(gym.Env[ObservationData, int]):
         previous_depth = self._max_depth
         previous_xl = self._max_xl
 
-        self.last_batch = self.game.send_key(keycode)
+        self.last_batch = (
+            self.game.send_key(keycode, level_transition=True)
+            if structured_action.kind in {ActionKind.STAIRS_UP, ActionKind.STAIRS_DOWN}
+            else self.game.send_key(keycode)
+        )
         self.last_exchange = (self.last_batch,)
         self.last_keycodes = (ord(keycode) if isinstance(keycode, str) else keycode,)
         self.current = self.reducer.apply(self.last_batch)

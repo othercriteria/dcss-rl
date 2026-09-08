@@ -378,6 +378,19 @@ model tensors (file hashes can legitimately differ with experiment metadata). It
 separates semantic/action/reward/bootstrap agreement from stored raw-message and
 sampling equality; absent sampling evidence does not establish sampling equality.
 
+Level transitions use a distinct explicit-input boundary. The environment selects it
+from `STAIRS_UP`/`STAIRS_DOWN`, not the physical angle-bracket key (which can also page
+a menu). Upstream mode0 is normal mouse mode, not permission for another command:
+leaving the command reader emits mode0+flush before potentially slow floor generation.
+For stairs, that prefix and ordinary player/map/progress updates cannot satisfy the
+boundary merely by becoming quiet. Accepted evidence is a current command/target/
+more/prompt/yes-no input mode, a terminal exit, or recognized current blocking UI.
+The latter retains a typed0.5-second quiescence fallback; unknown evidence instead
+times out closed. UI stack replacement/closure and text-input closure are tracked
+within the exchange; a progress-bar overlay is not a blocking input request. Ordinary
+and automatic-command paths remain unchanged. Raw exchanges retain the intermediate
+flushes so the boundary decision can be audited.
+
 Training worker directories use only typed worker, episode, and startup-attempt indices;
 human-controlled suite case labels never contribute to the Unix socket path. Evaluation
 keeps case labels at the outer artifact layer but gives each transient startup attempt

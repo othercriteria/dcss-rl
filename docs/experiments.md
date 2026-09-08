@@ -670,3 +670,40 @@ this journal exists to keep research velocity and direction visible.
   The audit found existing PPO retained game logs but not replayable trajectories;
   aggregate counts alone cannot verify matched first-update collection. Budgets,
   objectives, success/stop gates, and held-out exclusion remain unchanged.
+- **2026-09-08 — recorded UI-return pair outcome, source `a0e25ad`.** Each arm
+  completed12,288 decisions; off collection43.46/39.72 seconds, on43.66/37.69,
+  with optimizer0.93/0.45 versus0.95/0.44 seconds. Off cold anchor preparation
+ 31.394 seconds; on warm0.291. All four ownership audits pass: only abilities-row270
+  and value-head weight/bias change. Ac1 validation remains9/9 and38/38 with exact
+  masked menu logits. Nevertheless stochastic training samples3/2 Renounce choices
+  and76/82 zero-turn active/cooldown rejections across off/on; no renunciations
+  complete. Starts total200/188. Second-update inapplicable-menu incidence per
+  ordinary decision rises3.791%→3.930% despite fewer overall opens in the cost arm.
+  Both arms fail the stated safety criterion before their first optimizer update.
+  Diagnostic curves are off21,518→17,988 and on24,271→28,479, all below terrain-v66's
+  42,853. Every horizon is a loop; cost-on update2 replaces one ability cycle with
+  353 repeated explore rejections while Berserk. Decision: stop both arms, no broader
+  development or held-out evaluation. Greedy validation is not stochastic calibration.
+- **2026-09-08 — first-collection race localized.**
+  `artifacts/e/ui67-first-collection.json` verifies identical initial model tensors
+  and all6,144 pre-choice RNG digests. Thirty workers match semantically; eight differ
+  only in cell colour with exact masks/actions/probabilities/rewards. Ten first
+  sampling divergences follow identical downstairs actions: one arm returns only
+  `input_mode=0` plus flush before floor generation finishes. Worker5 transition3 is
+  minimal: premature old-floor state causes CANCEL; delayed D2 data then arrives with
+  `Unknown command.`. Worker28 demonstrates a legitimate mode5 more boundary, so
+  waiting only for mode1 is wrong. The UI-cost pair is not a clean causal ablation;
+  the readiness defect exists with cold startup, independently of static caching.
+- **2026-09-08 15:49 EDT — predeclared readiness correction check.** Scope the
+  correction to level-transition keys and distinguish explicit input/recognized
+  blocking UI from a mode0 normal-state prefix; do not infer readiness from a
+  progress-bar flush or extend a timer as the sole fix. Require delayed-packet
+  adversarial tests plus current trunk/stable compatibility smoke. Then run at most
+  two cold48×128 collections from the same ui67 starting model, with recording and
+  sampling evidence, no anchors, all loss weights zero, and selective warmup with no
+  allowed rows (preventing even optimizer decay). Audit every model tensor unchanged.
+  Total additional collection budget12,288 decisions; no learning or automatic
+  extension. Compare exact policy inputs/masks/actions/rewards/sampling/bootstrap
+  evidence while retaining strict raw/semantic colour differences separately. Any
+  remaining actor-affecting mismatch stops scaling and supplies the next boundary
+  trace; no heldout access.

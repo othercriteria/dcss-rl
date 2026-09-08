@@ -13,7 +13,7 @@ import socket
 import tempfile
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, StrEnum, auto
 from pathlib import Path
 from typing import cast
@@ -24,6 +24,26 @@ from dcss_rl.units import Seconds
 _DEFAULT_TRANSPORT_TIMEOUT = Seconds(10.0)
 _DEFAULT_INPUT_QUIET_PERIOD = Seconds(0.01)
 _SOCKET_APPEARANCE_POLL_INTERVAL = Seconds(0.01)
+_BLOCKING_UI_QUIET_PERIOD = Seconds(0.5)
+_LEVEL_INPUT_MODES = frozenset({1, 2, 3, 4, 5, 7, 8})
+_BLOCKING_UI_TYPES = frozenset(
+    {
+        "describe-generic",
+        "describe-feature-wide",
+        "describe-item",
+        "describe-spell",
+        "describe-monster",
+        "describe-god",
+        "describe-cards",
+        "msgwin-get-line",
+        "version",
+        "game-over",
+        "formatted-scroller",
+        "newgame-random-combo",
+        "seed-selection",
+        "newgame-choice",
+    }
+)
 
 
 class FlushBoundary(StrEnum):
@@ -31,12 +51,61 @@ class FlushBoundary(StrEnum):
 
     QUIESCENCE = "quiescence"
     INPUT_READY_OR_QUIESCENCE = "input-ready-or-quiescence"
+    LEVEL_TRANSITION = "level-transition"
 
 
 class _InputReadiness(Enum):
     UNKNOWN = auto()
     BUSY = auto()
     READY = auto()
+
+
+@dataclass
+class _LevelBoundaryEvidence:
+    """Current-exchange input evidence, not a remembered previous ready state."""
+
+    input_mode: int | None = None
+    ui_stack: list[bool] = field(default_factory=list)
+    line_input: bool = False
+
+    def apply(self, payload: JsonObject) -> None:
+        kind = payload.get("msg")
+        if kind == "input_mode":
+            mode = payload.get("mode")
+            self.input_mode = mode if isinstance(mode, int) else None
+        elif kind == "menu":
+            self.ui_stack.append(True)
+        elif kind == "ui-push":
+            ui_type = payload.get("type")
+            self.ui_stack.append(
+                isinstance(ui_type, str) and ui_type in _BLOCKING_UI_TYPES
+            )
+        elif kind in {"close_menu", "ui-pop"}:
+            if self.ui_stack:
+                self.ui_stack.pop()
+        elif kind == "close_all_menus":
+            self.ui_stack.clear()
+        elif kind == "ui-stack":
+            self.ui_stack.clear()
+            items = payload.get("items")
+            if isinstance(items, list):
+                for item in items:
+                    if isinstance(item, dict):
+                        self.apply(item)
+        elif kind == "init_input":
+            self.line_input = True
+        elif kind == "close_input":
+            self.line_input = False
+
+    @property
+    def explicit_input(self) -> bool:
+        return self.input_mode in _LEVEL_INPUT_MODES
+
+    @property
+    def blocking_ui(self) -> bool:
+        if self.ui_stack and not self.ui_stack[-1]:
+            return False
+        return self.line_input or bool(self.ui_stack and self.ui_stack[-1])
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,11 +255,18 @@ class WebtilesTransport:
         observations: list[Message] = []
         controls: list[Message] = []
         ordered: list[Message] = []
+        level_evidence = _LevelBoundaryEvidence()
         while True:
             message = self.receive()
             ordered.append(message)
             target = controls if message.control else observations
             target.append(message)
+            if boundary is FlushBoundary.LEVEL_TRANSITION:
+                level_evidence.apply(message.payload)
+                if message.kind == "exit":
+                    return ObservationBatch(
+                        tuple(observations), tuple(controls), tuple(ordered)
+                    )
             if message.kind == "input_mode":
                 mode = message.payload.get("mode")
                 if isinstance(mode, int):
@@ -198,6 +274,17 @@ class WebtilesTransport:
                         _InputReadiness.READY if mode == 1 else _InputReadiness.BUSY
                     )
             if message.control and message.kind == "flush_messages":
+                if boundary is FlushBoundary.LEVEL_TRANSITION:
+                    if level_evidence.explicit_input:
+                        return ObservationBatch(
+                            tuple(observations), tuple(controls), tuple(ordered)
+                        )
+                    if not level_evidence.blocking_ui:
+                        # Level generation emits mode 0 + flush before doing CPU
+                        # work. Silence here is not permission to send another key.
+                        # The socket timeout fails closed if no input evidence arrives.
+                        continue
+                    settle = _BLOCKING_UI_QUIET_PERIOD
                 if (
                     boundary is FlushBoundary.INPUT_READY_OR_QUIESCENCE
                     and self._input_readiness is _InputReadiness.READY

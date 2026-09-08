@@ -3,8 +3,14 @@ from pathlib import Path
 import pytest
 
 from dcss_rl.observation import ObservationReducer
-from dcss_rl.units import GameSeed, Keycode
-from dcss_rl.webtiles import GameConfig, ManagedGame
+from dcss_rl.units import GameSeed, Keycode, Seconds
+from dcss_rl.webtiles import (
+    FlushBoundary,
+    GameConfig,
+    ManagedGame,
+    ObservationBatch,
+    WebtilesTransport,
+)
 
 _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
 
@@ -40,6 +46,66 @@ def test_rejects_overlong_unix_socket_path_before_start(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Choose a shorter run/output path"):
         game.start()
+
+
+@pytest.mark.parametrize(
+    "key,level_transition",
+    [
+        ("<", True),
+        (">", True),
+        (60, True),
+        (62, True),
+        ("<", False),
+        (">", False),
+        (60, False),
+        (62, False),
+        ("h", False),
+        ("o", False),
+        ("5", False),
+    ],
+)
+@pytest.mark.parametrize("has_output", [False, True])
+def test_send_key_scopes_level_boundary_and_preserves_silent_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    key: str | int,
+    level_transition: bool,
+    has_output: bool,
+) -> None:
+    game = ManagedGame(tmp_path / "crawl", run_root=tmp_path / "run")
+    transport = WebtilesTransport(
+        tmp_path / "game.sock", client_directory=tmp_path / "client"
+    )
+    game.transport = transport
+    sent: list[str | int] = []
+    probes: list[bool] = []
+    boundaries: list[tuple[Seconds | None, FlushBoundary]] = []
+    expected = ObservationBatch((), ())
+
+    def receive(
+        *,
+        quiet_period: Seconds | None = None,
+        boundary: FlushBoundary = FlushBoundary.QUIESCENCE,
+    ) -> ObservationBatch:
+        boundaries.append((quiet_period, boundary))
+        return expected
+
+    monkeypatch.setattr(transport, "send_key", sent.append)
+    monkeypatch.setattr(transport, "output_available", lambda: has_output)
+    monkeypatch.setattr(transport, "request_full_state", lambda: probes.append(True))
+    monkeypatch.setattr(transport, "receive_until_flush", receive)
+    assert game.send_key(key, level_transition=level_transition) is expected
+    assert sent == [key]
+    automatic = key in {"o", "5"}
+    assert probes == ([True] if not has_output and not automatic else [])
+    expected_boundary = (
+        FlushBoundary.LEVEL_TRANSITION
+        if level_transition
+        else FlushBoundary.INPUT_READY_OR_QUIESCENCE
+        if automatic
+        else FlushBoundary.QUIESCENCE
+    )
+    assert boundaries == [(Seconds(0.5) if automatic else None, expected_boundary)]
 
 
 @pytest.mark.integration

@@ -426,10 +426,10 @@ not the current bottleneck.
 
 Next:
 
-1. Build on the completed terrain-only v66 pilot while addressing survival: broader
-   development discovery rose 37.9%, but deaths rose from ten to thirteen and maximum
-   actual depth remains D:6. The opening-only ability arm is stopped after transferring
-   the loop to open/cancel.
+1. Correct and verify the recorded downstairs input-boundary race before another
+   learning comparison; then recheck current-policy development behavior under the
+   corrected transport. The v67 UI-return pair failed safety/quality gates and is
+   stopped. Terrain-v66 remains the diagnostic leader; maximum actual depth is D:6.
 2. Address the independently measured blocked-action, prompt, and navigation loops
    that dominate the broader development baseline. Prioritize useful discovery and XL
    alongside fewer loops; do not count merely converting stalls into deaths as success.
@@ -514,11 +514,21 @@ Next:
   startup following the performance result. Optional raw PPO recording closes an
   evidence gap in earlier training logs: per-transition provenance references exact
   collector checkpoints, including across optimizer boundaries. Its2×8 smoke passes
-  and exact ownership allows only abilities/value-head changes. Full pilot pending.
+  and exact ownership allows only abilities/value-head changes. The completed pair
+  is stopped: diagnostic curves21,518→17,988 (off) and24,271→28,479 (on) remain below
+  terrain-v66. Every horizon survivor loops; stochastic training still samples
+  Renounce/rejected choices despite exact47/47 greedy ac1 validation preservation.
+  No broader or held-out evaluation was run.
 - A training-only retreat audit finds no low-HP upstairs examples among447 legal
   states in136 anchor episodes (minimum HP79.365%). Do not relabel these as escape
   training; deliberate exposure is needed. `docs/research-retreat-coverage.md` records
   the negative coverage evidence.
+- Recording/comparison tools and the full217-unit/three-live gate are committed at
+  `a0e25ad`. First-collection evidence confirms identical initial tensors and all
+  RNG-state streams, but ten workers act on a premature downstairs boundary containing
+  only mode0+flush, before the next floor arrives. Eight other workers differ solely
+  in cell colour with identical policy behavior. A scoped level-transition readiness
+  correction and bounded frozen-policy control are next; static caching stays opt-in.
 
 ## Verified commands
 

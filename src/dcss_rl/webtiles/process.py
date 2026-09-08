@@ -176,7 +176,9 @@ class ManagedGame:
             self.close()
             raise
 
-    def send_key(self, key: str | int) -> ObservationBatch:
+    def send_key(
+        self, key: str | int, *, level_transition: bool = False
+    ) -> ObservationBatch:
         """Apply one primitive input and collect the resulting state delta."""
         if self.transport is None:
             raise RuntimeError("DCSS game is not started")
@@ -190,7 +192,9 @@ class ManagedGame:
             self.transport.request_full_state()
         return self.transport.receive_until_flush(
             quiet_period=quiet_period,
-            boundary=FlushBoundary.INPUT_READY_OR_QUIESCENCE
+            boundary=FlushBoundary.LEVEL_TRANSITION
+            if level_transition
+            else FlushBoundary.INPUT_READY_OR_QUIESCENCE
             if quiet_period is not None
             else FlushBoundary.QUIESCENCE,
         )

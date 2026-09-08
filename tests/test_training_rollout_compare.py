@@ -19,10 +19,10 @@ from dcss_rl.trajectory import observation_delta
 from dcss_rl.units import StepLimit, WorkerCount
 
 
-def _state(hp: int) -> ObservationData:
+def _state(hp: int, colour: int = 7) -> ObservationData:
     return {
         "player": {"hp": hp, "hp_max": 20},
-        "cells": [],
+        "cells": [{"x": 0, "y": 0, "g": "@", "col": colour}],
         "messages": [],
         "menu": None,
         "input_mode": 1,
@@ -36,6 +36,8 @@ def _run(
     bootstrap_hp: int = 20,
     final_hp: int = 0,
     weight_change: bool = False,
+    colour: int = 7,
+    sampling: bool = False,
 ) -> None:
     root.mkdir()
     checkpoints = root / "collector-checkpoints"
@@ -66,7 +68,7 @@ def _run(
         for episode in range(2):
             directory = root / f"worker-{worker}" / f"episode-{episode}-attempt-0"
             directory.mkdir(parents=True)
-            initial = _state(20 if episode == 0 else bootstrap_hp)
+            initial = _state(20 if episode == 0 else bootstrap_hp, colour)
             header = {
                 "type": "episode",
                 "schema_version": 2,
@@ -81,7 +83,7 @@ def _run(
             previous = initial
             if episode == 0:
                 for step in range(2):
-                    current = _state(19 if step == 0 else final_hp)
+                    current = _state(19 if step == 0 else final_hp, colour)
                     action = Action(ActionKind.WAIT)
                     lines.append(
                         json.dumps(
@@ -107,6 +109,16 @@ def _run(
                         )
                     )
                     previous = current
+            if sampling:
+                probabilities = [0.0] * ACTION_COUNT
+                probabilities[action_to_index(Action(ActionKind.WAIT))] = 1.0
+                for index in range(1, len(lines)):
+                    row = json.loads(lines[index])
+                    row["sampling_evidence"] = {
+                        "probabilities": probabilities,
+                        "rng_state_sha256": "a" * 64,
+                    }
+                    lines[index] = json.dumps(row)
             (directory / "trajectory.jsonl").write_text("\n".join(lines) + "\n")
 
 
@@ -128,6 +140,8 @@ def test_serialization_provenance_differs_but_models_and_rollouts_match(
     assert result.cases[0].bootstrap_present == (True, True)
     assert result.cases[0].reset_metadata_differences == ("agent_id",)
     assert result.sampling_identical is None
+    assert result.policy_inputs_identical
+    assert not result.policy_rollout_matched
 
 
 @pytest.mark.parametrize(
@@ -241,3 +255,30 @@ def test_one_sided_sampling_evidence_is_not_reported_equal(tmp_path: Path) -> No
         item.field == "probabilities" and item.count == 1
         for item in result.cases[0].differences
     )
+
+
+@pytest.mark.parametrize("colour,final_hp,inputs_equal", [(3, 0, True), (7, 1, False)])
+def test_strict_semantics_and_policy_inputs_remain_separate(
+    tmp_path: Path, colour: int, final_hp: int, inputs_equal: bool
+) -> None:
+    left, right = tmp_path / "left", tmp_path / "right"
+    _run(left, sampling=True)
+    _run(right, colour=colour, final_hp=final_hp, sampling=True)
+    result = _compare(left, right)
+    assert not result.matched
+    assert result.policy_inputs_identical is inputs_equal
+    assert result.policy_rollout_matched is inputs_equal
+    assert result.sampling_identical is True
+    assert result.reference_feature_version == result.candidate_feature_version
+
+
+def test_history_models_are_explicitly_unsupported(tmp_path: Path) -> None:
+    left, right = tmp_path / "left", tmp_path / "right"
+    _run(left)
+    _run(right)
+    path = right / "collector-checkpoints/update-0000.pt"
+    payload = torch.load(path, weights_only=True)
+    payload["model_config"]["action_history_length"] = 1
+    torch.save(payload, path)
+    with pytest.raises(ValueError, match="action-history"):
+        _compare(left, right)

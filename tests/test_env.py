@@ -1,4 +1,6 @@
 from pathlib import Path
+from typing import cast
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -11,11 +13,56 @@ from dcss_rl.env import (
     index_to_action,
     shaped_reward,
 )
+from dcss_rl.observation import ObservationReducer, SemanticObservation
 from dcss_rl.schema import ObservationData
 from dcss_rl.units import GameSeed, Keycode, RewardWeight, StepLimit
-from dcss_rl.webtiles import GameConfig, Message, ObservationBatch
+from dcss_rl.webtiles import GameConfig, ManagedGame, Message, ObservationBatch
 
 _DCSS_BINARY = Path("vendor/crawl/crawl-ref/source/crawl")
+
+
+@pytest.mark.parametrize(
+    "kind,key,level_transition",
+    [
+        (ActionKind.STAIRS_DOWN, ">", True),
+        (ActionKind.STAIRS_UP, "<", True),
+        (ActionKind.MENU_SELECT, ">", False),
+        (ActionKind.MENU_SELECT, "<", False),
+    ],
+)
+def test_level_readiness_is_selected_by_action_not_menu_hotkey(
+    kind: ActionKind, key: str, level_transition: bool
+) -> None:
+    game = MagicMock(spec=ManagedGame)
+    game.send_key.return_value = ObservationBatch(
+        (Message({"msg": "input_mode", "mode": 1}),), ()
+    )
+    env = DcssEnv(_DCSS_BINARY)
+    env.game = cast(ManagedGame, game)
+    env.reducer = ObservationReducer()
+    state: ObservationData = {
+        "player": {"hp": 20, "hp_max": 20, "depth": 1, "xl": 1},
+        "cells": [],
+        "messages": [
+            "There is a staircase leading down here.",
+            "There is a staircase leading up here.",
+        ],
+        "menu": None
+        if level_transition
+        else {
+            "type": "menu",
+            "prompt": "Page",
+            "choices": [{"keycode": ord(key), "text": "Page"}],
+        },
+        "input_mode": 1,
+    }
+    env.current = SemanticObservation.from_dict(state)
+    action = Action(kind) if level_transition else Action.menu_select(Keycode(ord(key)))
+    env.step_typed(action_to_index(action))
+    if level_transition:
+        game.send_key.assert_called_once_with(key, level_transition=True)
+    else:
+        game.send_key.assert_called_once_with(ord(key))
 
 
 @pytest.mark.parametrize("kind", list(ActionKind))

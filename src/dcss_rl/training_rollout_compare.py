@@ -14,6 +14,7 @@ import msgspec
 import torch
 
 from dcss_rl.checkpoint_audit import compare_checkpoints, load_checkpoint_contents
+from dcss_rl.features import encode_observation
 from dcss_rl.returns import ReturnBoundaryMode
 from dcss_rl.schema import (
     ActionData,
@@ -27,6 +28,7 @@ from dcss_rl.units import (
     ActionCount,
     ActionIndex,
     EpisodeIndex,
+    FeatureSpecVersion,
     Keycode,
     StepLimit,
     WorkerCount,
@@ -93,6 +95,7 @@ class _Reset:
     raw: ContentDigest
     keys: tuple[Keycode, ...]
     metadata: tuple[tuple[str, ContentDigest], ...]
+    features: ContentDigest
 
 
 @dataclass(frozen=True)
@@ -110,6 +113,8 @@ class _Sample:
     raw: ContentDigest
     probabilities: tuple[float, ...] | None
     rng_state_sha256: str | None
+    features_before: ContentDigest
+    features_after: ContentDigest
 
 
 @dataclass(frozen=True)
@@ -138,6 +143,8 @@ class WorkerComparison:
     matched: bool
     raw_identical: bool
     sampling_identical: bool | None
+    policy_inputs_identical: bool
+    policy_rollout_matched: bool
 
 
 @dataclass(frozen=True)
@@ -156,6 +163,10 @@ class RolloutComparison:
     matched: bool
     raw_identical: bool
     sampling_identical: bool | None
+    reference_feature_version: FeatureSpecVersion
+    candidate_feature_version: FeatureSpecVersion
+    policy_inputs_identical: bool
+    policy_rollout_matched: bool
     raw_comparison_definition: str
 
 
@@ -187,7 +198,16 @@ def _raw_digest(raw: msgspec.Raw) -> ContentDigest:
     return _digest(json.loads(bytes(raw)))
 
 
-def _reset(header: _Header, episode: EpisodeIndex) -> _Reset:
+def _policy_features(
+    observation: ObservationData, version: FeatureSpecVersion
+) -> ContentDigest:
+    features = encode_observation(observation, spec_version=version)
+    return ContentDigest(hashlib.sha256(features.tobytes()).hexdigest())
+
+
+def _reset(
+    header: _Header, episode: EpisodeIndex, version: FeatureSpecVersion
+) -> _Reset:
     if header.type != "episode" or header.schema_version != 2:
         raise ValueError("invalid trajectory episode header")
     return _Reset(
@@ -199,6 +219,9 @@ def _reset(header: _Header, episode: EpisodeIndex) -> _Reset:
         tuple(
             (key, _digest(value))
             for key, value in sorted(_json_object(header.metadata).items())
+        ),
+        _policy_features(
+            cast(ObservationData, _json_object(header.initial.observation)), version
         ),
     )
 
@@ -227,6 +250,7 @@ def _trace(
     steps: StepLimit,
     checkpoint_hash: str,
     continuing: bool,
+    version: FeatureSpecVersion,
 ) -> _Trace:
     samples: list[_Sample] = []
     resets: list[_Reset] = []
@@ -240,7 +264,7 @@ def _trace(
             break
         with path.open() as stream:
             header = msgspec.json.decode(next(stream), type=_Header)
-            reset = _reset(header, EpisodeIndex(number))
+            reset = _reset(header, EpisodeIndex(number), version)
             current = cast(ObservationData, _json_object(header.initial.observation))
             if len(samples) == steps:
                 if not any(samples[-1].terminal[:2]):
@@ -306,6 +330,8 @@ def _trace(
                         record.sampling_evidence.rng_state_sha256
                         if record.sampling_evidence
                         else None,
+                        _policy_features(current, version),
+                        _policy_features(after, version),
                     )
                 )
                 current = after
@@ -349,6 +375,8 @@ def _compare(left: _Trace, right: _Trace) -> WorkerComparison:
         "raw",
         "probabilities",
         "rng_state_sha256",
+        "features_before",
+        "features_after",
     ):
         changed = [
             i
@@ -365,7 +393,7 @@ def _compare(left: _Trace, right: _Trace) -> WorkerComparison:
             )
         )
     metadata: set[str] = set()
-    for name in ("episode", "semantic", "mask", "keys", "raw"):
+    for name in ("episode", "semantic", "mask", "keys", "raw", "features"):
         count = abs(len(left.resets) - len(right.resets))
         count += sum(
             getattr(old, name) != getattr(new, name)
@@ -379,7 +407,7 @@ def _compare(left: _Trace, right: _Trace) -> WorkerComparison:
         bootstrap_metadata = _metadata_changes(
             left.trailing_reset, right.trailing_reset
         )
-        for name in ("episode", "semantic", "mask", "keys", "raw"):
+        for name in ("episode", "semantic", "mask", "keys", "raw", "features"):
             count = int(
                 getattr(left.trailing_reset, name)
                 != getattr(right.trailing_reset, name)
@@ -397,6 +425,49 @@ def _compare(left: _Trace, right: _Trace) -> WorkerComparison:
                 None,
             )
         )
+    sampling_identical = (
+        False
+        if any(
+            item.count
+            for item in differences
+            if item.field in {"probabilities", "rng_state_sha256"}
+        )
+        else True
+        if all(
+            sample.probabilities is not None
+            for sample in (*left.samples, *right.samples)
+        )
+        else None
+    )
+    policy_inputs_identical = not any(
+        item.count
+        for item in differences
+        if item.field
+        in {
+            "features_before",
+            "features_after",
+            "mask_before",
+            "mask_after",
+            "reset_features",
+            "reset_mask",
+            "bootstrap_features",
+            "bootstrap_mask",
+            "bootstrap_presence",
+        }
+    )
+    policy_rollout_matched = (
+        sampling_identical is True
+        and not any(
+            item.count
+            for item in differences
+            if item.field
+            not in {"before", "after", "reset_semantic", "bootstrap_semantic"}
+            and not item.field.endswith("raw")
+        )
+        and not (
+            {"seed", "character", "reward_spec"} & (metadata | set(bootstrap_metadata))
+        )
+    )
     return WorkerComparison(
         left.worker,
         ActionCount(len(left.samples)),
@@ -414,18 +485,9 @@ def _compare(left: _Trace, right: _Trace) -> WorkerComparison:
             {"seed", "character", "reward_spec"} & (metadata | set(bootstrap_metadata))
         ),
         not any(item.count for item in differences if item.field.endswith("raw")),
-        False
-        if any(
-            item.count
-            for item in differences
-            if item.field in {"probabilities", "rng_state_sha256"}
-        )
-        else True
-        if all(
-            sample.probabilities is not None
-            for sample in (*left.samples, *right.samples)
-        )
-        else None,
+        sampling_identical,
+        policy_inputs_identical,
+        policy_rollout_matched,
     )
 
 
@@ -461,6 +523,10 @@ def compare_training_rollouts(
         root / "collector-checkpoints/update-0000.pt" for root in (reference, candidate)
     )
     old, new = (load_checkpoint_contents(path) for path in checkpoints)
+    if old.config.action_history_length or new.config.action_history_length:
+        raise ValueError(
+            "policy-input comparison does not yet support action-history checkpoints"
+        )
     model = compare_checkpoints(new, old)
     initial_equal = not (
         model.incompatibilities
@@ -488,6 +554,7 @@ def compare_training_rollouts(
                 steps,
                 old.sha256,
                 old_continuing,
+                old.config.feature_spec_version,
             ),
             _trace(
                 candidate / f"worker-{index}",
@@ -495,6 +562,7 @@ def compare_training_rollouts(
                 steps,
                 new.sha256,
                 new_continuing,
+                new.config.feature_spec_version,
             ),
         )
         for index in range(workers)
@@ -518,6 +586,10 @@ def compare_training_rollouts(
         else True
         if all(case.sampling_identical is True for case in cases)
         else None,
+        old.config.feature_spec_version,
+        new.config.feature_spec_version,
+        all(case.policy_inputs_identical for case in cases),
+        initial_equal and all(case.policy_rollout_matched for case in cases),
         "Decoded raw_messages compared with canonical JSON key ordering only; "
         "all stored values, fields, message order, controls and strings retained. "
         "Original Python batch partitions are not stored by the recorder. "
@@ -535,6 +607,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--require-identical", action="store_true")
     parser.add_argument("--require-raw-identical", action="store_true")
+    parser.add_argument("--require-policy-identical", action="store_true")
     args = parser.parse_args()
     try:
         report = compare_training_rollouts(
@@ -550,8 +623,10 @@ def main() -> None:
         with args.output.open("x") as stream:
             stream.write(result)
     print(result, end="")
-    if (args.require_identical and not report.matched) or (
-        args.require_raw_identical and not report.raw_identical
+    if (
+        (args.require_identical and not report.matched)
+        or (args.require_raw_identical and not report.raw_identical)
+        or (args.require_policy_identical and not report.policy_rollout_matched)
     ):
         raise SystemExit(1)
 

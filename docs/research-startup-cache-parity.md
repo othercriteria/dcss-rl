@@ -3,6 +3,27 @@
 2026-09-08. Performance remains opt-in; no additional games are authorized by this
 note. The next UI-return experiment supplies the recorded cold/cold control below.
 
+## Resolved first-collection evidence
+
+The subsequent recorded cold/cold UI67 pair (`a0e25ad`) rules out caching as a
+necessary cause. `artifacts/e/ui67-first-collection.json` proves identical initial
+model tensors and every pre-choice RNG digest. Thirty workers match semantically;
+eight differ solely in cell colour, with identical policy inputs/behavior. Ten first
+sampling divergences occur after identical downstairs choices: one exchange ends
+at mode0+flush before floor generation completes. Worker:boundary pairs are
+3:29,5:3,8:71,16:90,26:12,27:101,28:12,32:50,33:31,42:71 (zero-based).
+Worker5's next premature CANCEL consumes delayed D2 output and produces the logged
+`Unknown command.`. Worker28's complete exchange ends at a legitimate mode5 more
+prompt, demonstrating why command-mode1 alone is insufficient. This establishes
+the level-transition readiness race in the recorded pair; it does not retrospectively
+prove every difference in the earlier unrecorded cache benchmark has that cause.
+
+The scoped correction awaits explicit/recognized input evidence for structured stair
+actions while preserving menu hotkeys, automatic paths, and raw data. Policy-input
+comparisons use the checkpoint's feature version and keep strict semantic/raw colour
+differences visible. Recheck frozen-policy parity before interpreting future costs or
+startup-cache wall time; do not normalize away unexplained actor-affecting changes.
+
 ## Observed result
 
 The matched terrain-v66 startup-cache benchmark used source revision
