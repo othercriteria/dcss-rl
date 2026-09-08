@@ -24,9 +24,23 @@ from dcss_rl.learned import (
     save_checkpoint,
 )
 from dcss_rl.policy import Policy, ScriptedMibePolicy
-from dcss_rl.schema import ObservationData, ObservationDeltaData
+from dcss_rl.schema import (
+    CellView,
+    MenuView,
+    ObservationData,
+    ObservationDeltaData,
+    PlayerView,
+)
 from dcss_rl.trajectory import apply_observation_delta
-from dcss_rl.units import BatchSize, EpochCount, LearningRate, LossWeight, Probability
+from dcss_rl.units import (
+    ActionIndex,
+    BatchSize,
+    Coordinate,
+    EpochCount,
+    LearningRate,
+    LossWeight,
+    Probability,
+)
 
 _DEFAULT_EPOCHS = EpochCount(20)
 _DEFAULT_BATCH_SIZE = BatchSize(256)
@@ -70,9 +84,71 @@ class TrainingReport:
 class ImitationEpisode:
     features: tuple[FeatureVector, ...]
     masks: tuple[ActionMaskVector, ...]
-    actions: tuple[int, ...]
+    actions: tuple[ActionIndex, ...]
     next_deltas: tuple[FeatureVector, ...]
     returns: tuple[float, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ImitationReplayEpisode:
+    """Only the tensors consumed by online DAgger anchor replay."""
+
+    features: tuple[FeatureVector, ...]
+    masks: tuple[ActionMaskVector, ...]
+    actions: tuple[ActionIndex, ...]
+
+
+@dataclass(slots=True)
+class _TransientObservation:
+    """Incrementally reconstruct one trajectory without snapshot deep copies.
+
+    The ordinary replay API returns detached snapshots because callers may retain or
+    mutate them. Anchor preprocessing consumes each observation synchronously and
+    immediately encodes it, so it can safely reuse this private mutable state.
+    """
+
+    player: PlayerView
+    cells: dict[Coordinate, CellView]
+    messages: list[str]
+    menu: MenuView | None
+    input_mode: int | None
+
+    @classmethod
+    def from_observation(cls, observation: ObservationData) -> _TransientObservation:
+        return cls(
+            observation["player"],
+            {(cell["x"], cell["y"]): cell for cell in observation["cells"]},
+            observation["messages"],
+            observation["menu"],
+            observation["input_mode"],
+        )
+
+    def observation(self) -> ObservationData:
+        return {
+            "player": self.player,
+            "cells": sorted(
+                self.cells.values(), key=lambda cell: (cell["y"], cell["x"])
+            ),
+            "messages": self.messages,
+            "menu": self.menu,
+            "input_mode": self.input_mode,
+        }
+
+    def apply(self, delta: ObservationDeltaData) -> ObservationData:
+        mutable_player = cast(dict[str, object], self.player)
+        for field in delta["removed_player_fields"]:
+            mutable_player.pop(field, None)
+        self.player.update(delta["player"])
+        for position in delta["removed_cells"]:
+            self.cells.pop((position["x"], position["y"]), None)
+        for cell in delta["cells"]:
+            self.cells[(cell["x"], cell["y"])] = cell
+        self.messages = delta["messages"]
+        if delta["menu_changed"]:
+            self.menu = delta["menu"]
+        if delta["input_mode_changed"]:
+            self.input_mode = delta["input_mode"]
+        return self.observation()
 
 
 def train_imitation(
@@ -189,7 +265,7 @@ def load_imitation_episode(
     observation = cast(ObservationData, raw_observation)
     features: list[FeatureVector] = []
     masks: list[ActionMaskVector] = []
-    actions: list[int] = []
+    actions: list[ActionIndex] = []
     deltas: list[FeatureVector] = []
     rewards: list[float] = []
     current_features = encode_observation(observation)
@@ -214,7 +290,9 @@ def load_imitation_episode(
         features.append(current_features)
         masks.append(mask)
         actions.append(
-            int(teacher.select(observation, mask)) if teacher is not None else action
+            teacher.select(observation, mask)
+            if teacher is not None
+            else ActionIndex(action)
         )
         deltas.append(next_features - current_features)
         rewards.append(float(reward))
@@ -227,6 +305,53 @@ def load_imitation_episode(
         tuple(deltas),
         tuple(_discounted_returns(rewards, discount)),
     )
+
+
+def load_imitation_replay_episode(
+    path: Path, *, teacher: Policy
+) -> ImitationReplayEpisode:
+    """Load the strict subset of an episode used by online imitation replay.
+
+    Unlike offline training, online anchor replay does not consume rewards, returns,
+    or ECHO deltas. Avoiding those products also permits transient in-place trajectory
+    reconstruction rather than materializing a detached full-map snapshot per step.
+    """
+    lines = Path(path).read_text().splitlines()
+    if len(lines) < 2:
+        raise ValueError(f"trajectory has no transitions: {path}")
+    header = _object(lines[0])
+    initial = header.get("initial")
+    if not isinstance(initial, dict):
+        raise ValueError(f"trajectory has no initial state: {path}")
+    raw_observation = cast(dict[str, object], initial).get("observation")
+    if not isinstance(raw_observation, dict):
+        raise ValueError(f"trajectory has no initial observation: {path}")
+    state = _TransientObservation.from_observation(
+        cast(ObservationData, raw_observation)
+    )
+    observation = state.observation()
+    features: list[FeatureVector] = []
+    masks: list[ActionMaskVector] = []
+    actions: list[ActionIndex] = []
+    for line in lines[1:]:
+        record = _object(line)
+        action = record.get("action_index")
+        if not isinstance(action, int):
+            raise ValueError(f"invalid transition target in {path}")
+        mask = _training_action_mask(observation)
+        features.append(encode_observation(observation))
+        masks.append(mask)
+        actions.append(teacher.select(observation, mask))
+        full = record.get("observation")
+        delta = record.get("observation_delta")
+        if isinstance(full, dict):
+            state = _TransientObservation.from_observation(cast(ObservationData, full))
+            observation = state.observation()
+        elif isinstance(delta, dict):
+            observation = state.apply(cast(ObservationDeltaData, delta))
+        else:
+            raise ValueError(f"transition has no next observation: {path}")
+    return ImitationReplayEpisode(tuple(features), tuple(masks), tuple(actions))
 
 
 def _discounted_returns(rewards: list[float], discount: float) -> list[float]:

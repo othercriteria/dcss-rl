@@ -189,7 +189,10 @@ optimizer phases to appended policy rows. Repeatable
 `--new-action-warmup-menu-key KEY` arguments include dependent player-visible menu
 decisions, while newly appended semantic input columns may learn without changing
 established inputs or unrelated outputs. Repeatable `--imitation-trajectory-root`
-arguments preload and current-teacher-relabel non-heldout replay anchors.
+arguments preload and current-teacher-relabel non-heldout replay anchors. The CLI
+content-addresses those generated tensors under `.cache/imitation-replay` by default;
+pre-update telemetry reports model setup time, replay preparation time, sample count,
+and whether the cache was reused.
 
 The current diagnostic track reuses five explicitly known development seeds for 500
 decisions, long enough to distinguish sustained navigation and survival from an early

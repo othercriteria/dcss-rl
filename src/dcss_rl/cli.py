@@ -128,6 +128,12 @@ def main() -> None:
         help="recursively preload and relabel trajectory.jsonl files for DAgger replay",
     )
     ppo.add_argument(
+        "--imitation-replay-cache-directory",
+        type=Path,
+        default=Path(".cache/imitation-replay"),
+        help="content-addressed generated cache for relabeled replay tensors",
+    )
+    ppo.add_argument(
         "--new-action-warmup-menu-key",
         action="append",
         type=_menu_keycode,
@@ -272,7 +278,21 @@ def main() -> None:
         )
         return
     if arguments.command == "train-ppo":
-        from dcss_rl.ppo import PpoConfig, PpoUpdateReport, train_ppo
+        from dcss_rl.ppo import (
+            PpoConfig,
+            PpoPreparationReport,
+            PpoUpdateReport,
+            train_ppo,
+        )
+
+        def report_preparation(preparation: PpoPreparationReport) -> None:
+            print(
+                f"preparation: model={preparation.model_setup_seconds:.2f}s; "
+                f"imitation_replay={preparation.imitation_replay_seconds:.2f}s; "
+                f"samples={preparation.imitation_samples}; "
+                f"cache_hit={preparation.imitation_replay_cache_hit}",
+                flush=True,
+            )
 
         def report_progress(update: PpoUpdateReport) -> None:
             print(
@@ -318,6 +338,9 @@ def main() -> None:
                     for root in (arguments.imitation_trajectory_root or ())
                     for trajectory in sorted(root.rglob("trajectory.jsonl"))
                 ),
+                imitation_replay_cache_directory=(
+                    arguments.imitation_replay_cache_directory
+                ),
                 workers=WorkerCount(arguments.workers),
                 inference_batch_size=InferenceBatchSize(arguments.inference_batch_size),
                 inference_batch_wait=Seconds(arguments.inference_batch_wait_seconds),
@@ -349,6 +372,7 @@ def main() -> None:
             policy_id=arguments.policy_id,
             update_checkpoint_directory=arguments.update_checkpoint_directory,
             progress=report_progress,
+            preparation_progress=report_preparation,
         )
         print(
             f"checkpoint: {report.checkpoint}; decisions={report.decisions}; "

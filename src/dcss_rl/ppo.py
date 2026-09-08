@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import random
+import tempfile
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -39,7 +42,7 @@ from dcss_rl.policy import ActionHistory, ScriptedMibePolicy
 from dcss_rl.returns import ReturnBoundaryMode, generalized_advantage_estimate
 from dcss_rl.schedule import TrainingSeedSchedule
 from dcss_rl.schema import ObservationData
-from dcss_rl.training import load_imitation_episode
+from dcss_rl.training import load_imitation_replay_episode
 from dcss_rl.units import (
     ActionHistoryLength,
     ActionIndex,
@@ -52,6 +55,8 @@ from dcss_rl.units import (
     EpochCount,
     FeatureSpecVersion,
     GameSeed,
+    ImitationReplayCacheKey,
+    ImitationSampleCount,
     InferenceBatchCount,
     InferenceBatchSize,
     Keycode,
@@ -101,6 +106,8 @@ _ZERO_SHORT_CYCLE_COST = ShortCycleCost(0.0)
 _DEFAULT_SHORT_CYCLE_WINDOW = DecisionWindow(8)
 _GAME_START_ATTEMPTS = StartupAttemptCount(3)
 _WIN_OUTCOME = TerminalOutcome("won")
+_IMITATION_REPLAY_CACHE_SCHEMA = 1
+_CACHE_READ_CHUNK_BYTES = 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +144,7 @@ class PpoConfig:
     new_action_warmup_menu_keycodes: tuple[Keycode, ...] = ()
     warmup_action_kinds: tuple[ActionKind, ...] = ()
     imitation_trajectories: tuple[Path, ...] = ()
+    imitation_replay_cache_directory: Path | None = None
     device: str = "cuda"
 
     def __post_init__(self) -> None:
@@ -220,6 +228,14 @@ class PpoUpdateReport:
 
 
 @dataclass(frozen=True, slots=True)
+class PpoPreparationReport:
+    model_setup_seconds: Seconds
+    imitation_replay_seconds: Seconds
+    imitation_samples: ImitationSampleCount
+    imitation_replay_cache_hit: bool
+
+
+@dataclass(frozen=True, slots=True)
 class PpoLosses:
     policy: float
     value: float
@@ -233,6 +249,12 @@ class _ImitationReplay:
     action_histories: FloatArray
     masks: BoolArray
     teacher_actions: IntArray
+
+
+@dataclass(frozen=True, slots=True)
+class _PreparedImitationReplay:
+    replay: tuple[_ImitationReplay, ...]
+    cache_hit: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -568,8 +590,10 @@ def train_ppo(
     policy_id: str,
     update_checkpoint_directory: Path | None = None,
     progress: Callable[[PpoUpdateReport], None] | None = None,
+    preparation_progress: Callable[[PpoPreparationReport], None] | None = None,
 ) -> PpoReport:
     """Fine-tune an imitation checkpoint with concurrent on-policy PPO updates."""
+    preparation_started = perf_counter()
     _seed_everything(config.seed)
     restored = LearnedPolicy(initial_checkpoint, device=config.device)
     model = restored.model
@@ -607,14 +631,26 @@ def train_ppo(
     short_cycle_count = 0
     losses = PpoLosses(0.0, 0.0, 0.0, 0.0)
     teacher_agreement = Probability(0.0)
-    imitation_replay = list(
-        _preloaded_imitation_replay(
-            config.imitation_trajectories,
-            model=model,
-            teacher=teacher,
-            discount=config.discount,
-        )
+    model_setup_finished = perf_counter()
+    prepared_replay = _preloaded_imitation_replay(
+        config.imitation_trajectories,
+        model=model,
+        teacher=teacher,
+        cache_directory=config.imitation_replay_cache_directory,
     )
+    imitation_replay = list(prepared_replay.replay)
+    replay_finished = perf_counter()
+    if preparation_progress is not None:
+        preparation_progress(
+            PpoPreparationReport(
+                Seconds(model_setup_finished - preparation_started),
+                Seconds(replay_finished - model_setup_finished),
+                ImitationSampleCount(
+                    sum(len(replay.features) for replay in imitation_replay)
+                ),
+                prepared_replay.cache_hit,
+            )
+        )
     try:
         with ThreadPoolExecutor(max_workers=config.workers) as executor:
             for update_index in range(config.updates):
@@ -772,13 +808,23 @@ def _preloaded_imitation_replay(
     *,
     model: SemanticActorCritic,
     teacher: ScriptedMibePolicy,
-    discount: Probability,
-) -> tuple[_ImitationReplay, ...]:
+    cache_directory: Path | None = None,
+) -> _PreparedImitationReplay:
     if not trajectories:
-        return ()
+        return _PreparedImitationReplay((), False)
+    cache_path = (
+        Path(cache_directory)
+        / f"{_imitation_replay_cache_key(trajectories, teacher)}.npz"
+        if cache_directory is not None
+        else None
+    )
+    if (
+        cache_path is not None
+        and (cached := _read_imitation_replay_cache(cache_path, model)) is not None
+    ):
+        return _PreparedImitationReplay((cached,), True)
     episodes = tuple(
-        load_imitation_episode(path, discount=discount, teacher=teacher)
-        for path in trajectories
+        load_imitation_replay_episode(path, teacher=teacher) for path in trajectories
     )
     features = np.concatenate(
         [np.stack(episode.features) for episode in episodes]
@@ -788,14 +834,87 @@ def _preloaded_imitation_replay(
         [np.asarray(episode.actions, dtype=np.int64) for episode in episodes]
     )
     history_width = model.config.action_count * model.config.action_history_length
-    return (
-        _ImitationReplay(
-            features,
-            np.zeros((len(features), history_width), dtype=np.float32),
-            masks,
-            teacher_actions,
-        ),
+    replay = _ImitationReplay(
+        features,
+        np.zeros((len(features), history_width), dtype=np.float32),
+        masks,
+        teacher_actions,
     )
+    if cache_path is not None:
+        _write_imitation_replay_cache(cache_path, replay)
+    return _PreparedImitationReplay((replay,), False)
+
+
+def _imitation_replay_cache_key(
+    trajectories: tuple[Path, ...], teacher: ScriptedMibePolicy
+) -> ImitationReplayCacheKey:
+    """Digest every semantic input to the generated replay tensor cache."""
+    digest = hashlib.sha256()
+    contract = {
+        "schema": _IMITATION_REPLAY_CACHE_SCHEMA,
+        "feature_spec": int(FEATURE_SPEC_VERSION),
+        "action_count": int(ACTION_COUNT),
+        "teacher": teacher.policy_id,
+        "trajectory_count": len(trajectories),
+    }
+    digest.update(json.dumps(contract, sort_keys=True).encode())
+    for trajectory in trajectories:
+        path = Path(trajectory)
+        size = path.stat().st_size
+        digest.update(size.to_bytes(8, "big"))
+        with path.open("rb") as trajectory_file:
+            while chunk := trajectory_file.read(_CACHE_READ_CHUNK_BYTES):
+                digest.update(chunk)
+    return ImitationReplayCacheKey(digest.hexdigest())
+
+
+def _read_imitation_replay_cache(
+    path: Path, model: SemanticActorCritic
+) -> _ImitationReplay | None:
+    if not path.is_file():
+        return None
+    try:
+        with np.load(path, allow_pickle=False) as cached:
+            # NPZ members are materialized as owned ndarrays, not views into the
+            # closing ZipFile, so no second 120-MiB feature copy is required here.
+            features = cached["features"]
+            masks = cached["masks"]
+            teacher_actions = cached["teacher_actions"]
+    except (OSError, ValueError, KeyError):
+        return None
+    sample_count = len(features)
+    if (
+        features.dtype != np.float32
+        or features.ndim != 2
+        or features.shape[1] != feature_count(FEATURE_SPEC_VERSION)
+        or masks.dtype != np.bool_
+        or masks.shape != (sample_count, ACTION_COUNT)
+        or teacher_actions.dtype != np.int64
+        or teacher_actions.shape != (sample_count,)
+        or np.any(teacher_actions < 0)
+        or np.any(teacher_actions >= ACTION_COUNT)
+    ):
+        return None
+    history_width = model.config.action_count * model.config.action_history_length
+    return _ImitationReplay(
+        features,
+        np.zeros((sample_count, history_width), dtype=np.float32),
+        masks,
+        teacher_actions,
+    )
+
+
+def _write_imitation_replay_cache(path: Path, replay: _ImitationReplay) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as temporary:
+        temporary_path = Path(temporary.name)
+        np.savez(
+            temporary,
+            features=replay.features,
+            masks=replay.masks,
+            teacher_actions=replay.teacher_actions,
+        )
+    temporary_path.replace(path)
 
 
 def _rollout_imitation_replay(rollout: _Rollout) -> _ImitationReplay:

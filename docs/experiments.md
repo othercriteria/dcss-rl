@@ -457,3 +457,17 @@ this journal exists to keep research velocity and direction visible.
   heldout remained untouched. Decision: do not scale either arm. Applicability is
   learnable, but square-root teacher balancing collapses the coupled choice to cancel;
   use a matched full-inverse selective probe before changing representation again.
+- **2026-09-08 13:15–13:40 EDT — anchor-preload profile and cache.** Profiling ten
+  real non-heldout anchor trajectories attributed 25.03 of 31.96 profiled seconds to
+  recursive deep copies while reconstructing 2,208 transient states. A dedicated
+  one-pass online-replay loader reduced an unprofiled matched sample from 12.58 to
+  2.90 seconds with byte-identical feature, legality-mask, and teacher-label hashes.
+  The full 25,733-sample replay is now content-addressed by trajectory bytes plus its
+  semantic contracts; a warm cache loaded in 0.31 seconds and reproduced the same
+  hashes. Absolute cold timings are load-contaminated by a concurrent system rebuild,
+  so only the paired sample and structural profile support the speedup claim.
+  Preparation telemetry now makes this formerly invisible phase explicit. Separately,
+  a 76.9-second diagnostic tail localized to one 500-decision case with 270 real rest
+  actions, not evaluation startup retries. A later three-retry startup failure occurred
+  while host CPU was saturated and is retained as contaminated reliability evidence,
+  not grounds for changing deterministic episode semantics or timeout policy.
