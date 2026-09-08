@@ -177,3 +177,19 @@ this journal exists to keep research velocity and direction visible.
   104.58/s at 24. The reproducible gain is 3.4–5.5%, not the expected 20%, but is cheap
   enough to adopt. Decision: use 24 workers and therefore 3,072 decisions/update for
   the next fresh experiment.
+- **2026-09-07 20:04 EDT — online-imitation isolation.** A 24-worker, 49,152-decision
+  run disabled policy, value, entropy, and ECHO gradients while retaining autonomous
+  collection and square-root-balanced online teacher imitation. Teacher agreement
+  reached 74.7%, but diagnostic-v2 ranked `(0, 0, 150, 2101, 9, 8, 32.0)`: four cases
+  remained on D:1 and one rushed to D:5 before dying. The policy selected rest 1,068
+  times and answered menus 867 times. Decision: reject without heldout access; online
+  imitation alone does not cure the rest-confirm attractor.
+- **2026-09-07 20:11 EDT — idle DCSS CPU root cause.** Every paused Crawl worker used
+  about one full CPU because its headless WebTiles `pselect` includes stdin and the
+  launcher supplied permanently-readable `/dev/null`. Supplying an unwritten pipe
+  instead lets the existing socket wait block. In an isolated post-fix measurement,
+  Crawl CPU time stayed unchanged at four seconds over a further 12 wall-clock
+  seconds. A matched 128-step resweep measured 137.12, 145.24, 150.57, 154.03, and
+  149.70 decisions/s at 24, 32, 40, 48, and 64 workers. Decision: retain the pipe and
+  use 48 workers for representative training; the new knee is 65% faster than the old
+  pre-fix 40-worker result.

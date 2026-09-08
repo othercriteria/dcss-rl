@@ -162,8 +162,9 @@ not the current bottleneck.
   to 16.18 seconds (154.48/s), a 19.23× speed-up with exactly the same rank.
 - Post-change asynchronous PPO collection scales from 36.93 decisions/s at five
   workers to 63.94 at ten and 97.93 at twenty, then declines to 93.28 at forty.
-  Twenty workers remain the measured knee and are 2.19× faster than the prior matched
-  collector. `online-train-v2` expands training from 20 to 64 disjoint seeds and its
+  Before the idle-CPU fix, twenty workers were the measured knee and 2.19× faster than
+  the prior matched collector. `online-train-v2` expands training from 20 to 64
+  disjoint seeds and its
   per-episode horizon from 500 to 1,000 decisions. Episode rotation strides by worker
   count, so concurrent workers consume disjoint seed blocks before wrapping rather
   than shifting into nearly complete overlap.
@@ -193,8 +194,18 @@ not the current bottleneck.
   returned to passive survival. Neither beats full-inverse v8's 1,795, and v8 failed
   heldout. The next ablation separates online imitation from PPO/value gradients.
 - A controlled current-build check measured 99.17 decisions/s at 20 workers and
-  102.58/104.58 at 24. The 3.4–5.5% gain is modest but repeatable, so new training runs
-  use 24 workers while 40 remains demonstrably beyond the scaling knee.
+  102.58/104.58 at 24. This pre-idle-fix check motivated using 24 workers for the next
+  run; the later corrected sweep supersedes that operating point.
+- A 49,152-decision online-imitation-only run reached 74.7% teacher agreement but
+  failed diagnostic-v2 at `(0, 0, 150, 2101, 9, 8, 32.0)`, with four D:1 truncations
+  and one D:5 death. Its 1,068 rests and 867 menu answers show that removing PPO/value
+  gradients does not remove the rest-confirm attractor.
+- Paused headless Crawl workers previously consumed a full core because WebTiles waits
+  on stdin as well as its socket and `/dev/null` is permanently readable. The launcher
+  now keeps an unwritten stdin pipe open; an isolated worker accumulated no additional
+  CPU time over a 12-second paused interval after startup. A matched post-fix sweep at
+  24/32/40/48/64 workers reached 137.12/145.24/150.57/154.03/149.70 decisions/s, moving
+  the measured collector knee to 48 workers.
 
 Next:
 

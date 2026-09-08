@@ -135,7 +135,10 @@ class ManagedGame:
         self.process = subprocess.Popen(
             arguments,
             cwd=self.binary.parent,
-            stdin=subprocess.DEVNULL,
+            # Headless WebTiles still includes fd 0 in its blocking pselect. A
+            # DEVNULL fd is permanently readable and makes an otherwise idle DCSS
+            # process busy-spin; an unwritten pipe lets the socket wait block.
+            stdin=subprocess.PIPE,
             stdout=self._log_handle,
             stderr=subprocess.STDOUT,
             start_new_session=True,
@@ -183,6 +186,8 @@ class ManagedGame:
             self.transport.close()
             self.transport = None
         if self.process is not None:
+            if self.process.stdin is not None:
+                self.process.stdin.close()
             if self.process.poll() is None:
                 self.process.terminate()
                 try:
