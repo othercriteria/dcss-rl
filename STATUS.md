@@ -426,10 +426,11 @@ not the current bottleneck.
 
 Next:
 
-1. Correct and verify the recorded downstairs input-boundary race before another
-   learning comparison; then recheck current-policy development behavior under the
-   corrected transport. The v67 UI-return pair failed safety/quality gates and is
-   stopped. Terrain-v66 remains the diagnostic leader; maximum actual depth is D:6.
+1. Use the verified stair-boundary correction for the next bounded research step:
+   strengthen conditional menu probability calibration and collect deliberate
+   combat/escape exposure before another opening-timing continuation. The v67
+   UI-return pair failed safety/quality gates and is stopped. Terrain-v66 remains
+   the diagnostic leader; actual D:11 progress and stronger survival remain open.
 2. Address the independently measured blocked-action, prompt, and navigation loops
    that dominate the broader development baseline. Prioritize useful discovery and XL
    alongside fewer loops; do not count merely converting stalls into deaths as success.
@@ -505,30 +506,41 @@ Next:
   186 fast tests, three live tests, formatting, lint, and typing pass.
 - Integrated terrain/cache changes are committed at `916408b`; optional selective
   critic learning and the predeclared UI-return experiment are committed at `9f0d08c`.
-  A later matched48-worker startup-cache pair does **not** justify default activation:
-  collection regressed39.02→50.82 seconds despite child CPU635.89→147.05 seconds,
+  A later matched 48-worker startup-cache pair does **not** justify default activation:
+  collection regressed 39.02→50.82 seconds despite child CPU 635.89→147.05 seconds,
   and stochastic rollouts/model tensors diverged. Keep caching opt-in and investigate
   parity before further optimization. Exact report: `artifacts/p/v66cache/report.json`.
-- The next bounded UI-cost comparison uses the same opening-capable v65→feature6
-  start, abilities-row plus critic learning, and cost0 versus0.1. Both arms use cold
+- The next bounded UI-cost comparison uses the same opening-capable v65→feature 6
+  start, abilities-row plus critic learning, and cost 0 versus 0.1. Both arms use cold
   startup following the performance result. Optional raw PPO recording closes an
   evidence gap in earlier training logs: per-transition provenance references exact
-  collector checkpoints, including across optimizer boundaries. Its2×8 smoke passes
+  collector checkpoints, including across optimizer boundaries. Its 2×8 smoke passes
   and exact ownership allows only abilities/value-head changes. The completed pair
-  is stopped: diagnostic curves21,518→17,988 (off) and24,271→28,479 (on) remain below
+  is stopped: diagnostic curves 21,518→17,988 (off) and 24,271→28,479 (on) remain below
   terrain-v66. Every horizon survivor loops; stochastic training still samples
-  Renounce/rejected choices despite exact47/47 greedy ac1 validation preservation.
+  Renounce/rejected choices despite exact 47/47 greedy ac1 validation preservation.
   No broader or held-out evaluation was run.
-- A training-only retreat audit finds no low-HP upstairs examples among447 legal
-  states in136 anchor episodes (minimum HP79.365%). Do not relabel these as escape
+- A training-only retreat audit finds no low-HP upstairs examples among 447 legal
+  states in 136 anchor episodes (minimum HP 79.365%). Do not relabel these as escape
   training; deliberate exposure is needed. `docs/research-retreat-coverage.md` records
   the negative coverage evidence.
-- Recording/comparison tools and the full217-unit/three-live gate are committed at
+- Recording/comparison tools and the full 217-unit/three-live gate are committed at
   `a0e25ad`. First-collection evidence confirms identical initial tensors and all
   RNG-state streams, but ten workers act on a premature downstairs boundary containing
-  only mode0+flush, before the next floor arrives. Eight other workers differ solely
+  only mode 0+flush, before the next floor arrives. Eight other workers differ solely
   in cell colour with identical policy behavior. A scoped level-transition readiness
   correction and bounded frozen-policy control are next; static caching stays opt-in.
+- The scoped stair-boundary correction is committed at `32bbea8` and passes 273 unit
+  tests, three live tests, and both stable-release compatibility smokes. Two frozen
+  cold 48×128 controls verify all 6,144 paired policy inputs/masks/probabilities/RNG
+  states/actions/rewards/terminal boundaries identical, with every model tensor
+  unchanged. All 140 actual stair actions per arm avoid the premature mode 0+flush
+  return. Twelve workers still differ strictly in cell colour; those raw differences
+  remain visible and explain short-cycle counts 1279/1273 (cycle cost was zero).
+  Evidence: `artifacts/e/readiness68-policy-parity.json` and both frozen-model audits.
+  Diagnostic rechecks retain terrain-v66's 42,853 and v51's 39,956 full ranks exactly.
+  Neither champion manifest nor heldout-v5 was changed. Do not interpret this bounded
+  proof as universal byte-identical DCSS output or as a new policy-quality milestone.
 
 ## Verified commands
 

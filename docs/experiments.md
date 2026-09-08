@@ -625,16 +625,16 @@ this journal exists to keep research velocity and direction visible.
   explicit opt-in caching and remeasure representative rollout scaling before
   changing the worker default; no player saves or shared writable caches are reused.
 - **2026-09-08 15:16 EDT — predeclared matched UI-return pilot.** Start both arms
-  from immutable v65 update 2 migrated explicitly to feature6 as
+  from immutable v65 update 2 migrated explicitly to feature 6 as
   `checkpoints/ui-cost-v67-start.pt`; evaluate this zero-update diagnostic control
   separately from terrain-v66. Train only the abilities row and value head; encoder,
   conditional menu rows, and ECHO head remain exact. The new critic opt-in defaults
   off and has actual optimizer preservation tests. Each arm uses two 48×128 updates,
-  seed1, online-train-v3, four epochs/update, learning rate1e-4, clipped PPO1/value0.5,
-  entropy0.01, imitation0.1 with full-inverse class balancing and the same v19/v20/ac1
-  anchors, ECHO0, continuing-reset returns, and decision cost0.01. Only UI overflow
-  cost differs:0 versus0.1, with capacity2/refill0.25. Both use validated static data
-  caching. Total budget24,576 decisions, no automatic extension.
+  seed 1, online-train-v3, four epochs/update, learning rate 1e-4, clipped PPO 1/value 0.5,
+  entropy 0.01, imitation 0.1 with full-inverse class balancing and the same v19/v20/ac1
+  anchors, ECHO 0, continuing-reset returns, and decision cost 0.01. Only UI overflow
+  cost differs: 0 versus 0.1, with capacity 2/refill 0.25. Both use validated static data
+  caching. Total budget 24,576 decisions, no automatic extension.
   Check exact selective ownership and inspect the two scheduled diagnostic snapshots
   per arm. Require real activations, no Renounce/state-rejected selections, and lower
   inapplicable open/cancel incidence per ordinary decision in the cost arm. Broader
@@ -645,25 +645,25 @@ this journal exists to keep research velocity and direction visible.
   Heldout-v5 stays untouched. Representative cache timing runs finish before this pair.
 - **2026-09-08 — UI-pilot control and retreat coverage prerequisites.** The migrated
   opening-capable control retains rank `(0, 0, 26016, 19, 19, 16, 152.0)` in 12.49
-  seconds:331 opens,5 successful activations,326 inapplicable menus,325 cancels,
-  no Renounce or state-rejected selections. Its ac1 validation remains9/9 applicable
-  and38/38 inapplicable correct; training remains20/24 and109/116, not perfect.
+  seconds: 331 opens, 5 successful activations, 326 inapplicable menus, 325 cancels,
+  no Renounce or state-rejected selections. Its ac1 validation remains 9/9 applicable
+  and 38/38 inapplicable correct; training remains 20/24 and 109/116, not perfect.
   These are qualifications to the repaired starting point, not new live success.
-  Separately, all136 training trajectories contain447 upstairs-legal pre-action
-  observations with valid HP, but minimum HP fraction is0.79365. No threatened
-  low-HP examples exist at the predeclared25/50/75% bands. Decision: do not fit an
+  Separately, all 136 training trajectories contain 447 upstairs-legal pre-action
+  observations with valid HP, but minimum HP fraction is 0.79365. No threatened
+  low-HP examples exist at the predeclared 25/50/75% bands. Decision: do not fit an
   upstairs escape row from these anchors; deliberate training exposure is necessary.
   Details: `docs/research-retreat-coverage.md`.
 - **2026-09-08 — representative static-cache pair and prelaunch amendment.**
-  `poe benchmark-startup-cache` ran matched48×128 single-update configurations from
-  terrain-v66, with anchor priming31.313 seconds separately and warm per-arm
-  preparation0.249/0.243 seconds. Off/on collection took39.02/50.82 seconds;
-  wall44.556/56.152 and awaited child CPU635.891/147.05 seconds. Source/input hashes
-  remained unchanged. Despite the CPU reduction, outcomes diverged:20/22 completed
-  episodes,982/926 cycles,19/5 UI overflows, and8/10 model-state tensors changed.
+  `poe benchmark-startup-cache` ran matched 48×128 single-update configurations from
+  terrain-v66, with anchor priming 31.313 seconds separately and warm per-arm
+  preparation 0.249/0.243 seconds. Off/on collection took 39.02/50.82 seconds;
+  wall 44.556/56.152 and awaited child CPU 635.891/147.05 seconds. Source/input hashes
+  remained unchanged. Despite the CPU reduction, outcomes diverged: 20/22 completed
+  episodes, 982/926 cycles, 19/5 UI overflows, and 8/10 model-state tensors changed.
   This is confounded operational evidence, not a matched-workload speedup or proof
   of cache-induced behavior change. Earlier deterministic parity probes do not
-  establish stochastic48-worker parity. Report: `artifacts/p/v66cache/report.json`.
+  establish stochastic 48-worker parity. Report: `artifacts/p/v66cache/report.json`.
   Decision: do not enable cache by default or spend more throughput budget yet.
   Before launching the UI-return pair, amend both arms to cold startup and enable
   optional raw rollout recording with actual per-update collector checkpoints.
@@ -671,39 +671,59 @@ this journal exists to keep research velocity and direction visible.
   aggregate counts alone cannot verify matched first-update collection. Budgets,
   objectives, success/stop gates, and held-out exclusion remain unchanged.
 - **2026-09-08 — recorded UI-return pair outcome, source `a0e25ad`.** Each arm
-  completed12,288 decisions; off collection43.46/39.72 seconds, on43.66/37.69,
-  with optimizer0.93/0.45 versus0.95/0.44 seconds. Off cold anchor preparation
- 31.394 seconds; on warm0.291. All four ownership audits pass: only abilities-row270
-  and value-head weight/bias change. Ac1 validation remains9/9 and38/38 with exact
-  masked menu logits. Nevertheless stochastic training samples3/2 Renounce choices
-  and76/82 zero-turn active/cooldown rejections across off/on; no renunciations
-  complete. Starts total200/188. Second-update inapplicable-menu incidence per
-  ordinary decision rises3.791%→3.930% despite fewer overall opens in the cost arm.
+  completed 12,288 decisions; off collection 43.46/39.72 seconds, on 43.66/37.69,
+  with optimizer 0.93/0.45 versus 0.95/0.44 seconds. Off cold anchor preparation
+  31.394 seconds; on warm 0.291. All four ownership audits pass: only abilities row 270
+  and value-head weight/bias change. Ac1 validation remains 9/9 and 38/38 with exact
+  masked menu logits. Nevertheless stochastic training samples 3/2 Renounce choices
+  and 76/82 zero-turn active/cooldown rejections across off/on; no renunciations
+  complete. Starts total 200/188. Second-update inapplicable-menu incidence per
+  ordinary decision rises 3.791%→3.930% despite fewer overall opens in the cost arm.
   Both arms fail the stated safety criterion before their first optimizer update.
-  Diagnostic curves are off21,518→17,988 and on24,271→28,479, all below terrain-v66's
-  42,853. Every horizon is a loop; cost-on update2 replaces one ability cycle with
+  Diagnostic curves are off 21,518→17,988 and on 24,271→28,479, all below terrain-v66's
+  42,853. Every horizon is a loop; cost-on update 2 replaces one ability cycle with
   353 repeated explore rejections while Berserk. Decision: stop both arms, no broader
   development or held-out evaluation. Greedy validation is not stochastic calibration.
 - **2026-09-08 — first-collection race localized.**
   `artifacts/e/ui67-first-collection.json` verifies identical initial model tensors
-  and all6,144 pre-choice RNG digests. Thirty workers match semantically; eight differ
+  and all 6,144 pre-choice RNG digests. Thirty workers match semantically; eight differ
   only in cell colour with exact masks/actions/probabilities/rewards. Ten first
   sampling divergences follow identical downstairs actions: one arm returns only
-  `input_mode=0` plus flush before floor generation finishes. Worker5 transition3 is
+  `input_mode=0` plus flush before floor generation finishes. Worker 5 transition 3 is
   minimal: premature old-floor state causes CANCEL; delayed D2 data then arrives with
-  `Unknown command.`. Worker28 demonstrates a legitimate mode5 more boundary, so
-  waiting only for mode1 is wrong. The UI-cost pair is not a clean causal ablation;
+  `Unknown command.`. Worker 28 demonstrates a legitimate mode 5 more boundary, so
+  waiting only for mode 1 is wrong. The UI-cost pair is not a clean causal ablation;
   the readiness defect exists with cold startup, independently of static caching.
 - **2026-09-08 15:49 EDT — predeclared readiness correction check.** Scope the
   correction to level-transition keys and distinguish explicit input/recognized
-  blocking UI from a mode0 normal-state prefix; do not infer readiness from a
+  blocking UI from a mode 0 normal-state prefix; do not infer readiness from a
   progress-bar flush or extend a timer as the sole fix. Require delayed-packet
   adversarial tests plus current trunk/stable compatibility smoke. Then run at most
-  two cold48×128 collections from the same ui67 starting model, with recording and
+  two cold 48×128 collections from the same ui67 starting model, with recording and
   sampling evidence, no anchors, all loss weights zero, and selective warmup with no
   allowed rows (preventing even optimizer decay). Audit every model tensor unchanged.
-  Total additional collection budget12,288 decisions; no learning or automatic
+  Total additional collection budget 12,288 decisions; no learning or automatic
   extension. Compare exact policy inputs/masks/actions/rewards/sampling/bootstrap
   evidence while retaining strict raw/semantic colour differences separately. Any
   remaining actor-affecting mismatch stops scaling and supplies the next boundary
   trace; no heldout access.
+- **2026-09-08 — readiness correction verified at `32bbea8`.** Full gate of 273 unit
+  tests/three live tests passes, as do standard cold compatibility smokes on 0.34.1
+  (`1eebc1a2892e1c89776a0d7a10691f8dac8d9796`) and 0.33.1
+  (`9cb173b281c11a5177f40b8c0662bacd3aac2717`). Frozen controls r68a/r68b each complete
+  6,144 decisions with no changed tensors; collection 45.29/45.02 seconds, nominal
+  zero-weight optimizer 0.61/0.62 seconds. Both have 23 completed episodes, mean
+  return 15.522 and 152 UI overflows. The strict policy comparison passes every paired
+  input/mask/probability/RNG/action/reward/terminal/bootstrap check; all 140 actual
+  stairs actions per arm avoid the defective prefix. Strict semantics/raw remain
+  unequal in 12 workers, exhaustively attributable to cell colour. Those colours also
+  enter the existing cycle digest, consistent with 1279/1273 cycle counts; cost 0 means
+  this cannot alter this comparison's reward. Do not claim universal raw determinism
+  or assume nonzero cycle-cost arms are matched without addressing that distinction.
+  Reports: `artifacts/e/readiness68-policy-parity.json`, `readiness68-a-frozen.json`,
+  `readiness68-b-frozen.json`. Current-policy diagnostic rechecks at
+  `artifacts/e/{v66,v51}-ready68` retain their complete ranks 42,853/39,956, in 14.68/
+  16.10 seconds. Decision: accept the scoped readiness fix, keep static caching opt-in,
+  resume bounded current-policy research; no more UI67 training, broader selection,
+  or held-out access. Conditional stochastic calibration and new combat/retreat
+  coverage are more justified than scaling the failed timing arm.

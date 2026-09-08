@@ -24,6 +24,15 @@ comparisons use the checkpoint's feature version and keep strict semantic/raw co
 differences visible. Recheck frozen-policy parity before interpreting future costs or
 startup-cache wall time; do not normalize away unexplained actor-affecting changes.
 
+The correction at `32bbea8` passes the frozen cold/cold check recorded in
+`artifacts/e/readiness68-policy-parity.json`: all 6,144 paired policy inputs,
+probabilities, RNG digests, actions, masks, rewards, and terminal/bootstrap boundaries
+match. All 140 actual stairs actions per arm avoid the premature return; both final
+models remain tensor-identical to their start. Twelve workers retain strictly different
+cell colours, which also explain differing cycle counters while cycle cost is zero.
+This verifies the observed readiness correction, not universal raw determinism or a
+cache speedup. The next cache measurement must use the corrected boundary.
+
 ## Observed result
 
 The matched terrain-v66 startup-cache benchmark used source revision

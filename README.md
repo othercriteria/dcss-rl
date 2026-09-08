@@ -216,6 +216,9 @@ poe compare-training-rollouts --reference RUN_A --candidate RUN_B --workers 48 -
 The report separates semantic/action agreement, raw-message equality, and sampling
 equality, validates collector checkpoints, and checks terminal bootstrap resets.
 Missing sampling evidence is unknown, not a successful equality check.
+For stateless checkpoints, `--require-policy-identical` requires matching versioned
+policy inputs, masks, complete sampling evidence, actions, rewards, and bootstrap
+states; cosmetic semantic/raw differences are still reported independently.
 PPO prepares anchor replay through a transient reducer and a disposable tensor cache
 (`--imitation-cache-directory`, default `.cache/imitation-replay`). Content and
 preprocessing-source hashes invalidate the cache; only environment features, legality

@@ -96,3 +96,22 @@ Before choosing that pilot, collect positive low-HP threatened upstairs contexts
 and matched negative upstairs contexts on training seeds, audit episode/seed
 coverage, and reserve an episode-disjoint validation split. Do not relax the HP
 threshold merely to obtain positive examples from the current anchors.
+
+## Training-only setup option (source-verified, not yet live-tested)
+
+Unmodified trunk `96832895d0253f9d7290d370efe32bf0614679a8` supports wizard level-down
+(`&d`), placing upstairs underfoot (`&,`), dismissing monsters (`&G`), and named monster
+creation (`&m`). The latter places monsters within distance 2 through visibility range;
+condition checks must use actual visible state rather than assuming adjacent placement.
+No direct HP setter was found. Ordinary bounded waiting against a controlled monster
+could provide low-HP threatened states, with healthy-threatened and injured-unthreatened
+controls. Record failed setup attempts rather than silently substituting easier seeds.
+
+No setup API currently exists. A future collector must retain raw setup exchanges
+separately from ordinary policy-action examples, keep wizard keys out of the learned
+catalog/deployment, and assert requested HP/threat/stair conditions before acceptance.
+Crucially, even suppressed wizard mode asks `Die?` at lethal damage (`ouch.cc:1548–1563`).
+The current teacher rejects generic prompts, which would resurrect the character.
+Any wizard collector must accept that death or terminate at the lethal boundary;
+otherwise its survival evidence is invalid. This route needs a bounded live smoke
+before any curriculum scale-up and cannot supply normal-play headline evidence.
