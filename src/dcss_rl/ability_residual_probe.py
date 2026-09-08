@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import time
 from dataclasses import asdict, dataclass
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from itertools import pairwise
 from pathlib import Path
 from typing import NewType, cast
@@ -31,7 +32,14 @@ from dcss_rl.learned import (
 from dcss_rl.replay import replay_frames
 from dcss_rl.schema import JsonObject
 from dcss_rl.training import _training_action_mask
-from dcss_rl.units import ActionCount, GameSeed, Keycode, Probability, Seconds
+from dcss_rl.units import (
+    ActionCount,
+    ActionIndex,
+    GameSeed,
+    Keycode,
+    Probability,
+    Seconds,
+)
 
 OptimizerStep = NewType("OptimizerStep", int)
 _STEPS = tuple(OptimizerStep(step) for step in (1, 16, 64, 256))
@@ -49,6 +57,39 @@ class MenuContext(IntEnum):
     UNKNOWN = 3
     NON_MENU = 4
     OTHER_MENU = 5
+
+
+class ResidualObjective(StrEnum):
+    CE = "ce"
+    WORST_MARGIN = "worst-margin"
+
+
+@dataclass(frozen=True)
+class CompetitorMargin:
+    context: str
+    target: ActionIndex
+    competitor: ActionIndex
+    relative_odds_cap: float
+    required_logit_gap: float
+
+
+def objective_margins(objective: ResidualObjective) -> tuple[CompetitorMargin, ...]:
+    if objective is ResidualObjective.CE:
+        return ()
+    if objective is not ResidualObjective.WORST_MARGIN:
+        raise ValueError("unsupported residual objective")
+    x_cap = 1e-5
+    cancel_cap = (1 - 0.995) / 0.995 - x_cap
+    return tuple(
+        CompetitorMargin(context.name.lower(), target, competitor, cap, -math.log(cap))
+        for context, target, competitor, cap in (
+            (MenuContext.APPLICABLE, _A, _X, x_cap),
+            (MenuContext.APPLICABLE, _A, _CANCEL, cancel_cap),
+            (MenuContext.INAPPLICABLE, _CANCEL, _X, x_cap),
+            (MenuContext.INAPPLICABLE, _CANCEL, _A, 1e-3),
+            (MenuContext.MISSING, _CANCEL, _X, x_cap),
+        )
+    )
 
 
 _TARGET_CONTEXTS = (
@@ -115,6 +156,9 @@ class ResidualMetadata(CheckpointTrainingMetadata):
     snapshot: ResidualSnapshot
     owned_parameters: tuple[str, ...]
     predeclared_steps: tuple[OptimizerStep, ...]
+    # Checkpoint metadata must contain primitives for torch weights_only loading.
+    objective: str = ResidualObjective.CE.value
+    competitor_margins: tuple[CompetitorMargin, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -133,6 +177,8 @@ class ResidualReport:
     learning_rate: float
     trainable_parameters: int
     protocol: str
+    objective: ResidualObjective = ResidualObjective.CE
+    competitor_margins: tuple[CompetitorMargin, ...] = ()
 
 
 def load_residual_data(paths: tuple[Path, ...]) -> ResidualData:
@@ -293,8 +339,69 @@ def measure_residual(
     )
 
 
+def worst_margin_loss(
+    logits: Tensor, masks: Tensor, targets: Tensor, contexts: Tensor
+) -> Tensor:
+    """Mean context-wise worst example sum of squared legal-margin violations."""
+    if (
+        logits.ndim != 2
+        or logits.shape[1] != ACTION_COUNT
+        or masks.shape != logits.shape
+        or masks.dtype != torch.bool
+        or targets.shape != (len(logits),)
+        or contexts.shape != targets.shape
+    ):
+        raise ValueError("worst-margin requires matching catalog logits/masks/labels")
+    if (
+        targets.dtype != torch.int64
+        or contexts.dtype != torch.int64
+        or not torch.isfinite(logits).all()
+    ):
+        raise ValueError("worst-margin requires integer labels and finite logits")
+    recognized = torch.zeros_like(contexts, dtype=torch.bool)
+    losses: list[Tensor] = []
+    margins = objective_margins(ResidualObjective.WORST_MARGIN)
+    for context in _TARGET_CONTEXTS:
+        selected = contexts == context
+        recognized |= selected
+        if not selected.any():
+            raise ValueError("worst-margin requires all three target contexts")
+        expected_target = _A if context is MenuContext.APPLICABLE else _CANCEL
+        if not (targets[selected] == expected_target).all():
+            raise ValueError("unexpected target for worst-margin context")
+        allowed = torch.zeros(ACTION_COUNT, dtype=torch.bool, device=masks.device)
+        allowed[[_CANCEL, _X]] = True
+        if context is not MenuContext.MISSING:
+            allowed[_A] = True
+        if (masks[selected] & ~allowed).any():
+            raise ValueError("unexpected legal competitor for worst-margin context")
+        if not masks[selected, expected_target].all():
+            raise ValueError("worst-margin target must be syntactically legal")
+        example_loss = torch.zeros(
+            int(selected.sum()), dtype=logits.dtype, device=logits.device
+        )
+        for margin in margins:
+            if margin.context != context.name.lower():
+                continue
+            gap = (
+                logits[selected, expected_target] - logits[selected, margin.competitor]
+            )
+            violation = torch.relu(margin.required_logit_gap - gap).square()
+            example_loss = example_loss + violation.masked_fill(
+                ~masks[selected, margin.competitor], 0
+            )
+        losses.append(example_loss.max())
+    if not recognized.all():
+        raise ValueError("unknown target context passed to worst-margin objective")
+    return torch.stack(losses).mean()
+
+
 def residual_step(
-    model: SemanticActorCritic, data: ResidualData, optimizer: torch.optim.Optimizer
+    model: SemanticActorCritic,
+    data: ResidualData,
+    optimizer: torch.optim.Optimizer,
+    *,
+    objective: ResidualObjective = ResidualObjective.CE,
 ) -> None:
     selected = data.contexts <= MenuContext.MISSING
     if not all((data.contexts == context).any() for context in _TARGET_CONTEXTS):
@@ -302,25 +409,41 @@ def residual_step(
     if not data.masks[selected].gather(1, data.targets[selected, None]).all():
         raise ValueError("residual targets must be syntactically legal")
     optimizer.zero_grad(set_to_none=True)
-    logits = model(data.features[selected])[0].masked_fill(
-        ~data.masks[selected], -torch.inf
-    )
-    losses = torch.nn.functional.cross_entropy(
-        logits, data.targets[selected], reduction="none"
-    )
-    loss = torch.stack(
-        [
-            losses[data.contexts[selected] == context].mean()
-            for context in _TARGET_CONTEXTS
-        ]
-    ).mean()
+    logits = model(data.features[selected])[0]
+    if objective is ResidualObjective.WORST_MARGIN:
+        loss = worst_margin_loss(
+            logits,
+            data.masks[selected],
+            data.targets[selected],
+            data.contexts[selected],
+        )
+    elif objective is ResidualObjective.CE:
+        losses = torch.nn.functional.cross_entropy(
+            logits.masked_fill(~data.masks[selected], -torch.inf),
+            data.targets[selected],
+            reduction="none",
+        )
+        loss = torch.stack(
+            [
+                losses[data.contexts[selected] == context].mean()
+                for context in _TARGET_CONTEXTS
+            ]
+        ).mean()
+    else:
+        raise ValueError("unsupported residual objective")
     if not torch.isfinite(loss):
         raise ValueError("nonfinite residual loss")
     loss.backward()
     optimizer.step()
 
 
-def run_residual_probe(checkpoint: Path, trajectories: Path, output: Path) -> Path:
+def run_residual_probe(
+    checkpoint: Path,
+    trajectories: Path,
+    output: Path,
+    *,
+    objective: ResidualObjective = ResidualObjective.CE,
+) -> Path:
     output.mkdir(parents=True, exist_ok=False)
     started = time.monotonic()
     torch.set_num_threads(1)
@@ -396,7 +519,7 @@ def run_residual_probe(checkpoint: Path, trajectories: Path, output: Path) -> Pa
     checkpoints: list[SourceEvidence] = []
     for step in range(257):
         if step:
-            residual_step(model, training, optimizer)
+            residual_step(model, training, optimizer, objective=objective)
         if not base_tensors_exact(model, baseline):
             raise ValueError(f"base tensor ownership violated at step {step}")
         if step not in (0, *_STEPS):
@@ -416,7 +539,7 @@ def run_residual_probe(checkpoint: Path, trajectories: Path, output: Path) -> Pa
             raise ValueError(f"non-ability preservation violated at step {step}")
         snapshots.append(snapshot)
         metadata = ResidualMetadata(
-            "ability-residual-fixed-ce",
+            f"ability-residual-fixed-{objective.value}",
             0,
             step,
             int((training.contexts <= MenuContext.MISSING).sum()),
@@ -436,6 +559,8 @@ def run_residual_probe(checkpoint: Path, trajectories: Path, output: Path) -> Pa
             snapshot,
             tuple(sorted(_OWNED)),
             _STEPS,
+            objective.value,
+            objective_margins(objective),
         )
         path = output / (f"step-{step:04d}.pt" if step else "start.pt")
         save_checkpoint(
@@ -467,13 +592,17 @@ def run_residual_probe(checkpoint: Path, trajectories: Path, output: Path) -> Pa
         _STEPS,
         _LEARNING_RATE,
         18,
-        "Fixed CPU Adam lr0.1, 256 full-batch steps with equal mean CE weight "
+        f"Fixed CPU Adam lr0.1, 256 full-batch steps, objective {objective.value}: "
+        "equal context weight, mean example CE or worst example summed squared "
+        "positive legal-competitor margin violations, "
         "for applicable, present-inapplicable, missing-Berserk contexts. "
         "Unknown excluded. Seeds3049..3084 train,3085..3096 validation; "
         "preaction frames only. Base tensors audited every step; "
         "non-ability preservation measured on all train+validation states "
         "at declared snapshots. No checkpoint selection, continuation, "
         "live rollout, or promotion is authorized by completion.",
+        objective,
+        objective_margins(objective),
     )
     path = output / "report.json"
     with path.open("x") as stream:
@@ -486,8 +615,18 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--trajectories", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--objective",
+        choices=list(ResidualObjective),
+        type=ResidualObjective,
+        default=ResidualObjective.CE,
+    )
     args = parser.parse_args()
-    print(run_residual_probe(args.checkpoint, args.trajectories, args.output))
+    print(
+        run_residual_probe(
+            args.checkpoint, args.trajectories, args.output, objective=args.objective
+        )
+    )
 
 
 if __name__ == "__main__":

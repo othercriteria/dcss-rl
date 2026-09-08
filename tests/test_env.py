@@ -95,6 +95,43 @@ def test_fixed_action_catalog_round_trips(kind: ActionKind) -> None:
     assert index_to_action(action_to_index(action)) == action
 
 
+@pytest.mark.parametrize("keycode", [32, 13, 27])
+@pytest.mark.parametrize("menu_type,mode", [("more", 5), ("menu", 5), ("more", 1)])
+def test_more_continuation_requires_structured_more_state(
+    keycode: int, menu_type: str, mode: int
+) -> None:
+    game = MagicMock(spec=ManagedGame)
+    game.send_key.return_value = ObservationBatch(
+        (Message({"msg": "input_mode", "mode": 1}),), ()
+    )
+    env = DcssEnv(_DCSS_BINARY)
+    env.game = cast(ManagedGame, game)
+    env.reducer = ObservationReducer()
+    env.current = SemanticObservation.from_dict(
+        {
+            "player": {"hp": 20, "hp_max": 20, "depth": 1, "xl": 1},
+            "cells": [],
+            "messages": [],
+            "menu": {
+                "type": menu_type,
+                "prompt": "--more--",
+                "choices": [{"keycode": keycode, "text": "Continue"}],
+            },
+            "input_mode": mode,
+        }
+    )
+    action = (
+        Action(ActionKind.CANCEL)
+        if keycode == 27
+        else Action.menu_select(Keycode(keycode))
+    )
+    env.step_typed(action_to_index(action))
+    if menu_type == "more" and mode == 5:
+        game.send_key.assert_called_once_with(keycode, ui_continuation=True)
+    else:
+        game.send_key.assert_called_once_with(keycode)
+
+
 def test_player_visible_death_ends_episode_before_post_game_ui() -> None:
     batch = ObservationBatch(
         observations=(

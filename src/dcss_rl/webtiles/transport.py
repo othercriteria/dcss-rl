@@ -52,6 +52,7 @@ class FlushBoundary(StrEnum):
     QUIESCENCE = "quiescence"
     INPUT_READY_OR_QUIESCENCE = "input-ready-or-quiescence"
     LEVEL_TRANSITION = "level-transition"
+    UI_CONTINUATION = "ui-continuation"
 
 
 class _InputReadiness(Enum):
@@ -67,12 +68,14 @@ class _LevelBoundaryEvidence:
     input_mode: int | None = None
     ui_stack: list[bool] = field(default_factory=list)
     line_input: bool = False
+    saw_busy: bool = False
 
     def apply(self, payload: JsonObject) -> None:
         kind = payload.get("msg")
         if kind == "input_mode":
             mode = payload.get("mode")
             self.input_mode = mode if isinstance(mode, int) else None
+            self.saw_busy |= mode == 0
         elif kind == "menu":
             self.ui_stack.append(True)
         elif kind == "ui-push":
@@ -261,7 +264,10 @@ class WebtilesTransport:
             ordered.append(message)
             target = controls if message.control else observations
             target.append(message)
-            if boundary is FlushBoundary.LEVEL_TRANSITION:
+            if boundary in {
+                FlushBoundary.LEVEL_TRANSITION,
+                FlushBoundary.UI_CONTINUATION,
+            }:
                 level_evidence.apply(message.payload)
                 if message.kind == "exit":
                     return ObservationBatch(
@@ -274,14 +280,17 @@ class WebtilesTransport:
                         _InputReadiness.READY if mode == 1 else _InputReadiness.BUSY
                     )
             if message.control and message.kind == "flush_messages":
-                if boundary is FlushBoundary.LEVEL_TRANSITION:
+                if boundary is FlushBoundary.LEVEL_TRANSITION or (
+                    boundary is FlushBoundary.UI_CONTINUATION
+                    and level_evidence.saw_busy
+                ):
                     if level_evidence.explicit_input:
                         return ObservationBatch(
                             tuple(observations), tuple(controls), tuple(ordered)
                         )
                     if not level_evidence.blocking_ui:
-                        # Level generation emits mode 0 + flush before doing CPU
-                        # work. Silence here is not permission to send another key.
+                        # Generation can follow stairs or a more acknowledgment.
+                        # Mode 0 + silence is not permission to send another key.
                         # The socket timeout fails closed if no input evidence arrives.
                         continue
                     settle = _BLOCKING_UI_QUIET_PERIOD

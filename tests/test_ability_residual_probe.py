@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from torch import Tensor
 
 from dcss_rl.ability_residual_probe import (
     _A,
@@ -11,13 +12,16 @@ from dcss_rl.ability_residual_probe import (
     _X,
     MenuContext,
     ResidualData,
+    ResidualObjective,
     base_tensors_exact,
     load_residual_data,
     measure_residual,
+    objective_margins,
     outputs_exact,
     residual_step,
     run_residual_probe,
     selected_coverage,
+    worst_margin_loss,
 )
 from dcss_rl.env import ACTION_COUNT
 from dcss_rl.features import FEATURE_COUNT, feature_count
@@ -58,7 +62,10 @@ def _model() -> SemanticActorCritic:
     return model
 
 
-def test_three_context_step_preserves_base_and_other_contexts() -> None:
+@pytest.mark.parametrize("objective", list(ResidualObjective))
+def test_three_context_step_preserves_base_and_other_contexts(
+    objective: ResidualObjective,
+) -> None:
     model, data = _model(), _data()
     baseline = {
         name: tensor.clone()
@@ -71,7 +78,7 @@ def test_three_context_step_preserves_base_and_other_contexts() -> None:
     optimizer = torch.optim.Adam(
         (p for p in model.parameters() if p.requires_grad), lr=0.1
     )
-    residual_step(model, data, optimizer)
+    residual_step(model, data, optimizer, objective=objective)
     after = measure_residual(model, data, logits)
     assert base_tensors_exact(model, baseline)
     assert after.unknown_excluded == 1
@@ -191,3 +198,74 @@ def test_zero_identity_checks_all_three_outputs() -> None:
     with torch.no_grad():
         candidate.echo_head.bias.add_(1)
     assert not outputs_exact(source, candidate, data)
+
+
+def _margin_batch() -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    data = _data()
+    logits = torch.zeros(3, ACTION_COUNT, dtype=torch.float64)
+    for margin in objective_margins(ResidualObjective.WORST_MARGIN):
+        row = MenuContext[margin.context.upper()]
+        logits[row, margin.competitor] = -margin.required_logit_gap
+    return logits, data.masks[:3], data.targets[:3], data.contexts[:3]
+
+
+def test_margin_zero_loss_implies_probability_gates() -> None:
+    logits, masks, targets, contexts = _margin_batch()
+    logits[~masks] = 1000
+    assert worst_margin_loss(logits, masks, targets, contexts) == 0
+    probabilities = logits.masked_fill(~masks, -torch.inf).softmax(-1)
+    assert probabilities.gather(1, targets[:, None]).min() >= 0.995 - 1e-15
+    assert probabilities[:, _X].max() <= 1e-5
+    assert probabilities[MenuContext.INAPPLICABLE, _A] <= 1e-3
+    assert objective_margins(ResidualObjective.CE) == ()
+
+
+@pytest.mark.parametrize("violation", ("extra-key", "missing-a", "target", "unknown"))
+def test_margin_rejects_unmodeled_competitors_and_contexts(violation: str) -> None:
+    logits, masks, targets, contexts = _margin_batch()
+    if violation == "extra-key":
+        masks[0, 0] = True
+    elif violation == "missing-a":
+        masks[MenuContext.MISSING, _A] = True
+    elif violation == "target":
+        targets[0] = _CANCEL
+    else:
+        logits = torch.cat((logits, logits[:1]))
+        masks = torch.cat((masks, masks[:1]))
+        targets = torch.cat((targets, targets[:1]))
+        contexts = torch.cat((contexts, torch.tensor([MenuContext.UNKNOWN])))
+    with pytest.raises(ValueError, match=r"unexpected|unknown"):
+        worst_margin_loss(logits, masks, targets, contexts)
+
+
+def test_margin_uses_worst_example_sum_and_routes_gradients() -> None:
+    logits, masks, targets, contexts = _margin_batch()
+    logits = torch.cat((logits, logits[:1]))
+    masks = torch.cat((masks, masks[:1]))
+    targets = torch.cat((targets, targets[:1]))
+    contexts = torch.cat((contexts, contexts[:1]))
+    logits[0, _X] += 1
+    logits[3, _X] += 3
+    logits[3, _CANCEL] += 2
+    logits.requires_grad_()
+    loss = worst_margin_loss(logits, masks, targets, contexts)
+    assert float(loss.detach()) == pytest.approx((9 + 4) / 3)
+    loss.backward()
+    assert logits.grad is not None
+    assert torch.count_nonzero(logits.grad[0]) == 0
+    assert logits.grad[3, _A] == pytest.approx(-10 / 3)
+    assert logits.grad[3, _X] == 2
+    assert logits.grad[3, _CANCEL] == pytest.approx(4 / 3)
+
+
+def test_default_objective_retains_exact_ce_step() -> None:
+    first, second = _model(), _model()
+    second.load_state_dict(first.state_dict())
+    first_optimizer = torch.optim.Adam(first.parameters(), lr=0.1)
+    second_optimizer = torch.optim.Adam(second.parameters(), lr=0.1)
+    residual_step(first, _data(), first_optimizer)
+    residual_step(second, _data(), second_optimizer, objective=ResidualObjective.CE)
+    assert all(
+        torch.equal(tensor, second.state_dict()[name])
+        for name, tensor in first.state_dict().items()
+    )

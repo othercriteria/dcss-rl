@@ -918,3 +918,18 @@ this journal exists to keep research velocity and direction visible.
   activation, or shortened readiness wait follows this failed pair. Fix and test
   post-acknowledgment readiness before another live comparison; optimize validation
   only with its content-integrity contract preserved.
+- **2026-09-08 — v73 preregistration: worst-example residual margins.** Starting
+  from `checkpoints/terrain-v66.pt`, zero-enable the same 18-parameter ability
+  residual and use ac2 seeds 3049–3084 for training, 3085–3096 for validation.
+  Run CPU Adam at 0.1 for exactly 256 full-batch steps, recording 1/16/64/256.
+  Use the probability-derived worst-example squared margin objective specified in
+  `docs/research-residual71-confidence.md`; no base updates or validation fitting.
+  Each train/validation context must have perfect accuracy, mean target probability
+  >=0.995, minimum >=0.99, maximum Renounce <=1e-5, and inapplicable Berserk
+  <=0.001. Require exact nonmenu/other-menu outputs and independently verified
+  checkpoint ownership. `poe audit-residual-gates` checks saved evidence and selects
+  the first qualifying scheduled snapshot. Failure stops without extra steps or
+  live candidate games. A pass permits independent ac1 regression auditing before
+  separately bounded diagnostic evaluation, never immediate promotion. Output:
+  `artifacts/c/ability-residual-v73`. This is a new bounded hypothesis, not an
+  extension of v71; heldout-v5 remains untouched.

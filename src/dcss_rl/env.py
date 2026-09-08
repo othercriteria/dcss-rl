@@ -256,6 +256,12 @@ class DcssEnv(gym.Env[ObservationData, int]):
         self.last_batch = (
             self.game.send_key(keycode, level_transition=True)
             if structured_action.kind in {ActionKind.STAIRS_UP, ActionKind.STAIRS_DOWN}
+            else self.game.send_key(keycode, ui_continuation=True)
+            if (
+                structured_action.kind in {ActionKind.MENU_SELECT, ActionKind.CANCEL}
+                and self.current.menu_type == "more"
+                and self.current.input_mode == 5
+            )
             else self.game.send_key(keycode)
         )
         self.last_exchange = (self.last_batch,)

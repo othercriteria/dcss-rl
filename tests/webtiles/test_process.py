@@ -49,19 +49,24 @@ def test_rejects_overlong_unix_socket_path_before_start(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "key,level_transition",
+    "key,level_transition,ui_continuation",
     [
-        ("<", True),
-        (">", True),
-        (60, True),
-        (62, True),
-        ("<", False),
-        (">", False),
-        (60, False),
-        (62, False),
-        ("h", False),
-        ("o", False),
-        ("5", False),
+        ("<", True, False),
+        (">", True, False),
+        (60, True, False),
+        (62, True, False),
+        ("<", False, False),
+        (">", False, False),
+        (60, False, False),
+        (62, False, False),
+        ("h", False, False),
+        ("o", False, False),
+        ("5", False, False),
+        (" ", False, False),
+        (32, False, False),
+        (32, False, True),
+        (13, False, True),
+        (27, False, True),
     ],
 )
 @pytest.mark.parametrize("has_output", [False, True])
@@ -70,6 +75,7 @@ def test_send_key_scopes_level_boundary_and_preserves_silent_probe(
     monkeypatch: pytest.MonkeyPatch,
     key: str | int,
     level_transition: bool,
+    ui_continuation: bool,
     has_output: bool,
 ) -> None:
     game = ManagedGame(tmp_path / "crawl", run_root=tmp_path / "run")
@@ -94,18 +100,31 @@ def test_send_key_scopes_level_boundary_and_preserves_silent_probe(
     monkeypatch.setattr(transport, "output_available", lambda: has_output)
     monkeypatch.setattr(transport, "request_full_state", lambda: probes.append(True))
     monkeypatch.setattr(transport, "receive_until_flush", receive)
-    assert game.send_key(key, level_transition=level_transition) is expected
+    assert (
+        game.send_key(
+            key, level_transition=level_transition, ui_continuation=ui_continuation
+        )
+        is expected
+    )
     assert sent == [key]
     automatic = key in {"o", "5"}
     assert probes == ([True] if not has_output and not automatic else [])
     expected_boundary = (
         FlushBoundary.LEVEL_TRANSITION
         if level_transition
+        else FlushBoundary.UI_CONTINUATION
+        if ui_continuation
         else FlushBoundary.INPUT_READY_OR_QUIESCENCE
         if automatic
         else FlushBoundary.QUIESCENCE
     )
     assert boundaries == [(Seconds(0.5) if automatic else None, expected_boundary)]
+
+
+def test_rejects_conflicting_input_boundaries_before_sending(tmp_path: Path) -> None:
+    game = ManagedGame(tmp_path / "crawl", run_root=tmp_path / "run")
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        game.send_key(32, level_transition=True, ui_continuation=True)
 
 
 @pytest.mark.integration

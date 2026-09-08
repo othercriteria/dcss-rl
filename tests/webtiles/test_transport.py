@@ -175,6 +175,61 @@ def test_full_state_probe_uses_upstream_spectator_message(
     transport.close()
 
 
+@pytest.mark.parametrize("delay_after", [0, 1, 2])
+def test_more_continuation_waits_past_captured_shaft_generation_prefixes(
+    game_socket: socket.socket, tmp_path: Path, delay_after: int
+) -> None:
+    # c72 worker 14/episode 0/step 108: space advances a shaft more prompt.
+    # Isolate the initial busy, in-progress, and closed-progress flush cuts.
+    prefixes: tuple[tuple[JsonObject, ...], ...] = (
+        ({"msg": "input_mode", "mode": 0},),
+        (
+            {"msg": "ui-push", "type": "progress-bar", "generation_id": 2},
+            {"msg": "ui-state", "type": "progress-bar"},
+        ),
+        ({"msg": "ui-pop"}, {"msg": "close_all_menus"}),
+    )
+    with WebtilesTransport(
+        Path(game_socket.getsockname()), client_directory=tmp_path / "client"
+    ) as transport:
+        _, address = game_socket.recvfrom(4096)
+        # A remembered more state must not certify this new exchange.
+        game_socket.sendto(b'{"msg":"input_mode","mode":5}\n', address)
+        game_socket.sendto(b'*{"msg":"flush_messages"}\n', address)
+        transport.receive_until_flush()
+
+        def emit() -> None:
+            for index, prefix in enumerate(prefixes):
+                for payload in prefix:
+                    game_socket.sendto(json.dumps(payload).encode() + b"\n", address)
+                game_socket.sendto(b'*{"msg":"flush_messages"}\n', address)
+                if index == delay_after:
+                    time.sleep(0.04)  # Longer than the ordinary 10 ms boundary.
+            game_socket.sendto(b'{"msg":"input_mode","mode":1}\n', address)
+            game_socket.sendto(b'{"msg":"player","depth":4}\n', address)
+            game_socket.sendto(b'*{"msg":"flush_messages"}\n', address)
+
+        sender = threading.Thread(target=emit)
+        sender.start()
+        batch = transport.receive_until_flush(boundary=FlushBoundary.UI_CONTINUATION)
+        sender.join()
+        assert batch.observations[-1].payload == {"msg": "player", "depth": 4}
+        assert len(batch.controls) == 4
+
+
+def test_more_continuation_preserves_quiescence_without_fresh_busy(
+    game_socket: socket.socket, tmp_path: Path
+) -> None:
+    with WebtilesTransport(
+        Path(game_socket.getsockname()), client_directory=tmp_path / "client"
+    ) as transport:
+        _, address = game_socket.recvfrom(4096)
+        game_socket.sendto(b'*{"msg":"flush_messages"}\n', address)
+        batch = transport.receive_until_flush(boundary=FlushBoundary.UI_CONTINUATION)
+        assert not batch.observations
+        assert len(batch.controls) == 1
+
+
 def test_level_transition_waits_past_busy_flush_and_old_ready_state(
     game_socket: socket.socket, tmp_path: Path
 ) -> None:
@@ -209,19 +264,23 @@ def test_level_transition_waits_past_busy_flush_and_old_ready_state(
 
 
 @pytest.mark.parametrize("mode", [1, 2, 3, 4, 5, 7, 8])
+@pytest.mark.parametrize(
+    "boundary", [FlushBoundary.LEVEL_TRANSITION, FlushBoundary.UI_CONTINUATION]
+)
 def test_level_transition_accepts_explicit_input_modes(
-    game_socket: socket.socket, tmp_path: Path, mode: int
+    game_socket: socket.socket, tmp_path: Path, mode: int, boundary: FlushBoundary
 ) -> None:
     with WebtilesTransport(
         Path(game_socket.getsockname()), client_directory=tmp_path / "client"
     ) as transport:
         _, address = game_socket.recvfrom(4096)
+        game_socket.sendto(b'{"msg":"input_mode","mode":0}\n', address)
         game_socket.sendto(
             json.dumps({"msg": "input_mode", "mode": mode}).encode() + b"\n", address
         )
         game_socket.sendto(b'*{"msg":"flush_messages"}\n', address)
-        batch = transport.receive_until_flush(boundary=FlushBoundary.LEVEL_TRANSITION)
-        assert batch.observations[0].payload["mode"] == mode
+        batch = transport.receive_until_flush(boundary=boundary)
+        assert batch.observations[-1].payload["mode"] == mode
 
 
 @pytest.mark.parametrize(
@@ -239,11 +298,15 @@ def test_level_transition_accepts_explicit_input_modes(
         ],
     ],
 )
+@pytest.mark.parametrize(
+    "boundary", [FlushBoundary.LEVEL_TRANSITION, FlushBoundary.UI_CONTINUATION]
+)
 def test_level_transition_accepts_current_blocking_ui(
     game_socket: socket.socket,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     payloads: list[JsonObject],
+    boundary: FlushBoundary,
 ) -> None:
     monkeypatch.setattr(
         "dcss_rl.webtiles.transport._BLOCKING_UI_QUIET_PERIOD", Seconds(0.001)
@@ -255,7 +318,7 @@ def test_level_transition_accepts_current_blocking_ui(
         for payload in [{"msg": "input_mode", "mode": 0}, *payloads]:
             game_socket.sendto(json.dumps(payload).encode() + b"\n", address)
         game_socket.sendto(b'*{"msg":"flush_messages"}\n', address)
-        batch = transport.receive_until_flush(boundary=FlushBoundary.LEVEL_TRANSITION)
+        batch = transport.receive_until_flush(boundary=boundary)
         assert len(batch.observations) == len(payloads) + 1
 
 
@@ -275,8 +338,14 @@ def test_level_transition_accepts_current_blocking_ui(
         [{"msg": "ui-state", "type": "crt"}],
     ],
 )
+@pytest.mark.parametrize(
+    "boundary", [FlushBoundary.LEVEL_TRANSITION, FlushBoundary.UI_CONTINUATION]
+)
 def test_level_transition_fails_closed_without_current_input_evidence(
-    game_socket: socket.socket, tmp_path: Path, payloads: list[JsonObject]
+    game_socket: socket.socket,
+    tmp_path: Path,
+    payloads: list[JsonObject],
+    boundary: FlushBoundary,
 ) -> None:
     with WebtilesTransport(
         Path(game_socket.getsockname()),
@@ -288,11 +357,14 @@ def test_level_transition_fails_closed_without_current_input_evidence(
             game_socket.sendto(json.dumps(payload).encode() + b"\n", address)
         game_socket.sendto(b'*{"msg":"flush_messages"}\n', address)
         with pytest.raises(TimeoutError):
-            transport.receive_until_flush(boundary=FlushBoundary.LEVEL_TRANSITION)
+            transport.receive_until_flush(boundary=boundary)
 
 
+@pytest.mark.parametrize(
+    "boundary", [FlushBoundary.LEVEL_TRANSITION, FlushBoundary.UI_CONTINUATION]
+)
 def test_level_transition_returns_terminal_exit_without_input_mode_or_flush(
-    game_socket: socket.socket, tmp_path: Path
+    game_socket: socket.socket, tmp_path: Path, boundary: FlushBoundary
 ) -> None:
     with WebtilesTransport(
         Path(game_socket.getsockname()), client_directory=tmp_path / "client"
@@ -300,12 +372,13 @@ def test_level_transition_returns_terminal_exit_without_input_mode_or_flush(
         _, address = game_socket.recvfrom(4096)
         game_socket.sendto(b'{"msg":"input_mode","mode":0}\n', address)
         game_socket.sendto(b'*{"msg":"exit","reason":"dead"}\n', address)
-        batch = transport.receive_until_flush(boundary=FlushBoundary.LEVEL_TRANSITION)
+        batch = transport.receive_until_flush(boundary=boundary)
         assert batch.messages[-1].kind == "exit"
 
 
+@pytest.mark.parametrize("ui_continuation", [False, True])
 def test_silent_noop_stairs_collects_full_state_probe(
-    game_socket: socket.socket, tmp_path: Path
+    game_socket: socket.socket, tmp_path: Path, ui_continuation: bool
 ) -> None:
     game = ManagedGame(tmp_path / "crawl", run_root=tmp_path / "run")
     with WebtilesTransport(
@@ -329,8 +402,15 @@ def test_silent_noop_stairs_collects_full_state_probe(
 
         sender = threading.Thread(target=emit)
         sender.start()
-        batch = game.send_key(">", level_transition=True)
+        batch = game.send_key(
+            32 if ui_continuation else 62,
+            level_transition=not ui_continuation,
+            ui_continuation=ui_continuation,
+        )
         sender.join()
-        assert received == [{"msg": "key", "keycode": 62}, {"msg": "spectator_joined"}]
+        assert received == [
+            {"msg": "key", "keycode": 32 if ui_continuation else 62},
+            {"msg": "spectator_joined"},
+        ]
         assert batch.observations[0].payload["depth"] == 1
         assert batch.observations[-1].payload["mode"] == 1

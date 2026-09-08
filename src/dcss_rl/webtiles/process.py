@@ -185,9 +185,15 @@ class ManagedGame:
             raise
 
     def send_key(
-        self, key: str | int, *, level_transition: bool = False
+        self,
+        key: str | int,
+        *,
+        level_transition: bool = False,
+        ui_continuation: bool = False,
     ) -> ObservationBatch:
         """Apply one primitive input and collect the resulting state delta."""
+        if level_transition and ui_continuation:
+            raise ValueError("input boundary requests must be mutually exclusive")
         if self.transport is None:
             raise RuntimeError("DCSS game is not started")
         self.transport.send_key(key)
@@ -202,6 +208,8 @@ class ManagedGame:
             quiet_period=quiet_period,
             boundary=FlushBoundary.LEVEL_TRANSITION
             if level_transition
+            else FlushBoundary.UI_CONTINUATION
+            if ui_continuation
             else FlushBoundary.INPUT_READY_OR_QUIESCENCE
             if quiet_period is not None
             else FlushBoundary.QUIESCENCE,

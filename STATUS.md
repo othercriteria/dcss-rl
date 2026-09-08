@@ -446,6 +446,15 @@ Next:
 
 ## Astra handoff progress (2026-09-08)
 
+- Pending integration now passes 414 unit tests and three live trunk tests, plus
+  lint, formatting, and typing. Structured more acknowledgments (including Escape)
+  wait for a fresh input boundary after busy mode, closing the captured shaft race;
+  ordinary raw keys retain their existing behavior. Stable-release and matched
+  rollout verification of this extension remain pending. The residual probe now
+  offers the predeclared worst-margin objective and `poe audit-residual-gates` binds
+  confidence evidence to saved checkpoint metadata and exact parameter ownership.
+  V73's fixed 256-step experiment is preregistered; no outcome yet.
+
 - User direction: current-policy progress first, bounded local pilots before justified
   hour-scale runs, thin immediate research goals, Poe workflows, and continuing
   independently owned performance work. These durable preferences are in `AGENTS.md`.
